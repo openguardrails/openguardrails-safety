@@ -213,10 +213,6 @@ app = FastAPI(
 # Add concurrent control middleware (highest priority, added last)
 app.add_middleware(ConcurrentLimitMiddleware, service_type="detection", max_concurrent=settings.detection_max_concurrent_requests)
 
-# Add rate limit middleware (RPS limiting)
-from middleware.rate_limit_middleware import RateLimitMiddleware
-app.add_middleware(RateLimitMiddleware)
-
 # Add billing middleware (monthly quota limiting)
 from middleware.billing_middleware import BillingMiddleware
 app.add_middleware(BillingMiddleware)

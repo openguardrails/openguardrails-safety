@@ -621,34 +621,64 @@ class StreamChunkDetector:
         self.detection_mode = detection_mode
         self.application_id = application_id  # Store application_id for risk config lookup
 
+        # Tool calls accumulator: {index: {"name": str, "arguments": str}}
+        self._tool_calls_acc = {}
+
         # Serial mode specific state
         self.last_chunk_held = None  # Held last chunk
         self.all_chunks_safe = False  # Whether all chunks are detected safe
         self.pending_detections = set()  # Pending detection task ID
         self.detection_result = None
-    
-    async def add_chunk(self, chunk_content: str, reasoning_content: str, tool_calls_content: str, model_config, input_messages: list,
+
+    def _accumulate_tool_calls_delta(self, tool_calls_delta: list):
+        """Accumulate streaming tool_calls deltas into complete tool calls"""
+        if not tool_calls_delta:
+            return
+        for tc in tool_calls_delta:
+            idx = tc.get('index', 0)
+            if idx not in self._tool_calls_acc:
+                self._tool_calls_acc[idx] = {"name": "", "arguments": ""}
+            func = tc.get('function', {})
+            if func.get('name'):
+                self._tool_calls_acc[idx]["name"] += func['name']
+            if func.get('arguments'):
+                self._tool_calls_acc[idx]["arguments"] += func['arguments']
+
+    def _get_formatted_tool_calls(self) -> str:
+        """Get formatted tool calls string from accumulated data"""
+        if not self._tool_calls_acc:
+            return ""
+        parts = []
+        for idx in sorted(self._tool_calls_acc.keys()):
+            tc = self._tool_calls_acc[idx]
+            if tc["name"] or tc["arguments"]:
+                parts.append(f"[Tool Call] {tc['name']}({tc['arguments']})")
+        return "\n".join(parts)
+
+    async def add_chunk(self, chunk_content: str, reasoning_content: str, tool_calls_raw: list, model_config, input_messages: list,
                        tenant_id: str, request_id: str) -> bool:
-        """Add chunk and detect, return whether to stop stream"""
-        if not chunk_content.strip() and not reasoning_content.strip() and not tool_calls_content.strip():
+        """Add chunk and detect, return whether to stop stream.
+
+        Args:
+            tool_calls_raw: Raw tool_calls delta list from chunk (not formatted string)
+        """
+        has_tool_calls = bool(tool_calls_raw)
+        if not chunk_content.strip() and not reasoning_content.strip() and not has_tool_calls:
             return False
 
         self.chunks_buffer.append(chunk_content)
         # Only add when reasoning detection is enabled and there is reasoning content
         if reasoning_content.strip() and getattr(model_config, 'enable_reasoning_detection', True):
             self.chunks_buffer.append(f"{reasoning_content}")
-        # Always add tool_calls content for security detection (tool prompt attacks)
-        if tool_calls_content.strip():
-            self.chunks_buffer.append(f"{tool_calls_content}")
+        # Accumulate tool_calls deltas (will be formatted at detection time)
+        if has_tool_calls:
+            self._accumulate_tool_calls_delta(tool_calls_raw)
 
         self.chunk_count += 1
         self.full_content += chunk_content
         # Only add when reasoning detection is enabled and there is reasoning content
         if reasoning_content.strip() and getattr(model_config, 'enable_reasoning_detection', True):
             self.full_content += f"{reasoning_content}"
-        # Always add tool_calls content for security detection
-        if tool_calls_content.strip():
-            self.full_content += f"{tool_calls_content}"
         
         # Check if detection threshold is reached (using user configured value)
         detection_threshold = getattr(model_config, 'stream_chunk_size', 50)  # Using configured chunk detection interval
@@ -666,7 +696,7 @@ class StreamChunkDetector:
     async def final_detection(self, model_config, input_messages: list, 
                             tenant_id: str, request_id: str) -> bool:
         """Final detection remaining chunks"""
-        if self.chunks_buffer and not self.risk_detected:
+        if (self.chunks_buffer or self._tool_calls_acc) and not self.risk_detected:
             if self.detection_mode == DetectionMode.ASYNC_BYPASS:
                 # Asynchronous bypass mode: start final detection but not block
                 asyncio.create_task(self._async_detection(model_config, input_messages, tenant_id, request_id, is_final=True))
@@ -702,18 +732,21 @@ class StreamChunkDetector:
         self.last_chunk_held = None
         return chunk
 
-    async def _async_detection(self, model_config, input_messages: list, 
+    async def _async_detection(self, model_config, input_messages: list,
                               tenant_id: str, request_id: str, is_final: bool = False):
         """Asynchronous bypass detection - not block stream, only record detection result"""
-        if not self.chunks_buffer:
+        if not self.chunks_buffer and not self._tool_calls_acc:
             return
-            
+
         try:
-            # Construct detection messages
+            # Construct detection messages with accumulated text + formatted tool calls
             accumulated_content = ''.join(self.chunks_buffer)
+            tool_calls_text = self._get_formatted_tool_calls()
+            if tool_calls_text:
+                accumulated_content = f"{accumulated_content}\n{tool_calls_text}" if accumulated_content else tool_calls_text
             detection_messages = input_messages.copy()
             detection_messages.append({
-                "role": "assistant", 
+                "role": "assistant",
                 "content": accumulated_content
             })
             
@@ -740,12 +773,15 @@ class StreamChunkDetector:
     async def _sync_detection(self, model_config, input_messages: list,
                              tenant_id: str, request_id: str, is_final: bool = False) -> bool:
         """Synchronous serial detection - may block stream"""
-        if not self.chunks_buffer:
+        if not self.chunks_buffer and not self._tool_calls_acc:
             return False
 
         try:
-            # Construct detection messages
+            # Construct detection messages with accumulated text + formatted tool calls
             accumulated_content = ''.join(self.chunks_buffer)
+            tool_calls_text = self._get_formatted_tool_calls()
+            if tool_calls_text:
+                accumulated_content = f"{accumulated_content}\n{tool_calls_text}" if accumulated_content else tool_calls_text
             detection_messages = input_messages.copy()
             detection_messages.append({
                 "role": "assistant",
@@ -805,12 +841,15 @@ class StreamChunkDetector:
     async def _sync_final_detection(self, model_config, input_messages: list,
                                    tenant_id: str, request_id: str) -> bool:
         """Synchronous final detection - used for detection at stream end"""
-        if not self.chunks_buffer:
+        if not self.chunks_buffer and not self._tool_calls_acc:
             return False
 
         try:
-            # Construct detection messages
+            # Construct detection messages with accumulated text + formatted tool calls
             accumulated_content = ''.join(self.chunks_buffer)
+            tool_calls_text = self._get_formatted_tool_calls()
+            if tool_calls_text:
+                accumulated_content = f"{accumulated_content}\n{tool_calls_text}" if accumulated_content else tool_calls_text
             detection_messages = input_messages.copy()
             detection_messages.append({
                 "role": "assistant",
@@ -999,7 +1038,10 @@ async def _handle_gateway_streaming_response(
                                         if getattr(api_config, 'enable_reasoning_detection', True):
                                             reasoning_content = delta.get('reasoning_content') or ''
 
-                                        if content or reasoning_content:
+                                        # Extract raw tool_calls delta for accumulation
+                                        tool_calls_raw = _extract_tool_calls_raw(chunk_data)
+
+                                        if content or reasoning_content or tool_calls_raw:
                                             full_content += content
 
                                             # Run output detection on model output (with placeholders)
@@ -1007,16 +1049,9 @@ async def _handle_gateway_streaming_response(
                                             # Only NEW sensitive data from model will trigger detection
                                             should_stop = False
 
-                                            # Extract tool_calls content for security detection
-                                            tool_calls_content = ""
-                                            has_tool_calls = _chunk_has_tool_calls(chunk_data)
-                                            if has_tool_calls:
-                                                tool_calls_content = _extract_tool_calls_content(chunk_data)
-                                                logger.debug(f"Extracted tool_calls content for detection: {tool_calls_content[:100]}...")
-
                                             # Detect chunk (including all content types)
                                             should_stop = await detector.add_chunk(
-                                                content, reasoning_content, tool_calls_content, api_config,
+                                                content, reasoning_content, tool_calls_raw, api_config,
                                                 input_messages, tenant_id, request_id
                                             )
 
@@ -1153,13 +1188,32 @@ async def _handle_gateway_non_streaming_response(
 
         # Extract response content for detection
         if upstream_response.get('choices'):
-            output_content = upstream_response['choices'][0]['message']['content']
+            message = upstream_response['choices'][0]['message']
+            output_content = message.get('content') or ''
+
+            # Extract and include tool_calls content for security detection
+            tool_calls_content = ""
+            if 'tool_calls' in message and message['tool_calls']:
+                tool_calls_text = []
+                for tool_call in message['tool_calls']:
+                    if 'function' in tool_call:
+                        func = tool_call['function']
+                        func_name = func.get('name', '')
+                        func_args = func.get('arguments', '')
+                        tool_calls_text.append(f"[工具调用] {func_name}({func_args})")
+                tool_calls_content = ' '.join(tool_calls_text)
+                logger.debug(f"Gateway non-streaming detected tool_calls: {tool_calls_content[:100]}...")
+
+            # Combine all content for detection
+            combined_content = output_content
+            if tool_calls_content:
+                combined_content = f"{output_content}\n{tool_calls_content}" if output_content else tool_calls_content
 
             # Always perform output detection first (before restore)
             # Detection runs on model output which may contain placeholders like [email_sys_1]
             # Placeholders won't be detected as sensitive data, only NEW sensitive data from model will be detected
             output_detection_result = await perform_output_detection(
-                api_config, input_messages, output_content, tenant_id, request_id, user_id, application_id
+                api_config, input_messages, combined_content, tenant_id, request_id, user_id, application_id
             )
 
             output_detection_id = output_detection_result.get('detection_id')
@@ -1173,9 +1227,14 @@ async def _handle_gateway_non_streaming_response(
                 logger.info(f"Restored placeholders in output: {len(AnonymizationContext.get_mapping())} mappings applied")
                 final_content = restored_content
 
-            # Update response content
-            upstream_response['choices'][0]['message']['content'] = final_content
+            # Update response content (only modify text content, preserve tool_calls)
+            if output_content:
+                upstream_response['choices'][0]['message']['content'] = final_content
             if output_blocked:
+                upstream_response['choices'][0]['message']['content'] = final_content
+                # For security reasons, remove tool_calls if content is blocked
+                if 'tool_calls' in message:
+                    del message['tool_calls']
                 upstream_response['choices'][0]['finish_reason'] = 'content_filter'
 
         # Extract usage tokens if available
@@ -1251,8 +1310,7 @@ async def _handle_streaming_chat_completion(
                     # Parse chunk content - extract all relevant fields
                     chunk_content = _extract_chunk_content(chunk, "content")
                     reasoning_content = ""
-                    tool_calls_content = ""
-                    has_tool_calls = _chunk_has_tool_calls(chunk)
+                    tool_calls_raw = _extract_tool_calls_raw(chunk)
 
                     # Decide whether to perform reasoning detection based on configuration
                     if getattr(model_config, 'enable_reasoning_detection', True):
@@ -1263,16 +1321,11 @@ async def _handle_streaming_chat_completion(
                             logger.debug(f"Model does not support reasoning_content field: {e}")
                             reasoning_content = ""
 
-                    # Extract tool_calls content for security detection (crucial for preventing tool prompt attacks)
-                    if has_tool_calls:
-                        tool_calls_content = _extract_tool_calls_content(chunk)
-                        logger.debug(f"Extracted tool_calls content for detection: {tool_calls_content[:100]}...")
-
                     # Detect chunk if it has any content (text, reasoning, or tool_calls)
-                    if chunk_content or reasoning_content or tool_calls_content:
+                    if chunk_content or reasoning_content or tool_calls_raw:
                         # Detect chunk (including all content types)
                         should_stop = await detector.add_chunk(
-                            chunk_content, reasoning_content, tool_calls_content, model_config, input_messages, tenant_id, request_id
+                            chunk_content, reasoning_content, tool_calls_raw, model_config, input_messages, tenant_id, request_id
                         )
                         
                         if should_stop:
@@ -1450,9 +1503,33 @@ def _chunk_has_tool_calls(chunk: dict) -> bool:
             choice = chunk['choices'][0]
             if 'delta' in choice and 'tool_calls' in choice['delta']:
                 return bool(choice['delta']['tool_calls'])
+            # Also check 'message' for non-streaming chunks
+            if 'message' in choice and 'tool_calls' in choice['message']:
+                return bool(choice['message']['tool_calls'])
     except Exception:
         pass
     return False
+
+
+def _extract_tool_calls_raw(chunk: dict) -> list:
+    """Extract raw tool_calls delta list from chunk for accumulation in StreamChunkDetector.
+
+    Returns the raw tool_calls array from the delta (or message) so that
+    StreamChunkDetector can accumulate name/arguments across chunks and
+    format them once at detection time.
+    """
+    try:
+        if 'choices' in chunk and chunk['choices']:
+            choice = chunk['choices'][0]
+            if 'delta' in choice and 'tool_calls' in choice['delta']:
+                tc = choice['delta']['tool_calls']
+                return tc if tc else []
+            if 'message' in choice and 'tool_calls' in choice['message']:
+                tc = choice['message']['tool_calls']
+                return tc if tc else []
+    except Exception:
+        pass
+    return []
 
 
 def _create_content_chunk(request_id: str, content: str, model: str = "openguardrails-security") -> dict:

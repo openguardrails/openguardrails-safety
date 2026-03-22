@@ -411,7 +411,7 @@ class DetectionGuardrailService:
 
         For logging: always include full conversation context
         """
-        if len(messages) == 1 and messages[0].role == 'user':
+        if len(messages) == 1:
             content = messages[0].content
             if isinstance(content, str):
                 return content
@@ -428,7 +428,7 @@ class DetectionGuardrailService:
             # Multi-message conversation
             conversation_parts = []
             for msg in messages:
-                role_label = "User" if msg.role == "user" else "Assistant" if msg.role == "assistant" else msg.role
+                role_label = {"user": "User", "assistant": "Assistant", "system": "System", "tool": "Tool"}.get(msg.role, msg.role)
                 content = msg.content
                 if isinstance(content, str):
                     conversation_parts.append(f"[{role_label}]: {content}")
@@ -447,6 +447,9 @@ class DetectionGuardrailService:
     def _extract_content_for_data_detection(self, messages: List[Message], direction: str) -> str:
         """Extract content for data leak detection based on direction
 
+        Extracts content from ALL message roles (system, user, assistant, tool)
+        to ensure comprehensive data leak detection coverage.
+
         Args:
             messages: List of messages
             direction: "input" for user input, "output" for assistant output
@@ -455,37 +458,26 @@ class DetectionGuardrailService:
             Text content to be checked for data leaks
         """
         if direction == "output":
-            # For output detection, only check assistant messages
-            assistant_parts = []
-            for msg in messages:
-                if msg.role == "assistant":
-                    content = msg.content
-                    if isinstance(content, str):
-                        assistant_parts.append(content)
-                    elif isinstance(content, list):
-                        text_parts = []
-                        for part in content:
-                            if hasattr(part, 'type') and part.type == 'text' and hasattr(part, 'text'):
-                                text_parts.append(part.text)
-                        if text_parts:
-                            assistant_parts.append(' '.join(text_parts))
-            return '\n'.join(assistant_parts) if assistant_parts else ""
+            # For output detection, check assistant messages
+            target_roles = {"assistant"}
         else:
-            # For input detection, check user messages
-            user_parts = []
-            for msg in messages:
-                if msg.role == "user":
-                    content = msg.content
-                    if isinstance(content, str):
-                        user_parts.append(content)
-                    elif isinstance(content, list):
-                        text_parts = []
-                        for part in content:
-                            if hasattr(part, 'type') and part.type == 'text' and hasattr(part, 'text'):
-                                text_parts.append(part.text)
-                        if text_parts:
-                            user_parts.append(' '.join(text_parts))
-            return '\n'.join(user_parts) if user_parts else ""
+            # For input detection, check all non-assistant roles (system, user, tool, etc.)
+            target_roles = {"system", "user", "tool"}
+
+        parts = []
+        for msg in messages:
+            if msg.role in target_roles:
+                content = msg.content
+                if isinstance(content, str):
+                    parts.append(content)
+                elif isinstance(content, list):
+                    text_parts = []
+                    for part in content:
+                        if hasattr(part, 'type') and part.type == 'text' and hasattr(part, 'text'):
+                            text_parts.append(part.text)
+                    if text_parts:
+                        parts.append(' '.join(text_parts))
+        return '\n'.join(parts) if parts else ""
     
     async def _parse_model_response(self, response: str, tenant_id: Optional[str] = None) -> Tuple[ComplianceResult, SecurityResult]:
         """Parse model response and apply risk type filtering"""

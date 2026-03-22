@@ -87,9 +87,10 @@ class SlidingWindowProcessor:
         Generate message window combinations for detection.
 
         Logic:
-        - If only user messages: Create windows from user content
+        - System/tool messages are preserved as prefix in every window
+        - If only user messages (input): Create windows from user+system+tool content
         - If user+assistant: Create cross-product of user windows × assistant windows
-          (each user window paired with each assistant window)
+          with system/tool prefix prepended to each window
 
         Args:
             messages: Original message list
@@ -100,13 +101,16 @@ class SlidingWindowProcessor:
         if not messages:
             return [[]]
 
-        # Separate user and assistant messages
+        # Separate messages by role
+        prefix_messages = [m for m in messages if m.get("role") in ("system", "tool")]
         user_messages = [m for m in messages if m.get("role") == "user"]
         assistant_messages = [m for m in messages if m.get("role") == "assistant"]
 
         # Extract text content from messages
         def get_text_content(msg: Dict) -> str:
             content = msg.get("content", "")
+            if content is None:
+                return ""
             if isinstance(content, str):
                 return content
             elif isinstance(content, list):
@@ -118,11 +122,14 @@ class SlidingWindowProcessor:
                 return " ".join(text_parts)
             return str(content)
 
+        # Calculate prefix length (system/tool messages always included)
+        prefix_content_length = sum(len(get_text_content(m)) for m in prefix_messages)
+
         # Combine all user content and assistant content
         user_content = "\n".join(get_text_content(m) for m in user_messages)
         assistant_content = "\n".join(get_text_content(m) for m in assistant_messages)
 
-        total_length = len(user_content) + len(assistant_content)
+        total_length = prefix_content_length + len(user_content) + len(assistant_content)
 
         # If total content fits in context, return original messages
         if total_length <= self.max_context_length:
@@ -131,21 +138,30 @@ class SlidingWindowProcessor:
 
         logger.info(f"Content length {total_length} > max {self.max_context_length}, applying sliding window")
 
-        # Case 1: Only user messages
+        # Reserve space for prefix messages (system/tool)
+        available_length = self.max_context_length - prefix_content_length
+        if available_length <= 0:
+            # Prefix alone exceeds limit, just return prefix truncated
+            logger.warning(f"System/tool prefix ({prefix_content_length}) exceeds max context ({self.max_context_length})")
+            return [prefix_messages]
+
+        # Case 1: Only user/input messages (no assistant)
         if not assistant_messages:
-            window_size = self.max_context_length
+            window_size = available_length
             user_windows = self._create_windows(user_content, window_size)
 
             result = []
             for window_text, start, end in user_windows:
-                result.append([{"role": "user", "content": window_text}])
+                window_messages = [m for m in prefix_messages]  # copy prefix
+                window_messages.append({"role": "user", "content": window_text})
+                result.append(window_messages)
 
-            logger.info(f"Created {len(result)} user-only windows")
+            logger.info(f"Created {len(result)} user-only windows (with {len(prefix_messages)} prefix messages)")
             return result
 
         # Case 2: User + Assistant messages - cross-product detection
-        # Each role gets half the context length
-        half_context = self.max_context_length // 2
+        # Each role gets half the available context length
+        half_context = available_length // 2
 
         user_windows = self._create_windows(user_content, half_context)
         assistant_windows = self._create_windows(assistant_content, half_context)
@@ -154,14 +170,12 @@ class SlidingWindowProcessor:
         result = []
         for user_text, u_start, u_end in user_windows:
             for asst_text, a_start, a_end in assistant_windows:
-                # Create a message pair for this window combination
-                window_messages = [
-                    {"role": "user", "content": user_text},
-                    {"role": "assistant", "content": asst_text}
-                ]
+                window_messages = [m for m in prefix_messages]  # copy prefix
+                window_messages.append({"role": "user", "content": user_text})
+                window_messages.append({"role": "assistant", "content": asst_text})
                 result.append(window_messages)
 
-        logger.info(f"Created {len(result)} cross-product windows ({len(user_windows)} user × {len(assistant_windows)} assistant)")
+        logger.info(f"Created {len(result)} cross-product windows ({len(user_windows)} user × {len(assistant_windows)} assistant, with {len(prefix_messages)} prefix messages)")
         return result
 
 

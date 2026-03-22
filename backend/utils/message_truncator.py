@@ -5,68 +5,123 @@ from config import settings
 
 class MessageTruncator:
     """Message truncator tool, used to control the maximum context length of the detection interface"""
-    
+
     @staticmethod
     def calculate_total_content_length(messages: List[Message]) -> int:
         """Calculate the total length of all message contents"""
-        return sum(len(msg.content) for msg in messages)
-    
+        return sum(len(msg.content) for msg in messages if msg.content)
+
     @staticmethod
     def get_random_window(content: str, max_length: int) -> str:
         """Randomly select a continuous window from the content"""
         if len(content) <= max_length:
             return content
-        
+
         # Randomly select starting position
         start_pos = random.randint(0, len(content) - max_length)
         return content[start_pos:start_pos + max_length]
-    
+
     @staticmethod
     def truncate_messages(messages: List[Message]) -> List[Message]:
         """
         Truncate messages based on the maximum context length configured
-        
+
         策略：
-        1. If the last round is user or only one round, prioritize keeping the last user message
-        2. If the last round is assistant, ensure it starts with user
-        3. Use random window to resist long text attacks
-        4. Consider user-assistant pairs
+        1. Preserve system/tool messages at the beginning (they are part of the full context)
+        2. If the last round is user or only one round, prioritize keeping the last user message
+        3. If the last round is assistant, ensure it starts with user
+        4. Use random window to resist long text attacks
+        5. Consider user-assistant pairs for conversation messages
         """
         # Ensure messages is not empty
         if not messages:
             return messages
-        
-        # Ensure the first message is user role (before length check)
-        if messages[0].role != 'user':
-            # If the first message is not user, find the first user message
+
+        # Separate leading system/tool messages from conversation messages
+        prefix_messages = []
+        conversation_start = 0
+        for i, msg in enumerate(messages):
+            if msg.role in ('system', 'tool'):
+                prefix_messages.append(msg)
+                conversation_start = i + 1
+            else:
+                break
+
+        conversation_messages = messages[conversation_start:]
+
+        # If no conversation messages, detect prefix messages only
+        if not conversation_messages:
+            max_length = settings.max_detection_context_length
+            total_length = MessageTruncator.calculate_total_content_length(prefix_messages)
+            if total_length <= max_length:
+                return prefix_messages
+            # Truncate prefix messages if too long
+            result = []
+            remaining = max_length
+            for msg in prefix_messages:
+                if msg.content and len(msg.content) <= remaining:
+                    result.append(msg)
+                    remaining -= len(msg.content)
+                elif msg.content:
+                    truncated = MessageTruncator.get_random_window(msg.content, remaining)
+                    result.append(Message(role=msg.role, content=truncated))
+                    break
+            return result
+
+        # Ensure conversation starts with user role
+        if conversation_messages[0].role != 'user':
             first_user_index = -1
-            for i, msg in enumerate(messages):
+            for i, msg in enumerate(conversation_messages):
                 if msg.role == 'user':
                     first_user_index = i
                     break
-            
+
             if first_user_index == -1:
-                # No user message found, return empty list
+                # No user message found in conversation part
+                # Still return prefix messages for detection
+                if prefix_messages:
+                    max_length = settings.max_detection_context_length
+                    total_length = MessageTruncator.calculate_total_content_length(prefix_messages)
+                    if total_length <= max_length:
+                        return prefix_messages
                 return []
-            
-            # Rebuild messages list from the first user message
-            messages = messages[first_user_index:]
-        
+
+            conversation_messages = conversation_messages[first_user_index:]
+
         max_length = settings.max_detection_context_length
-        total_length = MessageTruncator.calculate_total_content_length(messages)
-        
-        if total_length <= max_length:
-            return messages
-        
-        last_message = messages[-1]
-        
+        prefix_length = MessageTruncator.calculate_total_content_length(prefix_messages)
+        remaining_length = max_length - prefix_length
+
+        if remaining_length <= 0:
+            # Prefix messages already exceed limit, truncate them
+            result = []
+            remaining = max_length
+            for msg in prefix_messages:
+                if msg.content and len(msg.content) <= remaining:
+                    result.append(msg)
+                    remaining -= len(msg.content)
+                elif msg.content:
+                    truncated = MessageTruncator.get_random_window(msg.content, remaining)
+                    result.append(Message(role=msg.role, content=truncated))
+                    break
+            return result
+
+        conv_length = MessageTruncator.calculate_total_content_length(conversation_messages)
+
+        if conv_length <= remaining_length:
+            return prefix_messages + conversation_messages
+
+        last_message = conversation_messages[-1]
+
         if last_message.role == 'user':
-            return MessageTruncator._truncate_ending_with_user(messages, max_length)
+            truncated_conv = MessageTruncator._truncate_ending_with_user(conversation_messages, remaining_length)
         elif last_message.role == 'assistant':
-            return MessageTruncator._truncate_ending_with_assistant(messages, max_length)
+            truncated_conv = MessageTruncator._truncate_ending_with_assistant(conversation_messages, remaining_length)
         else:
-            # system message and other cases, treated as user
-            return MessageTruncator._truncate_ending_with_user(messages, max_length)
+            # system/tool message at end, treated as user for truncation
+            truncated_conv = MessageTruncator._truncate_ending_with_user(conversation_messages, remaining_length)
+
+        return prefix_messages + truncated_conv
     
     @staticmethod
     def _truncate_ending_with_user(messages: List[Message], max_length: int) -> List[Message]:

@@ -236,10 +236,6 @@ app.add_middleware(ConcurrentLimitMiddleware, service_type="proxy", max_concurre
 # Performance optimization middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# Add rate limiting middleware
-from middleware.rate_limit_middleware import RateLimitMiddleware  
-app.add_middleware(RateLimitMiddleware)
-
 # Add authentication context middleware
 app.add_middleware(AuthContextMiddleware)
 
