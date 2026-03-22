@@ -533,7 +533,9 @@ class ProxyService:
         frequency_penalty: Optional[float] = None,
         presence_penalty: Optional[float] = None,
         stop: Optional[List[str]] = None,
-        extra_body: Optional[Dict[str, Any]] = None
+        extra_body: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_choice: Optional[Any] = None
     ):
         """Call upstream API with gateway pattern (pass through model name)"""
         api_key = self._decrypt_api_key(api_config.api_key_encrypted)
@@ -572,6 +574,12 @@ class ProxyService:
         if stop is not None:
             payload["stop"] = stop
 
+        # Add tools and tool_choice
+        if tools is not None:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
         # Add extra_body parameters (exclude internal xxai_app_user_id)
         if extra_body:
             for key, value in extra_body.items():
@@ -579,7 +587,9 @@ class ProxyService:
                     payload[key] = value
 
         # Log the payload being sent to upstream for debugging
-        logger.info(f"Upstream payload being sent: {json.dumps(payload, ensure_ascii=False)}")
+        msg_summary = [{"role": m.get("role"), "content_type": type(m.get("content")).__name__, "content_len": len(str(m.get("content") or "")), "has_tool_calls": bool(m.get("tool_calls")), "has_tool_call_id": bool(m.get("tool_call_id"))} for m in payload.get("messages", [])]
+        logger.info(f"[UpstreamPayload] keys={list(payload.keys())}, has_tools={('tools' in payload)}, messages_summary={msg_summary}")
+        logger.info(f"Upstream payload being sent: {json.dumps(payload, ensure_ascii=False)[:3000]}")
 
         # Use shared HTTP client to send request
         try:

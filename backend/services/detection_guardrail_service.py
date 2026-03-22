@@ -125,8 +125,11 @@ class DetectionGuardrailService:
         from models.requests import GuardrailRequest, Message
 
         # Convert dictionary format messages to Message objects
+        # Skip messages with None content (e.g., assistant tool_calls, tool responses)
         message_objects = []
         for msg in messages:
+            if msg.get("content") is None:
+                continue
             message_objects.append(Message(role=msg["role"], content=msg["content"]))
 
         request = GuardrailRequest(model="detection", messages=message_objects)
@@ -235,6 +238,9 @@ class DetectionGuardrailService:
 
             for msg in truncated_messages:
                 content = msg.content
+                if content is None:
+                    # Skip messages with no content (e.g., assistant tool_calls messages)
+                    continue
                 if isinstance(content, str):
                     messages_dict.append({"role": msg.role, "content": content})
                 elif isinstance(content, list):

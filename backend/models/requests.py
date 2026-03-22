@@ -19,17 +19,19 @@ class ContentPart(BaseModel):
 
 class Message(BaseModel):
     """Message model - support text and multi-modal content"""
-    role: str = Field(..., description="Message role: user, system, assistant")
-    content: Union[str, List[ContentPart]] = Field(..., description="Message content, can be string or content part list")
+    role: str = Field(..., description="Message role: user, system, assistant, tool")
+    content: Union[str, List[ContentPart], None] = Field(None, description="Message content, can be string, content part list, or null (for tool_calls)")
 
     @validator('role')
     def validate_role(cls, v):
-        if v not in ['user', 'system', 'assistant']:
-            raise ValueError('role must be one of: user, system, assistant')
+        if v not in ['user', 'system', 'assistant', 'tool']:
+            raise ValueError('role must be one of: user, system, assistant, tool')
         return v
 
     @validator('content')
     def validate_content(cls, v):
+        if v is None:
+            return v
         if isinstance(v, str):
             if not v or not v.strip():
                 raise ValueError('content cannot be empty')
@@ -41,7 +43,7 @@ class Message(BaseModel):
                 raise ValueError('content cannot be empty')
             return v
         else:
-            raise ValueError('content must be string or list of content parts')
+            raise ValueError('content must be string, list of content parts, or null')
         return v
 
 class GuardrailRequest(BaseModel):

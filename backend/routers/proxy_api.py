@@ -798,7 +798,8 @@ class StreamChunkDetector:
             return False
 
         except Exception as e:
-            logger.error(f"Synchronous detection failed: {e}")
+            import traceback
+            logger.error(f"Synchronous detection failed: {e}\n{traceback.format_exc()}")
             return False
 
     async def _sync_final_detection(self, model_config, input_messages: list,
@@ -862,7 +863,8 @@ class StreamChunkDetector:
             return False
 
         except Exception as e:
-            logger.error(f"Synchronous final detection failed: {e}")
+            import traceback
+            logger.error(f"Synchronous final detection failed: {e}\n{traceback.format_exc()}")
             return False
 
 
@@ -901,6 +903,9 @@ async def _handle_gateway_streaming_response(
 
             try:
                 async with upstream_response as response:
+                    if response.status_code >= 400:
+                        error_body = await response.aread()
+                        logger.error(f"[UpstreamError] status={response.status_code}, body={error_body.decode('utf-8', errors='replace')[:2000]}")
                     response.raise_for_status()
 
                     async for line in response.aiter_lines():
@@ -1545,8 +1550,10 @@ def get_provider_from_url(api_base_url: str) -> str:
 
 class OpenAIMessage(BaseModel):
     role: str
-    content: str
+    content: Union[str, List[Dict[str, Any]], None] = None
     name: Optional[str] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_call_id: Optional[str] = None
 
 class ChatCompletionRequest(BaseModel):
     model: str
@@ -1777,7 +1784,16 @@ async def create_chat_completion(
         logger.info(f"Model routing: '{request_data.model}' -> upstream config '{model_config.config_name}'")
 
         # Construct messages structure for context-aware detection
-        input_messages = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
+        input_messages = []
+        for msg in request_data.messages:
+            m = {"role": msg.role, "content": msg.content}
+            if getattr(msg, 'tool_calls', None):
+                m['tool_calls'] = msg.tool_calls
+            if getattr(msg, 'tool_call_id', None):
+                m['tool_call_id'] = msg.tool_call_id
+            if getattr(msg, 'name', None):
+                m['name'] = msg.name
+            input_messages.append(m)
 
         start_time = time.time()
         input_blocked = False
@@ -1806,6 +1822,10 @@ async def create_chat_completion(
 
             # If input is blocked, record log and return
             if input_blocked:
+                logger.warning(f"[InputBlocked] request_id={request_id}, tenant={tenant_id}, model={request_data.model}")
+                logger.warning(f"[InputBlocked] suggest_answer={suggest_answer}")
+                logger.warning(f"[InputBlocked] detection_result={input_detection_result}")
+                logger.warning(f"[InputBlocked] input_messages (first 500 chars each): {[{k: str(v)[:500] for k, v in m.items()} for m in input_messages]}")
                 # Record log
                 await proxy_service.log_proxy_request(
                         request_id=request_id,
@@ -1903,12 +1923,30 @@ async def create_chat_completion(
                     actual_model_name = actual_model_config.private_model_names[0]
                 logger.info(f"Switched to private model {actual_model_config.config_name}, using model name: {actual_model_name}")
 
-            # Clean messages: only keep role and content
-            clean_messages = [
-                {"role": msg.get('role'), "content": msg.get('content')}
-                if isinstance(msg, dict) else {"role": msg.role, "content": msg.content}
-                for msg in actual_messages
-            ]
+            # Clean messages: keep role, content, and tool-related fields
+            clean_messages = []
+            for msg in actual_messages:
+                if isinstance(msg, dict):
+                    clean_msg = {"role": msg.get('role'), "content": msg.get('content')}
+                    if msg.get('tool_calls'):
+                        clean_msg['tool_calls'] = msg['tool_calls']
+                    if msg.get('tool_call_id'):
+                        clean_msg['tool_call_id'] = msg['tool_call_id']
+                    if msg.get('name'):
+                        clean_msg['name'] = msg['name']
+                else:
+                    clean_msg = {"role": msg.role, "content": msg.content}
+                    if getattr(msg, 'tool_calls', None):
+                        clean_msg['tool_calls'] = msg.tool_calls
+                    if getattr(msg, 'tool_call_id', None):
+                        clean_msg['tool_call_id'] = msg.tool_call_id
+                    if getattr(msg, 'name', None):
+                        clean_msg['name'] = msg.name
+                clean_messages.append(clean_msg)
+
+            logger.info(f"[ToolCall Debug] Request has tools: {bool(getattr(request_data, 'tools', None))}, tool_choice: {getattr(request_data, 'tool_choice', None)}")
+            logger.info(f"[ToolCall Debug] Messages with tool_calls: {[i for i, m in enumerate(clean_messages) if m.get('tool_calls')]}")
+            logger.info(f"[ToolCall Debug] Messages with tool_call_id: {[i for i, m in enumerate(clean_messages) if m.get('tool_call_id')]}")
 
             # Check if it is a streaming request
             if request_data.stream:
@@ -1924,7 +1962,9 @@ async def create_chat_completion(
                     frequency_penalty=request_data.frequency_penalty,
                     presence_penalty=request_data.presence_penalty,
                     stop=request_data.stop,
-                    extra_body=request_data.extra_body
+                    extra_body=request_data.extra_body,
+                    tools=getattr(request_data, 'tools', None),
+                    tool_choice=getattr(request_data, 'tool_choice', None)
                 )
                 return await _handle_gateway_streaming_response(
                     upstream_response, actual_model_config, tenant_id, request_id,
@@ -1944,7 +1984,9 @@ async def create_chat_completion(
                 frequency_penalty=request_data.frequency_penalty,
                 presence_penalty=request_data.presence_penalty,
                 stop=request_data.stop,
-                extra_body=request_data.extra_body
+                extra_body=request_data.extra_body,
+                tools=getattr(request_data, 'tools', None),
+                tool_choice=getattr(request_data, 'tool_choice', None)
             )
             
             # Output detection - select asynchronous/synchronous mode based on configuration
