@@ -8,11 +8,11 @@
 <a href="https://arxiv.org/abs/2510.19169">Tech Report</a>
 </p>
 
-# OpenGuardrails
+# OpenGuardrails Safety
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Version](https://img.shields.io/badge/Version-5.1.0-green.svg)](https://github.com/openguardrails/openguardrails/releases)
-[![Stars](https://img.shields.io/github/stars/openguardrails/openguardrails?style=social)](https://github.com/openguardrails/openguardrails)
+[![Version](https://img.shields.io/badge/Version-5.1.0-green.svg)](https://github.com/openguardrails/openguardrails-safety/releases)
+[![Stars](https://img.shields.io/github/stars/openguardrails/openguardrails?style=social)](https://github.com/openguardrails/openguardrails-safety)
 
 > **The only production-ready, fully open-source AI guardrails platform for enterprise data protection**
 
@@ -264,7 +264,7 @@ Beyond data leakage prevention, OpenGuardrails provides:
 - Contributions welcome — see [Contributing Guide](CONTRIBUTING.md)
 - Contact: **[thomas@openguardrails.com](mailto:thomas@openguardrails.com)**
 - Website: [https://openguardrails.com](https://openguardrails.com)
-- Issues: [GitHub Issues](https://github.com/openguardrails/openguardrails/issues)
+- Issues: [GitHub Issues](https://github.com/openguardrails/openguardrails-safety/issues)
 
 ---
 
