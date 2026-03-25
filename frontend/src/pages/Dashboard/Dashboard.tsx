@@ -12,7 +12,6 @@ import {
   AlertCircle,
 } from 'lucide-react'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { dashboardApi } from '../../services/api'
@@ -49,43 +48,49 @@ const Dashboard: React.FC = () => {
     if (!stats) return {}
 
     return {
+      backgroundColor: 'transparent',
       title: {
         text: t('dashboard.riskDistribution'),
         left: 'center',
+        textStyle: { color: '#e2e8f0', fontSize: 14, fontWeight: 600 },
       },
       tooltip: {
         trigger: 'item',
         formatter: '{a} <br/>{b}: {c} ({d}%)',
+        backgroundColor: 'rgba(20, 27, 39, 0.95)',
+        borderColor: 'rgba(255,255,255,0.1)',
+        textStyle: { color: '#e2e8f0' },
       },
       legend: {
         orient: 'vertical',
         left: 'left',
+        textStyle: { color: '#94a3b8' },
       },
       series: [
         {
           name: t('dashboard.riskLevel'),
           type: 'pie',
-          radius: '50%',
+          radius: ['35%', '55%'],
           data: [
             {
               value: stats.risk_distribution['high_risk'] || 0,
               name: t('dashboard.highRisk'),
-              itemStyle: { color: '#ff4d4f' },
+              itemStyle: { color: '#ef4444' },
             },
             {
               value: stats.risk_distribution['medium_risk'] || 0,
               name: t('dashboard.mediumRisk'),
-              itemStyle: { color: '#faad14' },
+              itemStyle: { color: '#f59e0b' },
             },
             {
               value: stats.risk_distribution['low_risk'] || 0,
               name: t('dashboard.lowRisk'),
-              itemStyle: { color: '#fadb14' },
+              itemStyle: { color: '#eab308' },
             },
             {
               value: stats.risk_distribution['no_risk'] || 0,
               name: t('dashboard.noRisk'),
-              itemStyle: { color: '#52c41a' },
+              itemStyle: { color: '#10b981' },
             },
           ],
           emphasis: {
@@ -94,6 +99,9 @@ const Dashboard: React.FC = () => {
               shadowOffsetX: 0,
               shadowColor: 'rgba(0, 0, 0, 0.5)',
             },
+          },
+          label: {
+            color: '#94a3b8',
           },
         },
       ],
@@ -109,42 +117,65 @@ const Dashboard: React.FC = () => {
     const mediumRiskData = stats.daily_trends.map((item) => item.medium_risk)
 
     return {
+      backgroundColor: 'transparent',
       title: {
         text: t('dashboard.dailyTrends'),
         left: 'center',
+        textStyle: { color: '#e2e8f0', fontSize: 14, fontWeight: 600 },
       },
       tooltip: {
         trigger: 'axis',
+        backgroundColor: 'rgba(20, 27, 39, 0.95)',
+        borderColor: 'rgba(255,255,255,0.1)',
+        textStyle: { color: '#e2e8f0' },
       },
       legend: {
         data: [t('dashboard.totalDetections'), t('dashboard.highRisk'), t('dashboard.mediumRisk')],
         bottom: 0,
+        textStyle: { color: '#94a3b8' },
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '12%',
+        containLabel: true,
       },
       xAxis: {
         type: 'category',
         data: dates,
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        axisLabel: { color: '#64748b' },
       },
       yAxis: {
         type: 'value',
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        axisLabel: { color: '#64748b' },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
       },
       series: [
         {
           name: t('dashboard.totalDetections'),
           type: 'line',
           data: totalData,
-          itemStyle: { color: '#1890ff' },
+          smooth: true,
+          itemStyle: { color: '#0ea5e9' },
+          areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(14,165,233,0.15)' }, { offset: 1, color: 'rgba(14,165,233,0)' }] } },
         },
         {
           name: t('dashboard.highRisk'),
           type: 'line',
           data: highRiskData,
-          itemStyle: { color: '#ff4d4f' },
+          smooth: true,
+          itemStyle: { color: '#ef4444' },
+          areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(239,68,68,0.1)' }, { offset: 1, color: 'rgba(239,68,68,0)' }] } },
         },
         {
           name: t('dashboard.mediumRisk'),
           type: 'line',
           data: mediumRiskData,
-          itemStyle: { color: '#faad14' },
+          smooth: true,
+          itemStyle: { color: '#f59e0b' },
+          areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.1)' }, { offset: 1, color: 'rgba(245,158,11,0)' }] } },
         },
       ],
     }
@@ -153,21 +184,21 @@ const Dashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-sky-400 border-t-transparent"></div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-5 w-5" />
+      <Alert variant="destructive" className="bg-red-500/10 border-red-500/20">
+        <AlertCircle className="h-5 w-5 text-red-400" />
         <AlertDescription className="ml-2 flex items-center justify-between">
           <div>
-            <p className="font-medium">{t('dashboard.error')}</p>
-            <p className="text-sm mt-1">{error}</p>
+            <p className="font-medium text-red-400">{t('dashboard.error')}</p>
+            <p className="text-sm mt-1 text-red-400/80">{error}</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchStats}>
+          <Button variant="outline" size="sm" onClick={fetchStats} className="border-red-500/20 text-red-400 hover:bg-red-500/10">
             {t('dashboard.retry')}
           </Button>
         </AlertDescription>
@@ -177,210 +208,157 @@ const Dashboard: React.FC = () => {
 
   if (!stats) return null
 
-  const handleSecurityRisksClick = () => {
-    navigate('/results', { state: { security_risk_level: 'any_risk' } })
-  }
+  const handleSecurityRisksClick = () => navigate('/results', { state: { security_risk_level: 'any_risk' } })
+  const handleComplianceRisksClick = () => navigate('/results', { state: { compliance_risk_level: 'any_risk' } })
+  const handleDataLeaksClick = () => navigate('/results', { state: { data_risk_level: 'any_risk' } })
+  const handleTotalRisksClick = () => navigate('/results', { state: { risk_level: 'any_risk' } })
+  const handleRiskLevelClick = (riskLevel: string) => navigate('/results', { state: { risk_level: [riskLevel] } })
+  const handleSafePassedClick = () => navigate('/results', { state: { risk_level: ['no_risk'] } })
+  const handleTotalDetectionsClick = () => navigate('/results')
 
-  const handleComplianceRisksClick = () => {
-    navigate('/results', { state: { compliance_risk_level: 'any_risk' } })
-  }
+  const statCards = [
+    {
+      label: t('dashboard.totalRequests'),
+      value: stats.total_requests,
+      icon: FileCheck,
+      color: 'text-sky-400',
+      iconColor: 'text-sky-400/60',
+      onClick: handleTotalDetectionsClick,
+    },
+    {
+      label: t('dashboard.securityRisks'),
+      value: stats.security_risks,
+      suffix: t('dashboard.times'),
+      icon: Shield,
+      color: 'text-orange-400',
+      iconColor: 'text-orange-400/60',
+      onClick: handleSecurityRisksClick,
+    },
+    {
+      label: t('dashboard.complianceRisks'),
+      value: stats.compliance_risks,
+      suffix: t('dashboard.times'),
+      icon: Shield,
+      color: 'text-purple-400',
+      iconColor: 'text-purple-400/60',
+      onClick: handleComplianceRisksClick,
+    },
+    {
+      label: t('dashboard.dataLeaks'),
+      value: stats.data_leaks,
+      suffix: t('dashboard.times'),
+      icon: Lock,
+      color: 'text-pink-400',
+      iconColor: 'text-pink-400/60',
+      onClick: handleDataLeaksClick,
+    },
+  ]
 
-  const handleDataLeaksClick = () => {
-    navigate('/results', { state: { data_risk_level: 'any_risk' } })
-  }
-
-  const handleTotalRisksClick = () => {
-    navigate('/results', { state: { risk_level: 'any_risk' } })
-  }
-
-  const handleRiskLevelClick = (riskLevel: string) => {
-    navigate('/results', { state: { risk_level: [riskLevel] } })
-  }
-
-  const handleSafePassedClick = () => {
-    navigate('/results', { state: { risk_level: ['no_risk'] } })
-  }
-
-  const handleTotalDetectionsClick = () => {
-    navigate('/results')
-  }
+  const summaryCards = [
+    {
+      label: t('dashboard.totalRisks'),
+      value: stats.high_risk_count + stats.medium_risk_count + stats.low_risk_count,
+      suffix: t('dashboard.times'),
+      icon: AlertTriangle,
+      color: 'text-orange-400',
+      iconColor: 'text-orange-400/60',
+      onClick: handleTotalRisksClick,
+    },
+    {
+      label: t('dashboard.safePassed'),
+      value: stats.safe_count,
+      suffix: t('dashboard.times'),
+      icon: CheckCircle,
+      color: 'text-emerald-400',
+      iconColor: 'text-emerald-400/60',
+      onClick: handleSafePassedClick,
+    },
+    {
+      label: t('dashboard.blockRate'),
+      value: stats.total_requests > 0
+        ? ((stats.high_risk_count + stats.medium_risk_count + stats.low_risk_count) / stats.total_requests * 100).toFixed(1)
+        : 0,
+      suffix: '%',
+      icon: TrendingUp,
+      color: 'text-sky-400',
+      iconColor: 'text-sky-400/60',
+    },
+  ]
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold tracking-tight">{t('dashboard.title')}</h2>
+      <h2 className="og-page-title">{t('dashboard.title')}</h2>
 
       {/* Overall Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card
-          className="hover:shadow-md transition-shadow cursor-pointer"
-          onClick={handleTotalDetectionsClick}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {t('dashboard.totalRequests')}
-            </CardTitle>
-            <FileCheck className="h-5 w-5 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-600">{stats.total_requests}</div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="hover:shadow-md transition-shadow cursor-pointer"
-          onClick={handleSecurityRisksClick}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {t('dashboard.securityRisks')}
-            </CardTitle>
-            <Shield className="h-5 w-5 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-500">
-              {stats.security_risks}
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                {t('dashboard.times')}
-              </span>
+        {statCards.map((card) => (
+          <div
+            key={card.label}
+            className="og-stat-card cursor-pointer"
+            onClick={card.onClick}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13px] font-medium text-muted-foreground">{card.label}</span>
+              <card.icon className={`h-5 w-5 ${card.iconColor}`} />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="hover:shadow-md transition-shadow cursor-pointer"
-          onClick={handleComplianceRisksClick}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {t('dashboard.complianceRisks')}
-            </CardTitle>
-            <Shield className="h-5 w-5 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-purple-600">
-              {stats.compliance_risks}
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                {t('dashboard.times')}
-              </span>
+            <div className={`text-3xl font-bold ${card.color}`}>
+              {card.value}
+              {card.suffix && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">{card.suffix}</span>
+              )}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="hover:shadow-md transition-shadow cursor-pointer"
-          onClick={handleDataLeaksClick}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {t('dashboard.dataLeaks')}
-            </CardTitle>
-            <Lock className="h-5 w-5 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-pink-600">
-              {stats.data_leaks}
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                {t('dashboard.times')}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        ))}
       </div>
 
-      {/* Risk Type Distribution */}
+      {/* Risk Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card
-          className="hover:shadow-md transition-shadow cursor-pointer"
-          onClick={handleTotalRisksClick}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {t('dashboard.totalRisks')}
-            </CardTitle>
-            <AlertTriangle className="h-5 w-5 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-orange-600">
-              {stats.high_risk_count + stats.medium_risk_count + stats.low_risk_count}
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                {t('dashboard.times')}
-              </span>
+        {summaryCards.map((card) => (
+          <div
+            key={card.label}
+            className={`og-stat-card ${card.onClick ? 'cursor-pointer' : ''}`}
+            onClick={card.onClick}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[13px] font-medium text-muted-foreground">{card.label}</span>
+              <card.icon className={`h-5 w-5 ${card.iconColor}`} />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card
-          className="hover:shadow-md transition-shadow cursor-pointer"
-          onClick={handleSafePassedClick}
-        >
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {t('dashboard.safePassed')}
-            </CardTitle>
-            <CheckCircle className="h-5 w-5 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">
-              {stats.safe_count}
-              <span className="text-sm font-normal text-gray-500 ml-2">
-                {t('dashboard.times')}
-              </span>
+            <div className={`text-3xl font-bold ${card.color}`}>
+              {card.value}
+              {card.suffix && (
+                <span className={`${card.suffix === '%' ? 'text-xl' : 'text-sm'} font-normal text-muted-foreground ml-1`}>
+                  {card.suffix}
+                </span>
+              )}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">
-              {t('dashboard.blockRate')}
-            </CardTitle>
-            <TrendingUp className="h-5 w-5 text-gray-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-blue-600">
-              {stats.total_requests > 0
-                ? (
-                    ((stats.high_risk_count + stats.medium_risk_count + stats.low_risk_count) /
-                      stats.total_requests) *
-                    100
-                  ).toFixed(1)
-                : 0}
-              <span className="text-xl font-normal text-gray-500">%</span>
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        ))}
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <ReactECharts
-              option={getRiskDistributionOption()}
-              style={{ height: 400 }}
-              onEvents={{
-                click: (params: any) => {
-                  const riskLevelMap: { [key: string]: string } = {
-                    [t('dashboard.highRisk')]: 'high_risk',
-                    [t('dashboard.mediumRisk')]: 'medium_risk',
-                    [t('dashboard.lowRisk')]: 'low_risk',
-                    [t('dashboard.noRisk')]: 'no_risk',
-                  }
-                  const riskLevel = riskLevelMap[params.name]
-                  if (riskLevel) {
-                    handleRiskLevelClick(riskLevel)
-                  }
-                },
-              }}
-            />
-          </CardContent>
-        </Card>
+        <div className="bg-card border border-border rounded-lg p-5">
+          <ReactECharts
+            option={getRiskDistributionOption()}
+            style={{ height: 380 }}
+            onEvents={{
+              click: (params: any) => {
+                const riskLevelMap: { [key: string]: string } = {
+                  [t('dashboard.highRisk')]: 'high_risk',
+                  [t('dashboard.mediumRisk')]: 'medium_risk',
+                  [t('dashboard.lowRisk')]: 'low_risk',
+                  [t('dashboard.noRisk')]: 'no_risk',
+                }
+                const riskLevel = riskLevelMap[params.name]
+                if (riskLevel) handleRiskLevelClick(riskLevel)
+              },
+            }}
+          />
+        </div>
 
-        <Card>
-          <CardContent className="p-6">
-            <ReactECharts option={getTrendOption()} style={{ height: 400 }} />
-          </CardContent>
-        </Card>
+        <div className="bg-card border border-border rounded-lg p-5">
+          <ReactECharts option={getTrendOption()} style={{ height: 380 }} />
+        </div>
       </div>
     </div>
   )

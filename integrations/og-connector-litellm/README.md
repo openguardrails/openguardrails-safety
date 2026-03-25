@@ -181,7 +181,7 @@ guardrails:
 
 In the OpenGuardrails Admin UI:
 1. Create an **Application** and get its API key (`sk-xxai-xxx`)
-2. Configure **Data Leakage Policy** for the application:
+2. Configure **Data Masking Policy** for the application:
    - Set risk actions: e.g., High Risk → `switch_private_model`, Medium → `anonymize`
 3. Configure **Risk Type Settings** as needed
 
@@ -189,7 +189,7 @@ In the OpenGuardrails Admin UI:
 
 ### Private Model Switching
 
-When OpenGuardrails detects sensitive data and the application's data leakage policy specifies `switch_private_model`, the flow is:
+When OpenGuardrails detects sensitive data and the application's data masking policy specifies `switch_private_model`, the flow is:
 
 1. OpenGuardrails returns `action: "switch_private_model"`
 2. The guardrail hook sets `data["model"] = "og-private-model"`

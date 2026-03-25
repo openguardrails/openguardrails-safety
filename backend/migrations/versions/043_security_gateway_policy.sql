@@ -43,7 +43,7 @@ ALTER TABLE application_data_leakage_policies
 ADD COLUMN IF NOT EXISTS general_low_risk_action VARCHAR(50) DEFAULT NULL;
 
 -- 3. Add private model names list to upstream_api_configs
--- This stores model names available for automatic switching when data leakage is detected
+-- This stores model names available for automatic switching when data masking is detected
 ALTER TABLE upstream_api_configs
 ADD COLUMN IF NOT EXISTS private_model_names JSONB DEFAULT '[]'::jsonb;
 

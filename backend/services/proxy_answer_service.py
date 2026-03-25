@@ -36,7 +36,7 @@ class ProxyAnswerService:
         self,
         user_query: str,
         kb_reference: str,
-        scanner_name: str,
+        guardrail_name: str,
         risk_level: str = "medium_risk",
         user_language: str = "en"
     ) -> str:
@@ -45,14 +45,14 @@ class ProxyAnswerService:
 
         Instead of directly returning knowledge base content, this method:
         1. Uses KB content as reference context
-        2. Emphasizes the detected risk (scanner_name)
+        2. Emphasizes the detected risk (guardrail_name)
         3. Asks the model to generate a careful, positive response
         4. Emphasizes legal compliance, ethics, and user well-being
 
         Args:
             user_query: The original user question
             kb_reference: The knowledge base content to use as reference
-            scanner_name: The detected risk scanner name (e.g., "Self-Harm", "Violence")
+            guardrail_name: The detected risk guardrail name (e.g., "Self-Harm", "Violence")
             risk_level: The risk level (high_risk, medium_risk, low_risk)
             user_language: User's preferred language ('en' or 'zh')
 
@@ -61,7 +61,7 @@ class ProxyAnswerService:
         """
         try:
             # Build system prompt based on language
-            system_prompt = self._build_system_prompt(scanner_name, risk_level, user_language)
+            system_prompt = self._build_system_prompt(guardrail_name, risk_level, user_language)
 
             # Build user message with KB reference
             user_message = self._build_user_message(user_query, kb_reference, user_language)
@@ -71,7 +71,7 @@ class ProxyAnswerService:
                 {"role": "user", "content": user_message}
             ]
 
-            logger.info(f"Generating proxy answer for risk: {scanner_name}, query: {user_query[:50]}...")
+            logger.info(f"Generating proxy answer for risk: {guardrail_name}, query: {user_query[:50]}...")
 
             response = await self._call_model(messages)
 
@@ -81,13 +81,13 @@ class ProxyAnswerService:
         except Exception as e:
             logger.error(f"Failed to generate proxy answer: {e}", exc_info=True)
             # Fallback to a safe default message
-            return self._get_fallback_message(scanner_name, user_language)
+            return self._get_fallback_message(guardrail_name, user_language)
 
-    def _build_system_prompt(self, scanner_name: str, risk_level: str, language: str) -> str:
+    def _build_system_prompt(self, guardrail_name: str, risk_level: str, language: str) -> str:
         """Build the system prompt for proxy answer generation"""
 
         if language == 'zh':
-            return f"""你是一个负责任的AI助手。用户的问题可能涉及"{scanner_name}"相关的敏感话题。
+            return f"""你是一个负责任的AI助手。用户的问题可能涉及"{guardrail_name}"相关的敏感话题。
 
 你的任务是：
 1. 仔细参考提供的参考内容，理解如何安全地回应此类问题
@@ -107,7 +107,7 @@ class ProxyAnswerService:
 
 风险等级：{risk_level}"""
         else:
-            return f"""You are a responsible AI assistant. The user's question may involve sensitive topics related to "{scanner_name}".
+            return f"""You are a responsible AI assistant. The user's question may involve sensitive topics related to "{guardrail_name}".
 
 Your task is to:
 1. Carefully reference the provided reference content to understand how to safely respond to such questions
@@ -174,16 +174,16 @@ Please generate a safe, positive response based on the above reference content."
             logger.error(f"Model API call error: {e}")
             raise
 
-    def _get_fallback_message(self, scanner_name: str, language: str) -> str:
+    def _get_fallback_message(self, guardrail_name: str, language: str) -> str:
         """Get fallback message when generation fails"""
         try:
             template = get_translation(language, 'guardrail', 'responseTemplates', 'securityRisk')
-            return template.replace('{scanner_name}', scanner_name)
+            return template.replace('{guardrail_name}', guardrail_name)
         except Exception:
             if language == 'zh':
-                return f"抱歉，我无法回答涉及{scanner_name}的问题。如果您需要帮助，请联系专业人士或相关机构。"
+                return f"抱歉，我无法回答涉及{guardrail_name}的问题。如果您需要帮助，请联系专业人士或相关机构。"
             else:
-                return f"Sorry, I cannot answer questions involving {scanner_name}. If you need help, please contact professionals or relevant organizations."
+                return f"Sorry, I cannot answer questions involving {guardrail_name}. If you need help, please contact professionals or relevant organizations."
 
     async def close(self):
         """Close the HTTP client"""

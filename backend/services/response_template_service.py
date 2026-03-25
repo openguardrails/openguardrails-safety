@@ -42,7 +42,7 @@ class ResponseTemplateService:
                 (ResponseTemplate.scanner_type == 'official_scanner') &
                 (ResponseTemplate.scanner_identifier == scanner.tag)
             ) |
-            (ResponseTemplate.scanner_name == scanner.name) |
+            (ResponseTemplate.guardrail_name == scanner.name) |
             (ResponseTemplate.category == scanner.tag)
         ).first()
 
@@ -59,7 +59,7 @@ class ResponseTemplateService:
             category=scanner.tag,  # Keep for backward compatibility
             scanner_type='official_scanner',
             scanner_identifier=scanner.tag,
-            scanner_name=scanner.name,
+            guardrail_name=scanner.name,
             risk_level=scanner.default_risk_level,
             template_content=default_content,
             is_default=True,
@@ -101,7 +101,7 @@ class ResponseTemplateService:
                 (ResponseTemplate.scanner_type == 'custom_scanner') &
                 (ResponseTemplate.scanner_identifier == scanner.tag)
             ) |
-            (ResponseTemplate.scanner_name == scanner.name) |
+            (ResponseTemplate.guardrail_name == scanner.name) |
             (ResponseTemplate.category == scanner.tag)
         ).first()
 
@@ -109,7 +109,7 @@ class ResponseTemplateService:
             logger.info(f"Template for custom scanner {scanner.tag} already exists (ID: {existing.id})")
             return None
 
-        # Use generic securityRisk template with scanner_name
+        # Use generic securityRisk template with guardrail_name
         default_content = self._get_default_content_for_scanner(scanner.name)
 
         template = ResponseTemplate(
@@ -117,7 +117,7 @@ class ResponseTemplateService:
             application_id=application_id,
             scanner_type='custom_scanner',
             scanner_identifier=scanner.tag,
-            scanner_name=scanner.name,
+            guardrail_name=scanner.name,
             risk_level=scanner.default_risk_level,
             template_content=default_content,
             is_default=True,
@@ -159,7 +159,7 @@ class ResponseTemplateService:
                 (ResponseTemplate.scanner_type == 'marketplace_scanner') &
                 (ResponseTemplate.scanner_identifier == scanner.tag)
             ) |
-            (ResponseTemplate.scanner_name == scanner.name) |
+            (ResponseTemplate.guardrail_name == scanner.name) |
             (ResponseTemplate.category == scanner.tag)
         ).first()
 
@@ -167,7 +167,7 @@ class ResponseTemplateService:
             logger.info(f"Template for marketplace scanner {scanner.tag} already exists (ID: {existing.id})")
             return None
 
-        # Use generic securityRisk template with scanner_name
+        # Use generic securityRisk template with guardrail_name
         default_content = self._get_default_content_for_scanner(scanner.name)
 
         template = ResponseTemplate(
@@ -175,7 +175,7 @@ class ResponseTemplateService:
             application_id=application_id,
             scanner_type='marketplace_scanner',
             scanner_identifier=scanner.tag,
-            scanner_name=scanner.name,
+            guardrail_name=scanner.name,
             risk_level=scanner.default_risk_level,
             template_content=default_content,
             is_default=True,
@@ -217,7 +217,7 @@ class ResponseTemplateService:
                 (ResponseTemplate.scanner_type == 'blacklist') &
                 (ResponseTemplate.scanner_identifier == blacklist.name)
             ) |
-            (ResponseTemplate.scanner_name == blacklist.name) |
+            (ResponseTemplate.guardrail_name == blacklist.name) |
             (ResponseTemplate.category == blacklist.name)
         ).first()
 
@@ -233,7 +233,7 @@ class ResponseTemplateService:
             application_id=application_id,
             scanner_type='blacklist',
             scanner_identifier=blacklist.name,
-            scanner_name=blacklist.name,
+            guardrail_name=blacklist.name,
             risk_level='high_risk',
             template_content=default_content,
             is_default=True,
@@ -321,15 +321,15 @@ class ResponseTemplateService:
         )
         return True
 
-    def _get_default_content_for_scanner(self, scanner_name: str) -> Dict[str, str]:
+    def _get_default_content_for_scanner(self, guardrail_name: str) -> Dict[str, str]:
         """
-        Get default multilingual content for any scanner using the generic securityRisk template.
+        Get default multilingual content for any guardrail using the generic securityRisk template.
 
         Args:
-            scanner_name: Human-readable scanner name (e.g., "Hate & Discrimination", "Custom Scanner")
+            guardrail_name: Human-readable guardrail name (e.g., "Hate & Discrimination", "Custom Scanner")
 
         Returns:
-            Dictionary with multilingual content with {scanner_name} replaced
+            Dictionary with multilingual content with {guardrail_name} replaced
         """
         # Use the generic securityRisk template from i18n
         try:
@@ -342,9 +342,9 @@ class ResponseTemplateService:
         except KeyError:
             zh_template = get_translation('zh', 'guardrail', 'responseTemplates', 'default')
 
-        # Replace {scanner_name} variable
-        en_content = en_template.replace('{scanner_name}', scanner_name) if '{scanner_name}' in en_template else en_template
-        zh_content = zh_template.replace('{scanner_name}', scanner_name) if '{scanner_name}' in zh_template else zh_template
+        # Replace {guardrail_name} variable
+        en_content = en_template.replace('{guardrail_name}', guardrail_name) if '{guardrail_name}' in en_template else en_template
+        zh_content = zh_template.replace('{guardrail_name}', guardrail_name) if '{guardrail_name}' in zh_template else zh_template
 
         return {
             'en': en_content,
@@ -354,7 +354,7 @@ class ResponseTemplateService:
     def _get_default_content_for_official_scanner(self, tag: str) -> Dict[str, str]:
         """
         Get default multilingual content for official scanners (S1-S21).
-        Now uses the generic securityRisk template with scanner_name variable.
+        Now uses the generic securityRisk template with guardrail_name variable.
 
         Args:
             tag: Scanner tag (S1, S2, etc.) - used to look up scanner name
@@ -362,8 +362,8 @@ class ResponseTemplateService:
         Returns:
             Dictionary with multilingual content
         """
-        # Scanner name mapping for official scanners
-        scanner_names = {
+        # Guardrail name mapping for official scanners
+        guardrail_names = {
             'S1': 'General Political Topics',
             'S2': 'Sensitive Political Topics',
             'S3': 'Insult to National Symbols or Leaders',
@@ -387,6 +387,6 @@ class ResponseTemplateService:
             'S21': 'Professional Legal Advice',
         }
 
-        scanner_name = scanner_names.get(tag, tag)
-        return self._get_default_content_for_scanner(scanner_name)
+        guardrail_name = guardrail_names.get(tag, tag)
+        return self._get_default_content_for_scanner(guardrail_name)
 

@@ -283,7 +283,7 @@ class ScannerPackageService:
             scanner_list.append({
                 'id': str(scanner.id),
                 'scanner_tag': scanner.tag,  # Use scanner_tag to match frontend expectation
-                'scanner_name': scanner.name,  # Use scanner_name to match frontend expectation
+                'guardrail_name': scanner.name,  # Use guardrail_name to match frontend expectation
                 'tag': scanner.tag,  # Keep original for backward compatibility
                 'name': scanner.name,  # Keep original for backward compatibility
                 'description': scanner.description,
@@ -382,7 +382,7 @@ class ScannerPackageService:
             scanner_info = {
                 'id': str(scanner.id),
                 'scanner_tag': scanner.tag,  # Use scanner_tag to match frontend expectation
-                'scanner_name': scanner.name,  # Use scanner_name to match frontend expectation
+                'guardrail_name': scanner.name,  # Use guardrail_name to match frontend expectation
                 'tag': scanner.tag,  # Keep original for backward compatibility
                 'name': scanner.name,  # Keep original for backward compatibility
                 'description': scanner.description,

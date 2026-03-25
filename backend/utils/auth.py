@@ -99,11 +99,12 @@ def verify_token(token: str) -> dict:
 
         return {
             "tenant_id": tenant_id,
-            "user_id": tenant_id,  # Preserve backward compatibility
+            "user_id": payload.get("user_id") or tenant_id,  # Individual user ID
             "sub": subject,
             "email": payload.get("email"),
             "role": role,
             "is_super_admin": payload.get("is_super_admin", False),
+            "member_role": payload.get("member_role", "owner"),
         }
             
     except JWTError:

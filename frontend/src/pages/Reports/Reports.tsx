@@ -59,24 +59,31 @@ const Reports: React.FC = () => {
 
   const getCategoryDistributionOption = () => {
     return {
+      backgroundColor: 'transparent',
       title: {
         text: t('reports.categoryDistribution'),
         left: 'center',
+        textStyle: { color: '#e2e8f0', fontSize: 14, fontWeight: 600 },
       },
       tooltip: {
         trigger: 'item',
         formatter: '{a} <br/>{b}: {c} ({d}%)',
+        backgroundColor: 'rgba(20, 27, 39, 0.95)',
+        borderColor: 'rgba(255,255,255,0.1)',
+        textStyle: { color: '#e2e8f0' },
       },
       legend: {
         orient: 'vertical',
         left: 'left',
+        textStyle: { color: '#94a3b8' },
       },
       series: [
         {
           name: t('reports.riskCategory'),
           type: 'pie',
-          radius: '50%',
+          radius: ['35%', '55%'],
           data: categoryData,
+          label: { color: '#94a3b8' },
           emphasis: {
             itemStyle: {
               shadowBlur: 10,
@@ -92,6 +99,7 @@ const Reports: React.FC = () => {
   const getTrendOption = () => {
     if (!stats || !stats.daily_trends || stats.daily_trends.length === 0) {
       return {
+        backgroundColor: 'transparent',
         title: {
           text: dateRange.from && dateRange.to
             ? t('reports.riskTrendPeriod', {
@@ -100,9 +108,10 @@ const Reports: React.FC = () => {
               })
             : '',
           left: 'center',
+          textStyle: { color: '#e2e8f0', fontSize: 14, fontWeight: 600 },
         },
-        xAxis: { type: 'category', data: [] },
-        yAxis: { type: 'value' },
+        xAxis: { type: 'category', data: [], axisLabel: { color: '#64748b' } },
+        yAxis: { type: 'value', axisLabel: { color: '#64748b' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
         series: [{ name: t('reports.riskDetectionCount'), type: 'line', data: [] }],
       }
     }
@@ -113,6 +122,7 @@ const Reports: React.FC = () => {
     )
 
     return {
+      backgroundColor: 'transparent',
       title: {
         text: dateRange.from && dateRange.to
           ? t('reports.riskTrendPeriod', {
@@ -121,9 +131,13 @@ const Reports: React.FC = () => {
             })
           : '',
         left: 'center',
+        textStyle: { color: '#e2e8f0', fontSize: 14, fontWeight: 600 },
       },
       tooltip: {
         trigger: 'axis',
+        backgroundColor: 'rgba(20, 27, 39, 0.95)',
+        borderColor: 'rgba(255,255,255,0.1)',
+        textStyle: { color: '#e2e8f0' },
         formatter: (params: any) => {
           const date = format(new Date(params[0].name), 'yyyy-MM-dd')
           return `${date}<br/>${t('reports.riskDetectionCount')}: ${params[0].value}`
@@ -132,9 +146,14 @@ const Reports: React.FC = () => {
       xAxis: {
         type: 'category',
         data: dates.map((date) => format(new Date(date), 'MM/dd')),
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        axisLabel: { color: '#64748b' },
       },
       yAxis: {
         type: 'value',
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        axisLabel: { color: '#64748b' },
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
       },
       series: [
         {
@@ -152,7 +171,7 @@ const Reports: React.FC = () => {
     return (
       <div className="flex items-center justify-center p-12">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400 mx-auto"></div>
         </div>
       </div>
     )
@@ -160,13 +179,13 @@ const Reports: React.FC = () => {
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+      <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
         <div className="flex items-start gap-2">
           <div className="flex-1">
-            <h3 className="text-red-900 font-semibold">{t('reports.error')}</h3>
-            <p className="text-red-700 text-sm mt-1">{error}</p>
+            <h3 className="text-red-200 font-semibold">{t('reports.error')}</h3>
+            <p className="text-red-400 text-sm mt-1">{error}</p>
           </div>
-          <Button variant="link" onClick={fetchReportData} className="text-blue-600">
+          <Button variant="link" onClick={fetchReportData} className="text-sky-400">
             {t('reports.retry')}
           </Button>
         </div>
@@ -193,45 +212,45 @@ const Reports: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
                 {t('reports.securityRisksDetected')}
               </CardTitle>
-              <Shield className="h-5 w-5 text-gray-400" />
+              <Shield className="h-5 w-5 text-slate-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-orange-600">
+              <div className="text-3xl font-bold text-orange-400">
                 {stats.security_risks}
-                <span className="text-sm font-normal text-gray-500 ml-2">{t('reports.times')}</span>
+                <span className="text-sm font-normal text-muted-foreground ml-2">{t('reports.times')}</span>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
                 {t('reports.complianceRisksDetected')}
               </CardTitle>
-              <Shield className="h-5 w-5 text-gray-400" />
+              <Shield className="h-5 w-5 text-slate-500" />
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-purple-600">
                 {stats.compliance_risks}
-                <span className="text-sm font-normal text-gray-500 ml-2">{t('reports.times')}</span>
+                <span className="text-sm font-normal text-muted-foreground ml-2">{t('reports.times')}</span>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
                 {t('reports.dataLeaksDetected')}
               </CardTitle>
-              <Lock className="h-5 w-5 text-gray-400" />
+              <Lock className="h-5 w-5 text-slate-500" />
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-pink-600">
                 {stats.data_leaks}
-                <span className="text-sm font-normal text-gray-500 ml-2">{t('reports.times')}</span>
+                <span className="text-sm font-normal text-muted-foreground ml-2">{t('reports.times')}</span>
               </div>
             </CardContent>
           </Card>
@@ -247,7 +266,7 @@ const Reports: React.FC = () => {
             {categoryData.length > 0 ? (
               <ReactECharts option={getCategoryDistributionOption()} style={{ height: 400 }} />
             ) : (
-              <div className="h-[400px] flex items-center justify-center text-gray-400">
+              <div className="h-[400px] flex items-center justify-center text-slate-500">
                 {t('reports.noRiskCategoryData')}
               </div>
             )}
@@ -262,7 +281,7 @@ const Reports: React.FC = () => {
             {stats ? (
               <ReactECharts option={getTrendOption()} style={{ height: 400 }} />
             ) : (
-              <div className="h-[400px] flex items-center justify-center text-gray-400">
+              <div className="h-[400px] flex items-center justify-center text-slate-500">
                 {t('reports.noTrendData')}
               </div>
             )}

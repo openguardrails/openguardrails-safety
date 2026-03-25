@@ -57,6 +57,16 @@ class ScannerConfigService:
         ).all()
         config_map = {str(c.scanner_id): c for c in configs}
 
+        # If no app-level configs, fall back to workspace-level configs
+        if not config_map:
+            app = self.db.query(Application).filter(Application.id == application_id).first()
+            if app and app.workspace_id:
+                ws_configs = self.db.query(ApplicationScannerConfig).filter(
+                    ApplicationScannerConfig.workspace_id == app.workspace_id,
+                    ApplicationScannerConfig.application_id.is_(None)
+                ).all()
+                config_map = {str(c.scanner_id): c for c in ws_configs}
+
         # Combine scanner definitions with configs
         result = []
         for scanner in all_scanners:

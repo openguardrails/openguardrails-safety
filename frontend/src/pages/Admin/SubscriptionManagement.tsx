@@ -144,7 +144,7 @@ const SubscriptionManagement: React.FC = () => {
             </div>
             <Progress
               value={percentage}
-              className={`h-2 ${record.usage_percentage >= 90 ? '[&>div]:bg-red-500' : '[&>div]:bg-blue-500'}`}
+              className={`h-2 ${record.usage_percentage >= 90 ? '[&>div]:bg-red-500' : '[&>div]:bg-sky-500'}`}
             />
           </div>
         )
@@ -175,7 +175,7 @@ const SubscriptionManagement: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => handleResetQuota(record.tenant_id)}
-              className="text-red-600 hover:text-red-700"
+              className="text-red-400 hover:text-red-300"
             >
               <RotateCw className="mr-2 h-4 w-4" />
               {t('admin.subscriptions.reset')}

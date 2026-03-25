@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import { Edit, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -30,7 +31,6 @@ import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/data-table/DataTable'
 import { configApi, knowledgeBaseApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { useApplication } from '../../contexts/ApplicationContext'
 import type { ResponseTemplate } from '../../types'
 import { eventBus, EVENTS } from '../../utils/eventBus'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -45,12 +45,12 @@ type ResponseTemplateFormData = z.infer<typeof responseTemplateSchema>
 
 const ResponseTemplateManagement: React.FC = () => {
   const { t, i18n } = useTranslation()
+  const canEdit = useCanEdit()
   const [data, setData] = useState<ResponseTemplate[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [editingItem, setEditingItem] = useState<ResponseTemplate | null>(null)
   const { onUserSwitch } = useAuth()
-  const { currentApplicationId } = useApplication()
   const [currentLang, setCurrentLang] = useState(i18n.language || 'en')
 
   // Available scanners for template creation
@@ -118,10 +118,8 @@ const ResponseTemplateManagement: React.FC = () => {
   ]
 
   useEffect(() => {
-    if (currentApplicationId) {
-      loadAllData()
-    }
-  }, [currentApplicationId])
+    loadAllData()
+  }, [])
 
   // Listen to user switch event, automatically refresh data
   useEffect(() => {
@@ -264,13 +262,13 @@ const ResponseTemplateManagement: React.FC = () => {
     if (record.scanner_type === 'blacklist' && record.scanner_identifier) {
       categoryDisplayValue = `${t('config.blacklist')} - ${record.scanner_identifier}`
     } else if (record.scanner_type === 'custom_scanner' && record.scanner_identifier) {
-      const displayText = record.scanner_name
-        ? `${record.scanner_identifier} - ${record.scanner_name}`
+      const displayText = record.guardrail_name
+        ? `${record.scanner_identifier} - ${record.guardrail_name}`
         : record.scanner_identifier
       categoryDisplayValue = displayText
     } else if (record.scanner_type === 'marketplace_scanner' && record.scanner_identifier) {
-      const displayText = record.scanner_name
-        ? `${record.scanner_identifier} - ${record.scanner_name}`
+      const displayText = record.guardrail_name
+        ? `${record.scanner_identifier} - ${record.guardrail_name}`
         : record.scanner_identifier
       categoryDisplayValue = displayText
     }
@@ -383,8 +381,8 @@ const ResponseTemplateManagement: React.FC = () => {
           }
           // If scanner_type is custom_scanner, show "tag - name"
           if (record.scanner_type === 'custom_scanner' && record.scanner_identifier) {
-            const displayText = record.scanner_name
-              ? `${record.scanner_identifier} - ${record.scanner_name}`
+            const displayText = record.guardrail_name
+              ? `${record.scanner_identifier} - ${record.guardrail_name}`
               : record.scanner_identifier
             return <Badge variant="secondary">{displayText}</Badge>
           }
@@ -394,8 +392,8 @@ const ResponseTemplateManagement: React.FC = () => {
               record.scanner_type === 'marketplace_scanner') &&
             record.scanner_identifier
           ) {
-            const displayText = record.scanner_name
-              ? `${record.scanner_identifier} - ${record.scanner_name}`
+            const displayText = record.guardrail_name
+              ? `${record.scanner_identifier} - ${record.guardrail_name}`
               : record.scanner_identifier
             return <Badge variant="default">{displayText}</Badge>
           }
@@ -440,7 +438,7 @@ const ResponseTemplateManagement: React.FC = () => {
               const availableLangs = Object.keys(content)
               if (availableLangs.length > 0) {
                 return (
-                  <span className="text-gray-400 italic">
+                  <span className="text-slate-500 italic">
                     {t('template.noContentForLanguage', {
                       language: currentLang === 'zh' ? '中文' : 'English',
                     })}{' '}
@@ -452,14 +450,14 @@ const ResponseTemplateManagement: React.FC = () => {
             }
           }
 
-          // Replace {scanner_name} placeholder with actual scanner name (not tag)
+          // Replace {guardrail_name} placeholder with actual guardrail name (not tag)
           if (displayText) {
             if (record.scanner_type === 'blacklist' || record.scanner_type === 'whitelist') {
-              displayText = displayText.replace(/{scanner_name}/g, record.scanner_identifier || '')
-            } else if (record.scanner_name) {
-              displayText = displayText.replace(/{scanner_name}/g, record.scanner_name)
+              displayText = displayText.replace(/{guardrail_name}/g, record.scanner_identifier || '')
+            } else if (record.guardrail_name) {
+              displayText = displayText.replace(/{guardrail_name}/g, record.guardrail_name)
             } else if (record.scanner_identifier) {
-              displayText = displayText.replace(/{scanner_name}/g, record.scanner_identifier)
+              displayText = displayText.replace(/{guardrail_name}/g, record.scanner_identifier)
             }
           }
 
@@ -478,10 +476,10 @@ const ResponseTemplateManagement: React.FC = () => {
           return format(new Date(time), 'yyyy-MM-dd HH:mm:ss')
         },
       },
-      {
+      ...(canEdit ? [{
         id: 'actions',
         header: t('common.operation'),
-        cell: ({ row }) => {
+        cell: ({ row }: { row: any }) => {
           const record = row.original
           return (
             <Button variant="link" size="sm" onClick={() => handleEdit(record)} className="h-auto p-0">
@@ -490,9 +488,9 @@ const ResponseTemplateManagement: React.FC = () => {
             </Button>
           )
         },
-      },
+      }] : []),
     ],
-    [currentLang, t]
+    [currentLang, t, canEdit]
   )
 
   return (
@@ -500,7 +498,7 @@ const ResponseTemplateManagement: React.FC = () => {
       <div className="flex justify-between items-start">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">{t('template.rejectAnswerLibrary')}</h2>
-          <p className="text-gray-600 mt-2">{t('template.rejectAnswerDescription')}</p>
+          <p className="text-muted-foreground mt-2">{t('template.rejectAnswerDescription')}</p>
         </div>
         <Button onClick={loadAllData} disabled={loading}>
           <RefreshCw className="mr-2 h-4 w-4" />

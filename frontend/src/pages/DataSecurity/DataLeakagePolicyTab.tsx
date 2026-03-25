@@ -6,7 +6,6 @@ import { Shield, AlertCircle, Info } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useApplication } from '../../contexts/ApplicationContext'
 import { useAuth } from '../../contexts/AuthContext'
 
 import InputPolicyConfig from './InputPolicyConfig'
@@ -59,16 +58,13 @@ const DataLeakagePolicyTab: React.FC = () => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
   const [policy, setPolicy] = useState<ApplicationPolicy | null>(null)
-  const { currentApplicationId } = useApplication()
   const { onUserSwitch } = useAuth()
 
   // Fetch policy data
   const fetchPolicy = async () => {
-    if (!currentApplicationId) return
-
     setLoading(true)
     try {
-      const data = await dataLeakagePolicyApi.getPolicy(currentApplicationId)
+      const data = await dataLeakagePolicyApi.getPolicy()
       setPolicy(data)
     } catch (error: any) {
       console.error('Failed to fetch policy:', error)
@@ -80,7 +76,7 @@ const DataLeakagePolicyTab: React.FC = () => {
 
   useEffect(() => {
     fetchPolicy()
-  }, [currentApplicationId])
+  }, [])
 
   // Listen to user switch event
   useEffect(() => {

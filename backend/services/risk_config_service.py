@@ -1,32 +1,59 @@
 from typing import Optional, Dict
 from sqlalchemy.orm import Session
-from database.models import RiskTypeConfig, Tenant
+from database.models import RiskTypeConfig, Tenant, Application
 from utils.logger import setup_logger
 
 logger = setup_logger()
 
+
+def _get_workspace_id_for_app(db: Session, application_id: str) -> Optional[str]:
+    """Get workspace_id for an application (returns None if not in a workspace)"""
+    try:
+        app = db.query(Application.workspace_id).filter(Application.id == application_id).first()
+        if app and app.workspace_id:
+            return str(app.workspace_id)
+        return None
+    except Exception:
+        return None
+
+
 class RiskConfigService:
     """Risk type configuration service"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     def get_user_risk_config(self, tenant_id: str = None, application_id: str = None) -> Optional[RiskTypeConfig]:
-        """Get user risk config (supports both tenant_id and application_id)"""
+        """Get user risk config with workspace fallback: app → workspace → tenant"""
         try:
-            # Prefer application_id (new multi-app model)
+            # 1. Prefer application_id (new multi-app model)
             if application_id:
                 config = self.db.query(RiskTypeConfig).filter(
                     RiskTypeConfig.application_id == application_id
                 ).first()
-            elif tenant_id:
-                # Fallback to tenant_id (legacy model, get first application's config)
+                if config:
+                    return config
+
+                # 2. Fallback to workspace config
+                workspace_id = _get_workspace_id_for_app(self.db, application_id)
+                if workspace_id:
+                    config = self.db.query(RiskTypeConfig).filter(
+                        RiskTypeConfig.workspace_id == workspace_id
+                    ).first()
+                    if config:
+                        return config
+
+            if tenant_id:
+                # 3. Fallback to tenant_id (legacy model, get first application's config)
                 config = self.db.query(RiskTypeConfig).filter(
-                    RiskTypeConfig.tenant_id == tenant_id
+                    RiskTypeConfig.tenant_id == tenant_id,
+                    RiskTypeConfig.application_id.isnot(None)
                 ).first()
-            else:
+                return config
+
+            if not application_id and not tenant_id:
                 raise ValueError("Either tenant_id or application_id must be provided")
-            return config
+            return None
         except Exception as e:
             logger.error(f"Failed to get user risk config for tenant_id={tenant_id}, application_id={application_id}: {e}")
             return None

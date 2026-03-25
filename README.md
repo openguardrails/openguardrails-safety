@@ -16,7 +16,7 @@
 
 > **The only production-ready, fully open-source AI guardrails platform for enterprise data protection**
 
-**OpenGuardrails** is an **open-source AI security gateway** that prevents enterprise AI applications from leaking sensitive data to external LLM providers — **without disrupting user workflows**.
+**OpenGuardrails** is an **open-source AI security gateway** that prevents enterprise AI applications from leaking sensitive data to external model providerss — **without disrupting user workflows**.
 
 <p align="center">
     <a href="https://www.youtube.com/watch?v=b1ZRODONTm8" target="_blank">
@@ -26,9 +26,9 @@
 
 ---
 
-## The Enterprise AI Data Leakage Problem
+## The Enterprise AI Data Masking Problem
 
-When employees use AI applications (Copilot, ChatGPT, internal AI agents), sensitive enterprise data flows to external LLM providers:
+When employees use AI applications (Copilot, ChatGPT, internal AI agents), sensitive enterprise data flows to external model providerss:
 
 - **PII**: Employee emails, customer phone numbers, government IDs
 - **Credentials**: API keys, database passwords, access tokens in code
@@ -42,7 +42,7 @@ When employees use AI applications (Copilot, ChatGPT, internal AI agents), sensi
 
 ## How It Works
 
-OpenGuardrails acts as an AI Gateway between your AI applications and LLM providers, automatically detecting and protecting sensitive data:
+OpenGuardrails acts as an AI Gateway between your AI applications and model providerss, automatically detecting and protecting sensitive data:
 <p align="center">
     <img src="frontend/public/arch.png" width="800"/>
 </p>
@@ -226,7 +226,7 @@ See [Deployment Guide](docs/DEPLOYMENT.md) for detailed instructions.
 
 ## Additional Security Features
 
-Beyond data leakage prevention, OpenGuardrails provides:
+Beyond Data Masking, OpenGuardrails provides:
 
 - **Prompt Injection Detection** — Block jailbreak attempts
 - **Content Safety** — 19 risk categories (violence, hate speech, etc.)
@@ -249,7 +249,7 @@ Beyond data leakage prevention, OpenGuardrails provides:
 ## Documentation
 
 - [Deployment Guide](docs/DEPLOYMENT.md) — Complete deployment instructions
-- [Data Leakage Guide](docs/DATA_LEAKAGE_GUIDE.md) — DLP configuration details
+- [Data Masking Guide](docs/DATA_LEAKAGE_GUIDE.md) — DLP configuration details
 - [Custom Scanners](docs/CUSTOM_SCANNERS.md) — Build your own detectors
 - [API Reference](docs/API_REFERENCE.md) — Complete API documentation
 - [Architecture](docs/ARCHITECTURE.md) — System architecture & design

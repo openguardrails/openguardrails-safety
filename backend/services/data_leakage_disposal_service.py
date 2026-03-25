@@ -1,7 +1,7 @@
 """
-Data Leakage Disposal Service
+Data Masking Disposal Service
 
-Handles data leakage disposal policy management and private model selection.
+Handles data masking disposal policy management and private model selection.
 """
 
 import logging
@@ -21,7 +21,7 @@ logger = setup_logger()
 
 
 class DataLeakageDisposalService:
-    """Service for managing data leakage disposal policies"""
+    """Service for managing data masking disposal policies"""
 
     # Valid disposal actions
     # - block: Block the request entirely
@@ -45,7 +45,7 @@ class DataLeakageDisposalService:
 
     def get_tenant_policy(self, tenant_id: str) -> Optional[TenantDataLeakagePolicy]:
         """
-        Get tenant's default data leakage policy
+        Get tenant's default data masking policy
 
         If policy doesn't exist, create a default one.
 
@@ -82,9 +82,9 @@ class DataLeakageDisposalService:
 
     def get_disposal_policy(self, application_id: str) -> Optional[ApplicationDataLeakagePolicy]:
         """
-        Get application's data leakage disposal policy
+        Get application's data masking disposal policy (with workspace fallback)
 
-        If policy doesn't exist, create a default one (with NULL overrides).
+        Inheritance: application → workspace → tenant default (auto-created)
 
         Args:
             application_id: Application ID
@@ -93,7 +93,7 @@ class DataLeakageDisposalService:
             ApplicationDataLeakagePolicy or None if application not found
         """
         try:
-            # Check if policy exists
+            # 1. Check app-level policy
             policy = self.db.query(ApplicationDataLeakagePolicy).filter(
                 ApplicationDataLeakagePolicy.application_id == application_id
             ).first()
@@ -101,10 +101,7 @@ class DataLeakageDisposalService:
             if policy:
                 return policy
 
-            # Policy doesn't exist - create default with NULL overrides (inherits from tenant)
-            logger.info(f"Creating default disposal policy for application {application_id}")
-
-            # Get application to find tenant_id
+            # 2. Check workspace-level policy
             application = self.db.query(Application).filter(
                 Application.id == application_id
             ).first()
@@ -113,11 +110,20 @@ class DataLeakageDisposalService:
                 logger.error(f"Application {application_id} not found")
                 return None
 
-            # Create default policy with NULL overrides (will inherit from tenant defaults)
+            if application.workspace_id:
+                ws_policy = self.db.query(ApplicationDataLeakagePolicy).filter(
+                    ApplicationDataLeakagePolicy.workspace_id == application.workspace_id,
+                    ApplicationDataLeakagePolicy.application_id.is_(None)
+                ).first()
+                if ws_policy:
+                    return ws_policy
+
+            # 3. No app or workspace policy - create default with NULL overrides (inherits from tenant)
+            logger.info(f"Creating default disposal policy for application {application_id}")
+
             default_policy = ApplicationDataLeakagePolicy(
                 tenant_id=application.tenant_id,
                 application_id=application_id,
-                # All fields default to NULL = inherit from tenant
             )
 
             self.db.add(default_policy)

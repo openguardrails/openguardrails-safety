@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -30,9 +31,9 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/data-table/DataTable'
 import { confirmDialog } from '@/utils/confirm-dialog'
-import { configApi } from '../../services/api'
+import api, { configApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { useApplication } from '../../contexts/ApplicationContext'
+
 import type { Blacklist } from '../../types'
 import { eventBus, EVENTS } from '../../utils/eventBus'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -47,14 +48,30 @@ const blacklistSchema = z.object({
 
 type BlacklistFormData = z.infer<typeof blacklistSchema>
 
-const BlacklistManagement: React.FC = () => {
+interface BlacklistManagementProps {
+  workspaceId?: string
+}
+
+const BlacklistManagement: React.FC<BlacklistManagementProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [data, setData] = useState<Blacklist[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [editingItem, setEditingItem] = useState<Blacklist | null>(null)
   const { onUserSwitch } = useAuth()
-  const { currentApplicationId } = useApplication()
+
+  // Use workspace API when workspaceId is provided
+  const blacklistApi = React.useMemo(() => {
+    if (!workspaceId) return configApi.blacklist
+    const prefix = `/api/v1/workspaces/${workspaceId}/config`
+    return {
+      list: (): Promise<Blacklist[]> => api.get(`${prefix}/blacklist`).then(res => res.data),
+      create: (data: any) => api.post(`${prefix}/blacklist`, data).then(res => res.data),
+      update: (id: number, data: any) => api.put(`${prefix}/blacklist/${id}`, data).then(res => res.data),
+      delete: (id: number) => api.delete(`${prefix}/blacklist/${id}`).then(res => res.data),
+    }
+  }, [workspaceId])
 
   const form = useForm<BlacklistFormData>({
     resolver: zodResolver(blacklistSchema),
@@ -67,22 +84,22 @@ const BlacklistManagement: React.FC = () => {
   })
 
   useEffect(() => {
-    if (currentApplicationId) {
-      fetchData()
-    }
-  }, [currentApplicationId])
+    fetchData()
+  }, [workspaceId])
 
   useEffect(() => {
-    const unsubscribe = onUserSwitch(() => {
-      fetchData()
-    })
-    return unsubscribe
-  }, [onUserSwitch])
+    if (!workspaceId) {
+      const unsubscribe = onUserSwitch(() => {
+        fetchData()
+      })
+      return unsubscribe
+    }
+  }, [onUserSwitch, workspaceId])
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      const result = await configApi.blacklist.list()
+      const result = await blacklistApi.list()
       setData(result)
     } catch (error) {
       console.error('Error fetching blacklist:', error)
@@ -124,7 +141,7 @@ const BlacklistManagement: React.FC = () => {
 
     if (confirmed) {
       try {
-        await configApi.blacklist.delete(record.id)
+        await blacklistApi.delete(record.id)
         toast.success(t('common.deleteSuccess'))
         fetchData()
         eventBus.emit(EVENTS.BLACKLIST_DELETED, {
@@ -149,10 +166,10 @@ const BlacklistManagement: React.FC = () => {
       }
 
       if (editingItem) {
-        await configApi.blacklist.update(editingItem.id, submitData)
+        await blacklistApi.update(editingItem.id, submitData)
         toast.success(t('common.updateSuccess'))
       } else {
-        await configApi.blacklist.create(submitData)
+        await blacklistApi.create(submitData)
         toast.success(t('common.createSuccess'))
         eventBus.emit(EVENTS.BLACKLIST_CREATED)
       }
@@ -167,7 +184,7 @@ const BlacklistManagement: React.FC = () => {
 
   const handleToggleStatus = async (record: Blacklist) => {
     try {
-      await configApi.blacklist.update(record.id, {
+      await blacklistApi.update(record.id, {
         name: record.name,
         keywords: record.keywords,
         description: record.description,
@@ -239,10 +256,10 @@ const BlacklistManagement: React.FC = () => {
         return format(new Date(time), 'yyyy-MM-dd HH:mm:ss')
       },
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('common.action'),
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const record = row.original
         return (
           <div className="flex items-center gap-2">
@@ -259,7 +276,7 @@ const BlacklistManagement: React.FC = () => {
               variant="link"
               size="sm"
               onClick={() => handleDelete(record)}
-              className="h-auto p-0 text-red-600 hover:text-red-700"
+              className="h-auto p-0 text-red-400 hover:text-red-300"
             >
               <Trash2 className="mr-1 h-4 w-4" />
               {t('common.delete')}
@@ -267,17 +284,20 @@ const BlacklistManagement: React.FC = () => {
           </div>
         )
       },
-    },
+    }] : []),
   ]
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">{t('blacklist.title')}</h2>
-        <Button onClick={handleAdd}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t('blacklist.addBlacklist')}
-        </Button>
+        {!workspaceId && <h2 className="text-3xl font-bold tracking-tight">{t('blacklist.title')}</h2>}
+        {workspaceId && <div />}
+        {canEdit && (
+          <Button onClick={handleAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('blacklist.addBlacklist')}
+          </Button>
+        )}
       </div>
 
       <Card>

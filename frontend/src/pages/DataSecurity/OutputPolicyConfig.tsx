@@ -20,7 +20,6 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { dataLeakagePolicyApi } from '../../services/api'
-import { useApplication } from '../../contexts/ApplicationContext'
 
 const outputPolicySchema = z.object({
   output_high_risk_anonymize: z.boolean().nullable(),
@@ -55,7 +54,6 @@ interface OutputPolicyConfigProps {
 const OutputPolicyConfig: React.FC<OutputPolicyConfigProps> = ({ policy, onUpdate }) => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
-  const { currentApplicationId } = useApplication()
 
   const form = useForm<OutputPolicyFormData>({
     resolver: zodResolver(outputPolicySchema),
@@ -79,14 +77,9 @@ const OutputPolicyConfig: React.FC<OutputPolicyConfigProps> = ({ policy, onUpdat
 
   // Save policy
   const onSubmit = async (values: OutputPolicyFormData) => {
-    if (!currentApplicationId) {
-      toast.error('No application selected')
-      return
-    }
-
     setLoading(true)
     try {
-      await dataLeakagePolicyApi.updatePolicy(currentApplicationId, {
+      await dataLeakagePolicyApi.updatePolicy({
         output_high_risk_anonymize: values.output_high_risk_anonymize,
         output_medium_risk_anonymize: values.output_medium_risk_anonymize,
         output_low_risk_anonymize: values.output_low_risk_anonymize,

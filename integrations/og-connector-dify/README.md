@@ -15,7 +15,7 @@ OpenGuardrails focuses on:
 - **Both guardrails LLM and platform are open sourced** (Apache 2.0)  
 - **Prompt Injection Attack Detection** (based on **OWASP TOP 10 LLM Applications**)  
 - **Content Safety & Compliance** (based on **Rich risk categories**) 
-- **Sensitive Data Leakage Prevention** PII, Business Secrets
+- **Sensitive Data Masking** PII, Business Secrets
 - **Contextual Semantic Understanding** for precise detection  
 - **Runtime Protection** with dual deployment modes:  
   - **API Detection Mode** – flexible integration and precise control  
@@ -29,7 +29,7 @@ OpenGuardrails focuses on:
 - **Content Safety Detection**  
   Context-aware detection for content safety  
 
-- **Sensitive Data Leakage Prevention**
+- **Sensitive Data Masking**
   PII, Business Secrets。
 
 **19 Risk Categories**:  
@@ -82,7 +82,7 @@ score:
 #### 2. check_response_ctx  
 OpenGuardrails - Check Response Contextual  
 
-- Detect AI response data leakage and content safety based on **context understanding**, including harmful content and compliance risks based on **Content safety standards**  
+- Detect AI response data masking and content safety based on **context understanding**, including harmful content and compliance risks based on **Content safety standards**  
 
 **Input**: `prompt` (user input) + `response` (AI output)  
 **Output**: 

@@ -22,9 +22,10 @@ class BanPolicyService:
 
     @staticmethod
     async def get_ban_policy(application_id: str) -> Optional[Dict[str, Any]]:
-        """Get application's ban policy configuration"""
+        """Get application's ban policy configuration (with workspace fallback)"""
         db = get_admin_db_session()
         try:
+            # 1. Try application-level policy
             result = db.execute(
                 text("""
                 SELECT id, tenant_id, application_id, enabled, risk_level, trigger_count,
@@ -49,6 +50,35 @@ class BanPolicyService:
                     'created_at': row[8],
                     'updated_at': row[9]
                 }
+
+            # 2. Fallback to workspace-level policy
+            ws_result = db.execute(
+                text("""
+                SELECT bp.id, bp.tenant_id, bp.workspace_id, bp.enabled, bp.risk_level,
+                       bp.trigger_count, bp.time_window_minutes, bp.ban_duration_minutes,
+                       bp.created_at, bp.updated_at
+                FROM ban_policies bp
+                JOIN applications a ON a.workspace_id = bp.workspace_id
+                WHERE a.id = :application_id AND bp.application_id IS NULL
+                """),
+                {"application_id": application_id}
+            )
+            ws_row = ws_result.fetchone()
+            if ws_row:
+                return {
+                    'id': str(ws_row[0]),
+                    'tenant_id': str(ws_row[1]),
+                    'application_id': application_id,  # Return the requesting app's id for consistency
+                    'enabled': ws_row[3],
+                    'risk_level': ws_row[4],
+                    'trigger_count': ws_row[5],
+                    'time_window_minutes': ws_row[6],
+                    'ban_duration_minutes': ws_row[7],
+                    'created_at': ws_row[8],
+                    'updated_at': ws_row[9],
+                    '_from_workspace': True
+                }
+
             return None
         finally:
             db.close()
@@ -194,17 +224,45 @@ class BanPolicyService:
         logger.info(f"check_and_apply_ban_policy called: tenant_id={tenant_id}, user_id={user_id}, risk_level={risk_level}, application_id={application_id}")
         db = get_admin_db_session()
         try:
-            # Get ban policy
-            logger.info(f"Fetching ban policy for tenant_id={tenant_id}")
-            policy_result = db.execute(
-                text("""
-                SELECT enabled, risk_level, trigger_count, time_window_minutes, ban_duration_minutes
-                FROM ban_policies
-                WHERE tenant_id = :tenant_id
-                """),
-                {"tenant_id": tenant_id}
-            )
-            policy = policy_result.fetchone()
+            # Get ban policy - try application → workspace → tenant
+            logger.info(f"Fetching ban policy for tenant_id={tenant_id}, application_id={application_id}")
+            policy = None
+
+            if application_id:
+                # 1. Try application-level
+                policy_result = db.execute(
+                    text("""
+                    SELECT enabled, risk_level, trigger_count, time_window_minutes, ban_duration_minutes
+                    FROM ban_policies WHERE application_id = :application_id
+                    """),
+                    {"application_id": application_id}
+                )
+                policy = policy_result.fetchone()
+
+                # 2. Try workspace-level
+                if not policy:
+                    policy_result = db.execute(
+                        text("""
+                        SELECT bp.enabled, bp.risk_level, bp.trigger_count, bp.time_window_minutes, bp.ban_duration_minutes
+                        FROM ban_policies bp
+                        JOIN applications a ON a.workspace_id = bp.workspace_id
+                        WHERE a.id = :application_id AND bp.application_id IS NULL
+                        """),
+                        {"application_id": application_id}
+                    )
+                    policy = policy_result.fetchone()
+
+            # 3. Fallback to tenant-level
+            if not policy:
+                policy_result = db.execute(
+                    text("""
+                    SELECT enabled, risk_level, trigger_count, time_window_minutes, ban_duration_minutes
+                    FROM ban_policies WHERE tenant_id = :tenant_id
+                    """),
+                    {"tenant_id": tenant_id}
+                )
+                policy = policy_result.fetchone()
+
             logger.info(f"Ban policy fetched: {policy}")
 
             # If policy not exists or not enabled, return directly

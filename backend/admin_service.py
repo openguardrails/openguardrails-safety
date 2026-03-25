@@ -74,7 +74,7 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
             return cached_auth
 
         from database.connection import get_admin_db_session
-        from database.models import Tenant, Application
+        from database.models import Tenant, Application, TenantMember
         from utils.user import get_user_by_api_key, get_application_by_api_key
         from utils.auth import verify_token
 
@@ -103,6 +103,7 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                                 "tenant_id": str(admin_user.id),
                                 "email": admin_user.email,
                                 "is_super_admin": admin_service.is_super_admin(admin_user),
+                                "member_role": "owner",
                                 "application_id": str(first_app.id) if first_app else None,
                                 "application_name": first_app.name if first_app else None
                             }
@@ -136,24 +137,31 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                                         "original_admin_id": str(user.id),
                                         "original_admin_email": user.email,
                                         "switch_session": switch_session,
+                                        "member_role": "owner",
                                         "application_id": str(first_app.id) if first_app else None,
                                         "application_name": first_app.name if first_app else None
                                     }
                                 }
 
                         if not auth_context:
-                            # Get first active application for this tenant
+                            # Resolve org tenant_id and role from JWT or membership
+                            jwt_member_role = user_data.get('member_role', 'owner')
+                            jwt_tenant_id = user_data.get('tenant_id') or str(user.id)
+
+                            # Get first active application for this tenant's org
                             first_app = db.query(Application).filter(
-                                Application.tenant_id == user.id,
+                                Application.tenant_id == jwt_tenant_id,
                                 Application.is_active == True
                             ).first()
 
                             auth_context = {
                                 "type": "jwt",
                                 "data": {
-                                    "tenant_id": str(user.id),
+                                    "tenant_id": jwt_tenant_id,
+                                    "user_id": str(user.id),
                                     "email": user.email,
                                     "is_super_admin": admin_service.is_super_admin(user),
+                                    "member_role": jwt_member_role,
                                     "application_id": str(first_app.id) if first_app else None,
                                     "application_name": first_app.name if first_app else None
                                 }
@@ -171,7 +179,8 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                             "application_id": app_data["application_id"],
                             "application_name": app_data["application_name"],
                             "api_key": app_data["api_key"],
-                            "is_super_admin": False  # API keys are not admin
+                            "is_super_admin": False,
+                            "member_role": "owner",  # API key access implies full access
                         }
                     }
                 else:
@@ -197,25 +206,33 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                                         "original_admin_id": str(user.id),
                                         "original_admin_email": user.email,
                                         "switch_session": switch_session,
+                                        "member_role": "owner",
                                         "application_id": str(first_app.id) if first_app else None,
                                         "application_name": first_app.name if first_app else None
                                     }
                                 }
 
                         if not auth_context:
-                            # Get first active application for this tenant
+                            # Resolve membership for legacy API key user
+                            legacy_membership = db.query(TenantMember).filter(TenantMember.user_id == user.id).first()
+                            legacy_org_id = str(legacy_membership.tenant_id) if legacy_membership else str(user.id)
+                            legacy_role = legacy_membership.role if legacy_membership else "owner"
+
+                            # Get first active application for this tenant's org
                             first_app = db.query(Application).filter(
-                                Application.tenant_id == user.id,
+                                Application.tenant_id == legacy_org_id,
                                 Application.is_active == True
                             ).first()
 
                             auth_context = {
                                 "type": "api_key_legacy",
                                 "data": {
-                                    "tenant_id": str(user.id),
+                                    "tenant_id": legacy_org_id,
+                                    "user_id": str(user.id),
                                     "email": user.email,
                                     "api_key": user.api_key,
                                     "is_super_admin": admin_service.is_super_admin(user),
+                                    "member_role": legacy_role,
                                     "application_id": str(first_app.id) if first_app else None,
                                     "application_name": first_app.name if first_app else None
                                 }
@@ -280,6 +297,10 @@ app = FastAPI(
 # Add concurrent control middleware (highest priority, added last)
 app.add_middleware(ConcurrentLimitMiddleware, service_type="admin", max_concurrent=settings.admin_max_concurrent_requests)
 
+# Add role-based permission middleware (checks member role for write operations)
+from utils.permissions import RoleCheckMiddleware
+app.add_middleware(RoleCheckMiddleware)
+
 # Add authentication context middleware
 app.add_middleware(AuthContextMiddleware)
 
@@ -338,6 +359,7 @@ async def verify_user_auth(
     
     db = get_admin_db_session()
     try:
+        from database.models import TenantMember
         # JWT verification
         try:
             user_data = verify_token(token)
@@ -348,28 +370,31 @@ async def verify_user_auth(
                     user = db.query(Tenant).filter(Tenant.id == tenant_uuid).first()
                     if user and user.is_active:
                         return {
-                            "type": "jwt", 
+                            "type": "jwt",
                             "data": {
                                 "tenant_id": str(user.id),
                                 "email": user.email,
-                                "is_super_admin": admin_service.is_super_admin(user)
+                                "is_super_admin": admin_service.is_super_admin(user),
+                                "member_role": user_data.get("member_role", "owner"),
                             }
                         }
                 except ValueError:
                     pass
         except:
             pass
-        
+
         # API key verification
         user = get_user_by_api_key(db, token)
         if user:
+            membership = db.query(TenantMember).filter(TenantMember.user_id == user.id).first()
             return {
-                "type": "api_key", 
+                "type": "api_key",
                 "data": {
-                    "tenant_id": str(user.id),
+                    "tenant_id": str(membership.tenant_id) if membership else str(user.id),
                     "email": user.email,
                     "api_key": user.api_key,
-                    "is_super_admin": admin_service.is_super_admin(user)
+                    "is_super_admin": admin_service.is_super_admin(user),
+                    "member_role": membership.role if membership else "owner",
                 }
             }
         
@@ -396,7 +421,7 @@ app.include_router(concurrent_stats.router, dependencies=[Depends(verify_user_au
 from routers import data_security
 app.include_router(data_security.router, prefix="/api/v1", dependencies=[Depends(verify_user_auth)])
 
-# Data Leakage Policy management
+# Data Masking Policy management
 from routers import data_leakage_policy_api
 app.include_router(data_leakage_policy_api.router, dependencies=[Depends(verify_user_auth)])
 
@@ -416,6 +441,10 @@ else:
     logger.info("Billing and payment routes disabled (enterprise mode)")
 
 app.include_router(applications.router, prefix="/api/v1/applications", dependencies=[Depends(verify_user_auth)])  # Application Management
+
+# Workspace Management
+from routers import workspaces
+app.include_router(workspaces.router, dependencies=[Depends(verify_user_auth)])
 
 # Scanner Package System routes
 app.include_router(scanner_packages_api.router, dependencies=[Depends(verify_user_auth)])  # Scanner Packages
@@ -439,6 +468,15 @@ app.include_router(appeal_api.router, dependencies=[Depends(verify_user_auth)])
 
 # Risk configuration routes
 app.include_router(risk_config_api.router, dependencies=[Depends(verify_user_auth)])
+
+# Gateway connection routes
+from routers import gateway_connections
+app.include_router(gateway_connections.router, dependencies=[Depends(verify_user_auth)])
+
+# Team management routes
+from routers import team as team_router
+app.include_router(team_router.public_router)  # Public: verify/accept invitation (no auth)
+app.include_router(team_router.router, dependencies=[Depends(verify_user_auth)])  # Protected: member management
 # Media router: image upload/delete needs authentication, but image access does not need authentication
 # First register image access routes that do not need authentication
 from fastapi import APIRouter

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from pathlib import Path
 from utils.logger import setup_logger
+from services.syslog_forwarder import syslog_forwarder
 
 logger = setup_logger()
 
@@ -136,22 +137,30 @@ class AsyncDetectionLogger:
             logger.info("Async logger writer loop stopped")
     
     async def _flush_batch(self, batch: list, current_date: str, current_file):
-        """Flush batch data to file"""
+        """Flush batch data to file and forward to syslog if configured"""
         if not batch or not current_file:
             return
-            
+
         try:
-            # Batch write
+            # Batch write to JSONL file
             lines = []
             for data in batch:
                 json_line = json.dumps(data, ensure_ascii=False) + '\n'
                 lines.append(json_line)
-            
+
             await current_file.write(''.join(lines))
             await current_file.flush()
-            
+
+            # Forward to syslog (best-effort, non-blocking)
+            if syslog_forwarder.enabled:
+                for data in batch:
+                    try:
+                        syslog_forwarder.send(data)
+                    except Exception as e:
+                        logger.warning(f"Syslog forward failed for {data.get('request_id', 'unknown')}: {e}")
+
             logger.debug(f"Flushed {len(batch)} log entries")
-            
+
         except Exception as e:
             logger.error(f"Error flushing batch: {e}")
     

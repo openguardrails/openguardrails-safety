@@ -171,7 +171,7 @@ const Account: React.FC = () => {
       <CardContent className="pt-6">
         <div className="space-y-6">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-blue-600" />
+            <ShieldCheck className="h-6 w-6 text-sky-400" />
             <h2 className="text-2xl font-bold">{t('account.title')}</h2>
           </div>
 
@@ -199,17 +199,17 @@ const Account: React.FC = () => {
             <TabsContent value="general" className="space-y-6 mt-6">
               {/* Email */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">{t('account.email')}</label>
+                <label className="text-sm font-medium text-muted-foreground">{t('account.email')}</label>
                 <div className="text-base">{user?.email || '-'}</div>
               </div>
 
               {/* Tenant UUID */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">
+                <label className="text-sm font-medium text-muted-foreground">
                   {t('account.tenantUuid')}
                 </label>
                 <div className="flex gap-2">
-                  <div className="flex-1 p-3 border rounded-md bg-gray-50 font-mono text-sm break-all">
+                  <div className="flex-1 p-3 border rounded-md bg-secondary font-mono text-sm break-all">
                     {user?.id || '-'}
                   </div>
                   <Button
@@ -229,15 +229,15 @@ const Account: React.FC = () => {
                     {t('account.copy')}
                   </Button>
                 </div>
-                <p className="text-sm text-gray-600">{t('account.uuidNote')}</p>
+                <p className="text-sm text-muted-foreground">{t('account.uuidNote')}</p>
               </div>
 
               {/* API Key Management Notice */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">
+                <label className="text-sm font-medium text-muted-foreground">
                   {t('account.apiKeyManagement')}
                 </label>
-                <div className="p-4 border rounded-md bg-gray-50">
+                <div className="p-4 border rounded-md bg-secondary">
                   <p className="text-sm">{t('account.apiKeyMigrationNotice')}</p>
                   <Button
                     variant="link"
@@ -251,11 +251,11 @@ const Account: React.FC = () => {
 
               {/* Dify Moderation Endpoint */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">
+                <label className="text-sm font-medium text-muted-foreground">
                   {t('account.difyModerationEndpoint')}
                 </label>
                 <div className="flex gap-2">
-                  <div className="flex-1 p-3 border rounded-md bg-gray-50 font-mono text-sm break-all">
+                  <div className="flex-1 p-3 border rounded-md bg-secondary font-mono text-sm break-all">
                     https://api.openguardrails.com/v1/dify/moderation
                   </div>
                   <Button variant="outline" onClick={handleCopyDifyEndpoint}>
@@ -263,7 +263,7 @@ const Account: React.FC = () => {
                     {t('account.copy')}
                   </Button>
                 </div>
-                <p className="text-sm text-gray-600">{t('account.difyModerationEndpointNote')}</p>
+                <p className="text-sm text-muted-foreground">{t('account.difyModerationEndpointNote')}</p>
               </div>
 
               <Separator />
@@ -274,7 +274,7 @@ const Account: React.FC = () => {
                   <h3 className="text-lg font-semibold">
                     {t('docs.directModelAccess') || 'Direct Model Access'}
                   </h3>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {t('docs.directModelAccessDesc') ||
                       'Use this API key to directly access models (OpenGuardrails-Text, bge-m3, etc.) without guardrails detection. For privacy, we only track usage count, not content.'}
                   </p>
@@ -283,19 +283,19 @@ const Account: React.FC = () => {
                   {isSaasMode() && !user?.is_super_admin && (
                     <div className="mt-3">
                       {subscription?.subscription_type === 'subscribed' ? (
-                        <p className="text-sm text-green-600">
+                        <p className="text-sm text-emerald-400">
                           ✓{' '}
                           {t('docs.subscriptionActive') ||
                             'Subscription active - Direct model access enabled'}
                         </p>
                       ) : (
-                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                          <p className="font-semibold text-yellow-900">
+                        <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                          <p className="font-semibold text-yellow-200">
                             {t('docs.subscriptionRequired') ||
                               'Active subscription required to use direct model access'}
                           </p>
                           <div className="mt-2 space-y-2">
-                            <p className="text-sm text-yellow-800">
+                            <p className="text-sm text-yellow-300">
                               {t('billing.upgradeDescription') ||
                                 'Upgrade to unlock unlimited access to direct model APIs, custom scanners, and premium features.'}
                             </p>
@@ -341,19 +341,19 @@ const Account: React.FC = () => {
 
                   return (
                     <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-600">
+                      <label className="text-sm font-medium text-muted-foreground">
                         {t('docs.modelApiKey') || 'Model API Key'}
                       </label>
                       <div className="flex gap-2">
                         <div
                           className={`flex-1 p-3 border rounded-md font-mono text-sm break-all ${
-                            hasAccess ? 'bg-gray-50' : 'bg-gray-100'
+                            hasAccess ? 'bg-secondary' : 'bg-muted'
                           }`}
                         >
                           {hasAccess ? (
                             user?.model_api_key
                           ) : (
-                            <span className="text-gray-500 flex items-center gap-2">
+                            <span className="text-muted-foreground flex items-center gap-2">
                               <Lock className="h-4 w-4" />
                               {t('account.subscriptionRequiredToViewKey') ||
                                 '••••••••••••••••••••••••••••••••••• (Subscription Required)'}
@@ -410,7 +410,7 @@ const Account: React.FC = () => {
                     {t('account.usageExample') || 'Usage Example'}:
                   </p>
                   <pre
-                    className={`bg-gray-100 p-4 rounded-md overflow-auto text-xs leading-relaxed ${
+                    className={`bg-muted p-4 rounded-md overflow-auto text-xs leading-relaxed ${
                       user?.model_api_key &&
                       (!isSaasMode() ||
                         user?.is_super_admin ||
@@ -438,11 +438,11 @@ response = client.chat.completions.create(
                 </div>
 
                 {/* Privacy Notice */}
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="font-semibold text-blue-900 mb-2">
+                <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+                  <p className="font-semibold text-sky-200 mb-2">
                     {t('account.privacyNotice') || 'Privacy Notice'}:
                   </p>
-                  <ul className="space-y-1 text-sm text-blue-800 list-disc pl-5">
+                  <ul className="space-y-1 text-sm text-sky-300 list-disc pl-5">
                     <li>
                       {t('account.privacyNotice1') ||
                         'Message content is NEVER stored in our database'}
@@ -459,12 +459,12 @@ response = client.chat.completions.create(
                 </div>
 
                 {/* DMA Logging Configuration */}
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg space-y-3">
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg space-y-3">
                   <div>
-                    <p className="font-semibold text-yellow-900 mb-2">
+                    <p className="font-semibold text-yellow-200 mb-2">
                       {t('account.dmaLoggingConfig') || 'DMA Logging Configuration'}
                     </p>
-                    <p className="text-sm text-yellow-800">
+                    <p className="text-sm text-yellow-300">
                       {t('account.dmaLoggingDesc') ||
                         'By default, Direct Model Access calls are NOT logged for privacy. Enable this option if you want to log full request content.'}
                     </p>
@@ -472,10 +472,10 @@ response = client.chat.completions.create(
                   
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <label className="text-sm font-medium text-gray-900">
+                      <label className="text-sm font-medium text-foreground">
                         {t('account.enableDmaLogging') || 'Enable DMA Logging'}
                       </label>
-                      <p className="text-xs text-gray-600">
+                      <p className="text-xs text-muted-foreground">
                         {t('account.enableDmaLoggingDesc') ||
                           'When enabled, full request content will be stored in detection results'}
                       </p>
@@ -502,7 +502,7 @@ response = client.chat.completions.create(
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-card after:border-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
                   </div>
                 </div>
@@ -511,7 +511,7 @@ response = client.chat.completions.create(
               {/* Subscription info only in SaaS mode */}
               {features.showSubscription() && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-600">
+                  <label className="text-sm font-medium text-muted-foreground">
                     {t('account.subscription')}
                   </label>
                   <div>
@@ -532,21 +532,21 @@ response = client.chat.completions.create(
                             {subscription.current_month_usage.toLocaleString()} /{' '}
                             {subscription.monthly_quota.toLocaleString()}
                           </span>
-                          <span className="text-sm text-gray-600"> {t('account.calls')}</span>
+                          <span className="text-sm text-muted-foreground"> {t('account.calls')}</span>
                         </div>
                         <Progress
                           value={Math.min(subscription.usage_percentage, 100)}
-                          className={`h-2 ${subscription.usage_percentage >= 90 ? '[&>div]:bg-red-500' : '[&>div]:bg-blue-500'}`}
+                          className={`h-2 ${subscription.usage_percentage >= 90 ? '[&>div]:bg-red-500' : '[&>div]:bg-sky-500'}`}
                         />
-                        <p className="text-xs text-gray-600">
+                        <p className="text-xs text-muted-foreground">
                           {t('account.quotaResetsOn', {
                             date: new Date(subscription.usage_reset_at).toLocaleDateString(),
                           })}
                         </p>
                         {subscription.subscription_type === 'free' &&
                           subscription.usage_percentage >= 80 && (
-                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-                              <p className="text-xs text-yellow-900">
+                            <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded">
+                              <p className="text-xs text-yellow-200">
                                 {t('account.upgradePrompt', {
                                   email: systemInfo?.support_email || '',
                                 })}
@@ -555,15 +555,15 @@ response = client.chat.completions.create(
                           )}
                       </div>
                     ) : subscription === null ? (
-                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-                        <p className="text-sm text-yellow-900">
+                      <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded">
+                        <p className="text-sm text-yellow-200">
                           {t('account.subscriptionNotFound', {
                             email: systemInfo?.support_email || 'support@openguardrails.com',
                           })}
                         </p>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-600">{t('common.loading')}</p>
+                      <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
                     )}
                   </div>
                 </div>
@@ -571,7 +571,7 @@ response = client.chat.completions.create(
 
               {/* API Rate Limit */}
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-600">
+                <label className="text-sm font-medium text-muted-foreground">
                   {t('account.apiRateLimit')}
                 </label>
                 <div className="text-base">
@@ -582,18 +582,18 @@ response = client.chat.completions.create(
 
                     if (rateLimitNum === 0) {
                       return (
-                        <span className="text-green-600">{t('account.unlimited')}</span>
+                        <span className="text-emerald-400">{t('account.unlimited')}</span>
                       )
                     } else if (rateLimitNum > 0) {
                       return <span>{t('account.rateLimitValue', { limit: rateLimitNum })}</span>
                     } else {
                       return (
-                        <span className="text-gray-600">{t('common.loading')}</span>
+                        <span className="text-muted-foreground">{t('common.loading')}</span>
                       )
                     }
                   })()}
                 </div>
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground">
                   {t('account.rateLimitNote', { email: systemInfo?.support_email || '' })}
                 </p>
               </div>
@@ -604,8 +604,8 @@ response = client.chat.completions.create(
                   <Separator />
                   <div className="space-y-2">
                     <h3 className="text-lg font-semibold">{t('account.contactSupport')}</h3>
-                    <p className="text-sm text-gray-600">{t('account.openguardrailsServices')}</p>
-                    <p className="text-base font-semibold text-blue-600">
+                    <p className="text-sm text-muted-foreground">{t('account.openguardrailsServices')}</p>
+                    <p className="text-base font-semibold text-sky-400">
                       {systemInfo.support_email}
                     </p>
                   </div>
@@ -619,7 +619,7 @@ response = client.chat.completions.create(
                   <div className="space-y-6">
                     <div>
                       <h3 className="text-xl font-semibold">{t('account.passwordChange')}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-muted-foreground mt-1">
                         {t('account.newPasswordRequirements')}
                       </p>
                     </div>
@@ -637,7 +637,7 @@ response = client.chat.completions.create(
                               <FormLabel>{t('account.currentPassword')}</FormLabel>
                               <FormControl>
                                 <div className="relative">
-                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                                   <Input
                                     {...field}
                                     type="password"
@@ -660,7 +660,7 @@ response = client.chat.completions.create(
                               <FormLabel>{t('account.newPassword')}</FormLabel>
                               <FormControl>
                                 <div className="relative">
-                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                                   <Input
                                     {...field}
                                     type="password"
@@ -683,7 +683,7 @@ response = client.chat.completions.create(
                               <FormLabel>{t('account.confirmPassword')}</FormLabel>
                               <FormControl>
                                 <div className="relative">
-                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                                   <Input
                                     {...field}
                                     type="password"

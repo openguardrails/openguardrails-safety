@@ -67,6 +67,11 @@ export interface DetectionResult {
   image_urls?: string[];  // Signed image access URLs
   // Direct Model Access flag
   is_direct_model_access?: boolean;  // Whether this is a direct model access call
+  // Application and workspace info (for global results view)
+  application_id?: string;
+  application_name?: string;
+  workspace_id?: string;
+  workspace_name?: string;
 }
 
 // Paginated response type
@@ -104,7 +109,7 @@ export interface ResponseTemplate {
   category: string;
   scanner_type?: string | null;  // Scanner type: blacklist, whitelist, official_scanner, custom_scanner, etc.
   scanner_identifier?: string | null;  // Scanner identifier: blacklist name, scanner tag, etc.
-  scanner_name?: string | null;  // Scanner name from Scanner table (for custom/marketplace scanners)
+  guardrail_name?: string | null;  // Guardrail name from Scanner table (for custom/marketplace scanners)
   risk_level: string;
   template_content: { [key: string]: string };  // Multilingual content: { en: "...", zh: "...", ... }
   is_default: boolean;
@@ -147,7 +152,7 @@ export interface KnowledgeBase {
   category?: string | null;  // Legacy field (S1-S21) - nullable for new scanner types
   scanner_type?: string | null;  // Scanner type: blacklist, whitelist, official_scanner, etc.
   scanner_identifier?: string | null;  // Scanner identifier: blacklist name, scanner tag, etc.
-  scanner_name?: string | null;  // Scanner human-readable name for display
+  guardrail_name?: string | null;  // Guardrail human-readable name for display
   name: string;
   description?: string;
   file_path: string;

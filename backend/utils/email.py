@@ -220,6 +220,108 @@ def get_reset_token_expiry() -> datetime:
     return datetime.utcnow() + timedelta(hours=1)
 
 
+def send_team_invitation_email(
+    email: str,
+    inviter_email: str,
+    invitation_url: str,
+    role: str = 'member',
+    language: str = 'en',
+) -> bool:
+    """
+    Send team invitation email.
+
+    Args:
+        email: Recipient email address
+        inviter_email: Email of the person who sent the invitation
+        invitation_url: URL to accept the invitation
+        role: Invited role (admin or member)
+        language: Language code
+    """
+    if not settings.smtp_username or not settings.smtp_password:
+        raise Exception("SMTP configuration is not set")
+
+    try:
+        role_display = {"admin": "Admin", "member": "Member"}.get(role, role.title())
+
+        if language == 'zh':
+            subject = f"OpenGuardrails 团队邀请"
+            html_body = f"""
+            <html><body>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #f8f9fa; padding: 20px; text-align: center;">
+                    <h1 style="color: #1890ff; margin: 0;">OpenGuardrails</h1>
+                </div>
+                <div style="padding: 30px 20px;">
+                    <h2 style="color: #333;">您收到了一份团队邀请</h2>
+                    <p style="color: #666; line-height: 1.6;">
+                        <strong>{inviter_email}</strong> 邀请您加入他们的 OpenGuardrails 团队，角色为 <strong>{role_display}</strong>。
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{invitation_url}" style="background-color: #1890ff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                            接受邀请
+                        </a>
+                    </div>
+                    <p style="color: #999; font-size: 14px;">此邀请将在 7 天后过期。</p>
+                    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+                        <p style="color: #999; font-size: 14px;">— OpenGuardrails Team</p>
+                    </div>
+                </div>
+            </div>
+            </body></html>
+            """
+        else:
+            subject = f"OpenGuardrails Team Invitation"
+            html_body = f"""
+            <html><body>
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #f8f9fa; padding: 20px; text-align: center;">
+                    <h1 style="color: #1890ff; margin: 0;">OpenGuardrails</h1>
+                </div>
+                <div style="padding: 30px 20px;">
+                    <h2 style="color: #333;">You've been invited to join a team</h2>
+                    <p style="color: #666; line-height: 1.6;">
+                        <strong>{inviter_email}</strong> has invited you to join their OpenGuardrails team as <strong>{role_display}</strong>.
+                    </p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{invitation_url}" style="background-color: #1890ff; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                            Accept Invitation
+                        </a>
+                    </div>
+                    <p style="color: #999; font-size: 14px;">This invitation will expire in 7 days.</p>
+                    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+                        <p style="color: #999; font-size: 14px;">— OpenGuardrails Team</p>
+                    </div>
+                </div>
+            </div>
+            </body></html>
+            """
+
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = settings.smtp_username
+        msg['To'] = email
+
+        html_part = MIMEText(html_body, 'html', 'utf-8')
+        msg.attach(html_part)
+
+        if settings.smtp_use_ssl:
+            with smtplib.SMTP_SSL(settings.smtp_server, settings.smtp_port) as server:
+                server.login(settings.smtp_username, settings.smtp_password)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(settings.smtp_server, settings.smtp_port) as server:
+                if settings.smtp_use_tls:
+                    server.starttls()
+                server.login(settings.smtp_username, settings.smtp_password)
+                server.send_message(msg)
+
+        return True
+
+    except Exception as e:
+        print(f"Failed to send invitation email: {e}")
+        return False
+
+
 def get_appeal_review_email_template(
     language: str,
     appeal_data: dict,

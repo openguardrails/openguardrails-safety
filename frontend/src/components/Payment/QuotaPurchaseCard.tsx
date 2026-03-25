@@ -44,21 +44,21 @@ const QuotaPurchaseCard: React.FC<QuotaPurchaseCardProps> = ({
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Current Quota Status */}
-        <div className="p-4 rounded-lg border bg-gray-50">
-          <p className="text-sm font-medium text-gray-600 mb-2">{t('billing.purchasedQuota')}</p>
+        <div className="p-4 rounded-lg border bg-secondary">
+          <p className="text-sm font-medium text-muted-foreground mb-2">{t('billing.purchasedQuota')}</p>
           {hasQuota ? (
             <div className="space-y-1">
-              <p className="text-2xl font-bold text-green-600">
-                {currentQuota.toLocaleString()} <span className="text-sm font-normal text-gray-500">{t('billing.calls')}</span>
+              <p className="text-2xl font-bold text-emerald-400">
+                {currentQuota.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{t('billing.calls')}</span>
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 {t('billing.quotaExpiresOn', {
                   date: new Date(quotaExpiresAt!).toLocaleDateString(),
                 })}
               </p>
             </div>
           ) : (
-            <p className="text-gray-400">{isExpired ? t('billing.quotaExpired') : t('billing.noPurchasedQuota')}</p>
+            <p className="text-slate-500">{isExpired ? t('billing.quotaExpired') : t('billing.noPurchasedQuota')}</p>
           )}
         </div>
 
@@ -72,7 +72,7 @@ const QuotaPurchaseCard: React.FC<QuotaPurchaseCardProps> = ({
           </p>
 
           <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-600">{t('billing.quotaUnits')}</span>
+            <span className="text-sm text-muted-foreground">{t('billing.quotaUnits')}</span>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -103,18 +103,18 @@ const QuotaPurchaseCard: React.FC<QuotaPurchaseCardProps> = ({
 
           <div className="flex gap-4 text-sm">
             <div>
-              <span className="text-gray-600">{t('billing.quotaTotalCalls')}: </span>
+              <span className="text-muted-foreground">{t('billing.quotaTotalCalls')}: </span>
               <span className="font-semibold">{totalCalls.toLocaleString()}</span>
             </div>
             <div>
-              <span className="text-gray-600">{t('billing.quotaTotalPrice')}: </span>
-              <span className="font-semibold text-blue-600">¥{totalPrice}</span>
+              <span className="text-muted-foreground">{t('billing.quotaTotalPrice')}: </span>
+              <span className="font-semibold text-sky-400">¥{totalPrice}</span>
             </div>
           </div>
         </div>
 
         {/* Warnings */}
-        <div className="space-y-2 text-xs text-gray-500">
+        <div className="space-y-2 text-xs text-muted-foreground">
           <div className="flex items-start gap-1.5">
             <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-amber-500" />
             <span>{t('billing.quotaValidityNote', { days: quotaConfig.validity_days })}</span>

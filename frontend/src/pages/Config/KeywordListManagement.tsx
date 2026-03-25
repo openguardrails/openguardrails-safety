@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -33,7 +34,7 @@ import { DataTable } from '@/components/data-table/DataTable'
 import { confirmDialog } from '@/utils/confirm-dialog'
 import { configApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { useApplication } from '../../contexts/ApplicationContext'
+
 import type { Blacklist, Whitelist } from '../../types'
 import { eventBus, EVENTS } from '../../utils/eventBus'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -52,6 +53,7 @@ type ListType = 'blacklist' | 'whitelist'
 
 const KeywordListManagement: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [activeTab, setActiveTab] = useState<ListType>('whitelist')
   const [blacklistData, setBlacklistData] = useState<Blacklist[]>([])
   const [whitelistData, setWhitelistData] = useState<Whitelist[]>([])
@@ -61,7 +63,6 @@ const KeywordListManagement: React.FC = () => {
   const [editingItem, setEditingItem] = useState<Blacklist | Whitelist | null>(null)
   const [modalType, setModalType] = useState<ListType>('blacklist')
   const { onUserSwitch } = useAuth()
-  const { currentApplicationId } = useApplication()
 
   const form = useForm<KeywordListFormData>({
     resolver: zodResolver(keywordListSchema),
@@ -74,11 +75,9 @@ const KeywordListManagement: React.FC = () => {
   })
 
   useEffect(() => {
-    if (currentApplicationId) {
-      fetchBlacklistData()
-      fetchWhitelistData()
-    }
-  }, [currentApplicationId])
+    fetchBlacklistData()
+    fetchWhitelistData()
+  }, [])
 
   useEffect(() => {
     const unsubscribe = onUserSwitch(() => {
@@ -290,10 +289,10 @@ const KeywordListManagement: React.FC = () => {
         return format(new Date(time), 'yyyy-MM-dd HH:mm:ss')
       },
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('common.action'),
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const record = row.original
         return (
           <div className="flex items-center gap-2">
@@ -310,7 +309,7 @@ const KeywordListManagement: React.FC = () => {
               variant="link"
               size="sm"
               onClick={() => handleDelete(record, type)}
-              className="h-auto p-0 text-red-600 hover:text-red-700"
+              className="h-auto p-0 text-red-400 hover:text-red-300"
             >
               <Trash2 className="mr-1 h-4 w-4" />
               {t('common.delete')}
@@ -318,7 +317,7 @@ const KeywordListManagement: React.FC = () => {
           </div>
         )
       },
-    },
+    }] : []),
   ]
 
   const blacklistColumns = createColumns('blacklist')
@@ -336,10 +335,12 @@ const KeywordListManagement: React.FC = () => {
             <TabsTrigger value="whitelist">{t('keywordList.whitelistTab')}</TabsTrigger>
             <TabsTrigger value="blacklist">{t('keywordList.blacklistTab')}</TabsTrigger>
           </TabsList>
-          <Button onClick={() => handleAdd(activeTab)}>
-            <Plus className="mr-2 h-4 w-4" />
-            {activeTab === 'blacklist' ? t('blacklist.addBlacklist') : t('whitelist.addWhitelist')}
-          </Button>
+          {canEdit && (
+            <Button onClick={() => handleAdd(activeTab)}>
+              <Plus className="mr-2 h-4 w-4" />
+              {activeTab === 'blacklist' ? t('blacklist.addBlacklist') : t('whitelist.addWhitelist')}
+            </Button>
+          )}
         </div>
 
         <TabsContent value="whitelist">

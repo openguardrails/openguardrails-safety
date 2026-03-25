@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 Populate Scanner Names - Data Maintenance Script
-This script populates missing scanner_name fields in knowledge_bases and response_templates tables.
+This script populates missing guardrail_name fields in knowledge_bases and response_templates tables.
 
 Use this script when:
 1. After running migration 026 on an existing database with data
-2. If scanner_name fields are missing or null for existing records
+2. If guardrail_name fields are missing or null for existing records
 3. As part of database maintenance to ensure data consistency
 
-This is a safe operation that only updates NULL scanner_name fields.
+This is a safe operation that only updates NULL guardrail_name fields.
 """
 
 import sys
@@ -23,26 +23,26 @@ from sqlalchemy.orm import sessionmaker
 from config import settings
 from database.models import KnowledgeBase, ResponseTemplate, Scanner, Blacklist, Whitelist
 
-def populate_knowledge_base_scanner_names(db):
-    """Populate scanner_name for knowledge bases"""
+def populate_knowledge_base_guardrail_names(db):
+    """Populate guardrail_name for knowledge bases"""
     print("\n=== Populating Knowledge Base Scanner Names ===")
     
-    # Get all knowledge bases with null scanner_name
+    # Get all knowledge bases with null guardrail_name
     kb_records = db.query(KnowledgeBase).filter(
-        KnowledgeBase.scanner_name.is_(None),
+        KnowledgeBase.guardrail_name.is_(None),
         KnowledgeBase.scanner_type.isnot(None),
         KnowledgeBase.scanner_identifier.isnot(None)
     ).all()
     
     if not kb_records:
-        print("✓ All knowledge bases already have scanner_name populated")
+        print("✓ All knowledge bases already have guardrail_name populated")
         return 0
     
-    print(f"Found {len(kb_records)} knowledge base(s) with missing scanner_name\n")
+    print(f"Found {len(kb_records)} knowledge base(s) with missing guardrail_name\n")
     
     updated_count = 0
     for kb in kb_records:
-        scanner_name = None
+        guardrail_name = None
         
         try:
             if kb.scanner_type == 'blacklist':
@@ -52,7 +52,7 @@ def populate_knowledge_base_scanner_names(db):
                     Blacklist.name == kb.scanner_identifier
                 ).first()
                 if blacklist:
-                    scanner_name = blacklist.name
+                    guardrail_name = blacklist.name
             
             elif kb.scanner_type == 'whitelist':
                 # Get name from whitelist table
@@ -61,7 +61,7 @@ def populate_knowledge_base_scanner_names(db):
                     Whitelist.name == kb.scanner_identifier
                 ).first()
                 if whitelist:
-                    scanner_name = whitelist.name
+                    guardrail_name = whitelist.name
             
             elif kb.scanner_type in ['official_scanner', 'marketplace_scanner', 'custom_scanner']:
                 # Get name from scanners table
@@ -69,12 +69,12 @@ def populate_knowledge_base_scanner_names(db):
                     Scanner.tag == kb.scanner_identifier
                 ).first()
                 if scanner:
-                    scanner_name = scanner.name
+                    guardrail_name = scanner.name
             
-            if scanner_name:
-                kb.scanner_name = scanner_name
+            if guardrail_name:
+                kb.guardrail_name = guardrail_name
                 updated_count += 1
-                print(f"  ✓ KB #{kb.id}: {kb.scanner_type}/{kb.scanner_identifier} → {scanner_name}")
+                print(f"  ✓ KB #{kb.id}: {kb.scanner_type}/{kb.scanner_identifier} → {guardrail_name}")
             else:
                 print(f"  ⚠ KB #{kb.id}: Could not find scanner for {kb.scanner_type}/{kb.scanner_identifier}")
         
@@ -87,26 +87,26 @@ def populate_knowledge_base_scanner_names(db):
     
     return updated_count
 
-def populate_response_template_scanner_names(db):
-    """Populate scanner_name for response templates"""
+def populate_response_template_guardrail_names(db):
+    """Populate guardrail_name for response templates"""
     print("\n=== Populating Response Template Scanner Names ===")
     
-    # Get all response templates with null scanner_name
+    # Get all response templates with null guardrail_name
     rt_records = db.query(ResponseTemplate).filter(
-        ResponseTemplate.scanner_name.is_(None),
+        ResponseTemplate.guardrail_name.is_(None),
         ResponseTemplate.scanner_type.isnot(None),
         ResponseTemplate.scanner_identifier.isnot(None)
     ).all()
     
     if not rt_records:
-        print("✓ All response templates already have scanner_name populated")
+        print("✓ All response templates already have guardrail_name populated")
         return 0
     
-    print(f"Found {len(rt_records)} response template(s) with missing scanner_name\n")
+    print(f"Found {len(rt_records)} response template(s) with missing guardrail_name\n")
     
     updated_count = 0
     for rt in rt_records:
-        scanner_name = None
+        guardrail_name = None
         
         try:
             if rt.scanner_type == 'blacklist':
@@ -116,7 +116,7 @@ def populate_response_template_scanner_names(db):
                     Blacklist.name == rt.scanner_identifier
                 ).first()
                 if blacklist:
-                    scanner_name = blacklist.name
+                    guardrail_name = blacklist.name
             
             elif rt.scanner_type == 'whitelist':
                 # Get name from whitelist table
@@ -125,7 +125,7 @@ def populate_response_template_scanner_names(db):
                     Whitelist.name == rt.scanner_identifier
                 ).first()
                 if whitelist:
-                    scanner_name = whitelist.name
+                    guardrail_name = whitelist.name
             
             elif rt.scanner_type in ['official_scanner', 'marketplace_scanner', 'custom_scanner']:
                 # Get name from scanners table
@@ -133,12 +133,12 @@ def populate_response_template_scanner_names(db):
                     Scanner.tag == rt.scanner_identifier
                 ).first()
                 if scanner:
-                    scanner_name = scanner.name
+                    guardrail_name = scanner.name
             
-            if scanner_name:
-                rt.scanner_name = scanner_name
+            if guardrail_name:
+                rt.guardrail_name = guardrail_name
                 updated_count += 1
-                print(f"  ✓ Template #{rt.id}: {rt.scanner_type}/{rt.scanner_identifier} → {scanner_name}")
+                print(f"  ✓ Template #{rt.id}: {rt.scanner_type}/{rt.scanner_identifier} → {guardrail_name}")
             else:
                 print(f"  ⚠ Template #{rt.id}: Could not find scanner for {rt.scanner_type}/{rt.scanner_identifier}")
         
@@ -153,7 +153,7 @@ def populate_response_template_scanner_names(db):
 
 def main():
     print("=== Scanner Name Population Tool ===")
-    print("This script populates missing scanner_name fields for knowledge bases and response templates.\n")
+    print("This script populates missing guardrail_name fields for knowledge bases and response templates.\n")
     
     # Create database session
     engine = create_engine(settings.database_url)
@@ -162,10 +162,10 @@ def main():
     
     try:
         # Populate knowledge base scanner names
-        kb_count = populate_knowledge_base_scanner_names(db)
+        kb_count = populate_knowledge_base_guardrail_names(db)
         
         # Populate response template scanner names
-        rt_count = populate_response_template_scanner_names(db)
+        rt_count = populate_response_template_guardrail_names(db)
         
         # Summary
         print("\n=== Summary ===")
@@ -174,7 +174,7 @@ def main():
         print(f"Total Records Updated: {kb_count + rt_count}")
         
         if kb_count + rt_count > 0:
-            print("\n✅ All missing scanner_name fields have been populated!")
+            print("\n✅ All missing guardrail_name fields have been populated!")
         else:
             print("\n✓ No updates needed - all records are already up to date")
     

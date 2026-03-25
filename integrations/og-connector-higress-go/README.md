@@ -8,7 +8,7 @@ A Higress WASM plugin that integrates OpenGuardrails AI security capabilities in
 |---------|-------------|
 | **Input Detection** | Block prompt injection, jailbreaks, and policy violations before they reach the LLM |
 | **Output Detection** | Scan LLM responses for risky content (non-streaming) |
-| **Data Leakage Prevention** | Detect and anonymize sensitive data (PII, bank numbers, phone numbers, etc.) |
+| **Data Masking** | Detect and anonymize sensitive data (PII, bank numbers, phone numbers, etc.) |
 | **Streaming Restoration** | Restore anonymized placeholders in real-time SSE streaming responses |
 | **Private Model Switching** | Automatically redirect requests to on-premise models when sensitive data is detected |
 | **Bypass Token** | Skip detection for trusted internal requests (e.g., private model responses) |
@@ -166,7 +166,7 @@ Through OpenGuardrails integration, the plugin provides:
 |------------|-------------|
 | Prompt Injection Detection (S9) | Detects jailbreak and prompt injection attempts |
 | 19 Risk Categories (S1-S19) | Security, compliance, and content policy scanning |
-| Data Leakage Prevention | Detects PII, financial data, credentials, etc. |
+| Data Masking | Detects PII, financial data, credentials, etc. |
 | Anonymization + Restoration | Masks sensitive data before LLM, restores in response |
 | Private Model Switching | Routes sensitive requests to on-premise models |
 | Ban Policy | IP and user-based blocking |

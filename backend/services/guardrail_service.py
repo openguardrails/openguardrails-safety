@@ -1,6 +1,6 @@
 import uuid
 import json
-from typing import List, Dict, Tuple, Optional, Union
+from typing import List, Dict, Tuple, Optional, Union, Any
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from database.models import DetectionResult, ResponseTemplate, Application
@@ -337,12 +337,13 @@ class GuardrailService:
                 except Exception as e:
                     logger.warning(f"Failed to generate appeal link: {e}")
 
-            # 7. Asynchronously log detection results
+            # 7. Asynchronously log detection results (with sensitive data masked)
             await self._log_detection_result(
                 request_id, user_content, compliance_result, security_result,
                 suggest_action, suggest_answer, model_response,
                 ip_address, user_agent, tenant_id,
-                has_image=has_image, image_count=len(saved_image_paths), image_paths=saved_image_paths
+                has_image=has_image, image_count=len(saved_image_paths), image_paths=saved_image_paths,
+                data_result=data_result
             )
 
             # 8. Construct response
@@ -596,19 +597,19 @@ class GuardrailService:
         # Extract scanner information from matched scanners (use highest risk scanner)
         scanner_type = None
         scanner_identifier = None
-        scanner_name = None
-        
+        guardrail_name = None
+
         if matched_scanners and len(matched_scanners) > 0:
             # Use the first matched scanner (highest priority)
             first_scanner = matched_scanners[0]
             scanner_type = "official_scanner"  # All scanners in new system are official_scanner type
             scanner_identifier = first_scanner.scanner_tag  # Use scanner tag as identifier (e.g., S8, S100)
-            scanner_name = first_scanner.scanner_name  # Human-readable name for template variable
-            logger.info(f"Using scanner info for answer matching: type={scanner_type}, identifier={scanner_identifier}, name={scanner_name}")
+            guardrail_name = first_scanner.guardrail_name  # Human-readable name for template variable
+            logger.info(f"Using scanner info for answer matching: type={scanner_type}, identifier={scanner_identifier}, name={guardrail_name}")
         elif categories:
-            # Fallback: use first category as scanner_name
-            scanner_name = categories[0]
-            logger.debug(f"No matched_scanners provided, using first category as scanner_name: {scanner_name}")
+            # Fallback: use first category as guardrail_name
+            guardrail_name = categories[0]
+            logger.debug(f"No matched_scanners provided, using first category as guardrail_name: {guardrail_name}")
 
         return await enhanced_template_service.get_suggest_answer(
             categories,
@@ -618,7 +619,7 @@ class GuardrailService:
             user_language=user_language,
             scanner_type=scanner_type,
             scanner_identifier=scanner_identifier,
-            scanner_name=scanner_name
+            guardrail_name=guardrail_name
         )
     
     async def _handle_blacklist_hit(
@@ -650,7 +651,7 @@ class GuardrailService:
             user_language=user_language,
             scanner_type='blacklist',  # Scanner type
             scanner_identifier=list_name,  # Blacklist name
-            scanner_name=list_name  # For {scanner_name} variable replacement
+            guardrail_name=list_name  # For {guardrail_name} variable replacement
         )
 
         # Asynchronously log to database
@@ -725,25 +726,48 @@ class GuardrailService:
             suggest_answer=None
         )
     
+    @staticmethod
+    def _mask_sensitive_entities(text: str, detected_entities: List[Dict[str, Any]]) -> str:
+        """Replace detected sensitive entity texts with asterisks."""
+        if not text or not detected_entities:
+            return text
+        entity_texts = sorted(
+            {e['text'] for e in detected_entities if e.get('text')},
+            key=len, reverse=True,
+        )
+        masked = text
+        for et in entity_texts:
+            if et and et in masked:
+                masked = masked.replace(et, '***')
+        return masked
+
     async def _log_detection_result(
         self, request_id: str, content: str, compliance_result: ComplianceResult,
         security_result: SecurityResult, suggest_action: str, suggest_answer: Optional[str],
         model_response: str, ip_address: Optional[str], user_agent: Optional[str],
         tenant_id: Optional[str] = None, has_image: bool = False,
-        image_count: int = 0, image_paths: List[str] = None
+        image_count: int = 0, image_paths: List[str] = None,
+        data_result: Optional[DataSecurityResult] = None
     ):
         """Asynchronously record detection results to log"""
 
         # Clean NUL characters in content
         from utils.validators import clean_null_characters
 
+        # Mask sensitive entities detected by data masking before logging
+        logged_content = clean_null_characters(content) if content else content
+        logged_model_response = clean_null_characters(model_response) if model_response else model_response
+        if data_result and data_result.detected_entities:
+            logged_content = self._mask_sensitive_entities(logged_content, data_result.detected_entities)
+            logged_model_response = self._mask_sensitive_entities(logged_model_response, data_result.detected_entities)
+
         detection_data = {
             "request_id": request_id,
             "tenant_id": tenant_id,
-            "content": clean_null_characters(content) if content else content,
+            "content": logged_content,
             "suggest_action": suggest_action,
             "suggest_answer": clean_null_characters(suggest_answer) if suggest_answer else suggest_answer,
-            "model_response": clean_null_characters(model_response) if model_response else model_response,
+            "model_response": logged_model_response,
             "ip_address": ip_address,
             "user_agent": clean_null_characters(user_agent) if user_agent else user_agent,
             "security_risk_level": security_result.risk_level,

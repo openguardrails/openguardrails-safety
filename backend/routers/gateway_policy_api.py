@@ -2,7 +2,7 @@
 Gateway Security Policy Configuration API
 
 Provides endpoints for managing both general risk policies (security, safety, compliance)
-and data leakage policies in a unified interface for the Security Gateway.
+and data masking policies in a unified interface for the Security Gateway.
 """
 
 from typing import List, Optional
@@ -104,19 +104,19 @@ class GatewayPolicyUpdate(BaseModel):
     general_output_medium_risk_action: Optional[str] = Field(None, pattern='^(block|replace|pass)$')
     general_output_low_risk_action: Optional[str] = Field(None, pattern='^(block|replace|pass)$')
 
-    # Data Leakage - Input Policy
+    # Data Masking - Input Policy
     # Actions: 'block' | 'switch_private_model' | 'anonymize' | 'anonymize_restore' | 'pass'
     input_high_risk_action: Optional[str] = Field(None, pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
     input_medium_risk_action: Optional[str] = Field(None, pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
     input_low_risk_action: Optional[str] = Field(None, pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
 
-    # Data Leakage - Output Policy
+    # Data Masking - Output Policy
     # Actions: 'block' | 'switch_private_model' | 'anonymize' | 'pass'
     output_high_risk_action: Optional[str] = Field(None, pattern='^(block|switch_private_model|anonymize|pass)$')
     output_medium_risk_action: Optional[str] = Field(None, pattern='^(block|switch_private_model|anonymize|pass)$')
     output_low_risk_action: Optional[str] = Field(None, pattern='^(block|switch_private_model|anonymize|pass)$')
 
-    # Private model for data leakage switching
+    # Private model for data masking switching
     private_model_id: Optional[str] = None
 
 
@@ -145,22 +145,22 @@ class GatewayPolicyResponse(BaseModel):
     general_output_medium_risk_action_override: Optional[str]
     general_output_low_risk_action_override: Optional[str]
 
-    # Data Leakage - Input Policy - resolved values
+    # Data Masking - Input Policy - resolved values
     input_high_risk_action: str
     input_medium_risk_action: str
     input_low_risk_action: str
 
-    # Data Leakage - Input Policy - overrides
+    # Data Masking - Input Policy - overrides
     input_high_risk_action_override: Optional[str]
     input_medium_risk_action_override: Optional[str]
     input_low_risk_action_override: Optional[str]
 
-    # Data Leakage - Output Policy - resolved values
+    # Data Masking - Output Policy - resolved values
     output_high_risk_action: str
     output_medium_risk_action: str
     output_low_risk_action: str
 
-    # Data Leakage - Output Policy - overrides
+    # Data Masking - Output Policy - overrides
     output_high_risk_action_override: Optional[str]
     output_medium_risk_action_override: Optional[str]
     output_low_risk_action_override: Optional[str]
@@ -192,12 +192,12 @@ class TenantGatewayPolicyResponse(BaseModel):
     default_general_output_medium_risk_action: str
     default_general_output_low_risk_action: str
 
-    # Data Leakage - Input Policy defaults
+    # Data Masking - Input Policy defaults
     default_input_high_risk_action: str
     default_input_medium_risk_action: str
     default_input_low_risk_action: str
 
-    # Data Leakage - Output Policy defaults
+    # Data Masking - Output Policy defaults
     default_output_high_risk_action: str
     default_output_medium_risk_action: str
     default_output_low_risk_action: str
@@ -225,12 +225,12 @@ class TenantGatewayPolicyUpdate(BaseModel):
     default_general_output_medium_risk_action: str = Field(..., pattern='^(block|replace|pass)$')
     default_general_output_low_risk_action: str = Field(..., pattern='^(block|replace|pass)$')
 
-    # Data Leakage - Input Policy defaults
+    # Data Masking - Input Policy defaults
     default_input_high_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
     default_input_medium_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
     default_input_low_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
 
-    # Data Leakage - Output Policy defaults
+    # Data Masking - Output Policy defaults
     default_output_high_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|pass)$')
     default_output_medium_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|pass)$')
     default_output_low_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|pass)$')
@@ -344,12 +344,12 @@ async def update_tenant_gateway_policy(
         tenant_policy.default_general_output_medium_risk_action = policy_update.default_general_output_medium_risk_action
         tenant_policy.default_general_output_low_risk_action = policy_update.default_general_output_low_risk_action
 
-        # Update data leakage - input policy
+        # Update data masking - input policy
         tenant_policy.default_input_high_risk_action = policy_update.default_input_high_risk_action
         tenant_policy.default_input_medium_risk_action = policy_update.default_input_medium_risk_action
         tenant_policy.default_input_low_risk_action = policy_update.default_input_low_risk_action
 
-        # Update data leakage - output policy
+        # Update data masking - output policy
         tenant_policy.default_output_high_risk_action = policy_update.default_output_high_risk_action
         tenant_policy.default_output_medium_risk_action = policy_update.default_output_medium_risk_action
         tenant_policy.default_output_low_risk_action = policy_update.default_output_low_risk_action
@@ -584,12 +584,12 @@ async def update_gateway_policy(
         if hasattr(app_policy, 'general_output_low_risk_action'):
             app_policy.general_output_low_risk_action = policy_update.general_output_low_risk_action
 
-        # Update data leakage - input policy
+        # Update data masking - input policy
         app_policy.input_high_risk_action = policy_update.input_high_risk_action
         app_policy.input_medium_risk_action = policy_update.input_medium_risk_action
         app_policy.input_low_risk_action = policy_update.input_low_risk_action
 
-        # Update data leakage - output policy
+        # Update data masking - output policy
         if hasattr(app_policy, 'output_high_risk_action'):
             app_policy.output_high_risk_action = policy_update.output_high_risk_action
         if hasattr(app_policy, 'output_medium_risk_action'):

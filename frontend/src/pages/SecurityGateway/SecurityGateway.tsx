@@ -334,7 +334,7 @@ const ProxyModelManagement: React.FC = () => {
       header: t('proxy.upstreamApiId'),
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <code className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">
+          <code className="px-2 py-1 bg-muted rounded text-xs font-mono">
             {row.original.id}
           </code>
           <Button
@@ -344,7 +344,7 @@ const ProxyModelManagement: React.FC = () => {
             onClick={() => handleCopyToClipboard(row.original.id, row.original.id)}
           >
             {copiedId === row.original.id ? (
-              <Check className="h-3 w-3 text-green-600" />
+              <Check className="h-3 w-3 text-emerald-400" />
             ) : (
               <Copy className="h-3 w-3" />
             )}
@@ -358,7 +358,7 @@ const ProxyModelManagement: React.FC = () => {
       cell: ({ row }) => (
         <div className="flex items-center gap-2 flex-wrap">
           {row.original.enable_reasoning_detection && (
-            <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+            <Badge variant="secondary" className="bg-purple-500/15 text-purple-300 border-purple-500/20">
               {t('proxy.inferenceDetection')}
             </Badge>
           )}
@@ -394,7 +394,7 @@ const ProxyModelManagement: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
             onClick={() => handleDelete(row.original.id)}
           >
             <Trash2 className="h-4 w-4 mr-1" />
@@ -438,13 +438,13 @@ const ProxyModelManagement: React.FC = () => {
           <CardTitle>{t('proxy.accessOpenGuardrailsGateway')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-900">{t('proxy.gatewayIntegrationDesc')}</p>
+          <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+            <p className="text-sm text-sky-200">{t('proxy.gatewayIntegrationDesc')}</p>
           </div>
 
           <div>
             <p className="font-semibold mb-2">{t('proxy.pythonOpenaiExample')}</p>
-            <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm border border-gray-200">
+            <pre className="bg-secondary p-4 rounded-lg overflow-auto text-sm border border-border">
               <code>
 {`from openai import OpenAI
 
@@ -467,7 +467,7 @@ completion = client.chat.completions.create(
 
           <div>
             <p className="font-semibold mb-2">{t('proxy.importantNotes')}</p>
-            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+            <ul className="list-disc list-inside space-y-1 text-sm text-slate-300">
               <li>{t('proxy.note1')}</li>
               <li>{t('proxy.note2')}</li>
               <li>{t('proxy.note3')}</li>
@@ -570,7 +570,7 @@ completion = client.chat.completions.create(
               <div className="space-y-3 p-4 border rounded-lg">
                 <div>
                   <p className="font-medium mb-1">{t('proxy.securityConfigLabel')}</p>
-                  <p className="text-sm text-gray-600">{t('proxy.securityConfigDesc')}</p>
+                  <p className="text-sm text-muted-foreground">{t('proxy.securityConfigDesc')}</p>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -596,7 +596,7 @@ completion = client.chat.completions.create(
                   placeholder={t('proxy.streamDetectionIntervalPlaceholder')}
                   className="mt-2"
                 />
-                <p className="text-sm text-gray-600 mt-1">{t('proxy.streamDetectionIntervalTooltip')}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t('proxy.streamDetectionIntervalTooltip')}</p>
               </div>
 
               <DialogFooter>
@@ -619,14 +619,14 @@ completion = client.chat.completions.create(
           {viewingModel && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.configName')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.configName')}</span>
                 <span className="col-span-2">{viewingModel.config_name}</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.upstreamApiId')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.upstreamApiId')}</span>
                 <div className="col-span-2 flex items-center gap-2">
-                  <code className="px-2 py-1 bg-gray-100 rounded text-xs font-mono">
+                  <code className="px-2 py-1 bg-muted rounded text-xs font-mono">
                     {viewingModel.id}
                   </code>
                   <Button
@@ -636,7 +636,7 @@ completion = client.chat.completions.create(
                     onClick={() => handleCopyToClipboard(viewingModel.id, viewingModel.id)}
                   >
                     {copiedId === viewingModel.id ? (
-                      <Check className="h-3 w-3 text-green-600" />
+                      <Check className="h-3 w-3 text-emerald-400" />
                     ) : (
                       <Copy className="h-3 w-3" />
                     )}
@@ -645,10 +645,10 @@ completion = client.chat.completions.create(
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.status')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.status')}</span>
                 <span className="col-span-2">
                   {viewingModel.is_active ? (
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                    <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
                       {t('proxy.enabled')}
                     </Badge>
                   ) : (
@@ -658,10 +658,10 @@ completion = client.chat.completions.create(
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.securityConfig')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.securityConfig')}</span>
                 <div className="col-span-2 space-y-2">
                   {viewingModel.enable_reasoning_detection && (
-                    <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                    <Badge variant="secondary" className="bg-purple-500/15 text-purple-300 border-purple-500/20">
                       {t('proxy.inferenceDetection')}
                     </Badge>
                   )}
@@ -669,7 +669,7 @@ completion = client.chat.completions.create(
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2">
-                <span className="font-medium text-gray-700">{t('proxy.createTime')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.createTime')}</span>
                 <span className="col-span-2">
                   {new Date(viewingModel.created_at).toLocaleString('zh-CN')}
                 </span>

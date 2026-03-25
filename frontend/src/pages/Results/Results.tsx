@@ -32,16 +32,17 @@ import {
 } from '@/components/ui/sheet'
 import { DataTable } from '@/components/data-table/DataTable'
 import { DateRangePicker } from '@/components/forms/DateRangePicker'
-import { resultsApi, dataSecurityApi } from '../../services/api'
+import api, { resultsApi, dataSecurityApi } from '../../services/api'
 import type { DetectionResult, PaginatedResponse, DataSecurityEntityType } from '../../types'
 import { translateRiskLevel } from '../../utils/i18nMapper'
-import { useApplication } from '../../contexts/ApplicationContext'
 import type { ColumnDef } from '@tanstack/react-table'
 import type { DateRange } from 'react-day-picker'
 
 // Helper function to extract filters from navigation state
 const extractFiltersFromState = (state: any) => {
   const filters: any = {
+    application_id: undefined,
+    workspace_id: undefined,
     risk_level: undefined,
     security_risk_level: undefined,
     compliance_risk_level: undefined,
@@ -102,16 +103,29 @@ const extractFiltersFromState = (state: any) => {
   return filters
 }
 
+interface AppOption {
+  id: string
+  name: string
+  workspace_id?: string | null
+  workspace_name?: string | null
+}
+
+interface WorkspaceOption {
+  id: string
+  name: string
+}
+
 const Results: React.FC = () => {
   const { t } = useTranslation()
   const location = useLocation()
-  const { currentApplicationId } = useApplication()
   const [data, setData] = useState<PaginatedResponse<DetectionResult> | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedResult, setSelectedResult] = useState<DetectionResult | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [dataEntityTypes, setDataEntityTypes] = useState<DataSecurityEntityType[]>([])
+  const [applicationOptions, setApplicationOptions] = useState<AppOption[]>([])
+  const [workspaceOptions, setWorkspaceOptions] = useState<WorkspaceOption[]>([])
 
   // Initialize filters from location.state if available
   const [filters, setFilters] = useState(() => extractFiltersFromState(location.state))
@@ -121,7 +135,23 @@ const Results: React.FC = () => {
     pageSize: 20,
   })
 
-  // Define functions before useEffect
+  // Fetch applications and workspaces for filter dropdowns
+  const fetchFilterOptions = async () => {
+    try {
+      const [appsRes, wsRes] = await Promise.all([
+        api.get('/api/v1/applications'),
+        api.get('/api/v1/workspaces'),
+      ])
+      setApplicationOptions(appsRes.data.map((a: any) => ({
+        id: a.id, name: a.name,
+        workspace_id: a.workspace_id, workspace_name: a.workspace_name,
+      })))
+      setWorkspaceOptions(wsRes.data.map((w: any) => ({ id: w.id, name: w.name })))
+    } catch (error) {
+      console.error('Error fetching filter options:', error)
+    }
+  }
+
   const fetchDataEntityTypes = async () => {
     try {
       const response = await dataSecurityApi.list()
@@ -141,6 +171,12 @@ const Results: React.FC = () => {
         per_page: pagination.pageSize,
       }
 
+      if (filters.application_id) {
+        params.application_id = filters.application_id
+      }
+      if (filters.workspace_id) {
+        params.workspace_id = filters.workspace_id
+      }
       if (filters.risk_level) {
         params.risk_level = filters.risk_level
       }
@@ -191,10 +227,11 @@ const Results: React.FC = () => {
 
   useEffect(() => {
     fetchResults()
-  }, [fetchResults, currentApplicationId])
+  }, [fetchResults])
 
   useEffect(() => {
     fetchDataEntityTypes()
+    fetchFilterOptions()
   }, [])
 
   const handlePageChange = (page: number, newPageSize?: number) => {
@@ -222,6 +259,8 @@ const Results: React.FC = () => {
 
   const handleResetAllFilters = () => {
     setFilters({
+      application_id: undefined,
+      workspace_id: undefined,
       risk_level: undefined,
       security_risk_level: undefined,
       compliance_risk_level: undefined,
@@ -240,6 +279,8 @@ const Results: React.FC = () => {
   // Check if any filter is active
   const hasActiveFilters = () => {
     return (
+      filters.application_id ||
+      filters.workspace_id ||
       filters.risk_level ||
       filters.security_risk_level ||
       filters.compliance_risk_level ||
@@ -259,6 +300,12 @@ const Results: React.FC = () => {
 
       const params: any = {}
 
+      if (filters.application_id) {
+        params.application_id = filters.application_id
+      }
+      if (filters.workspace_id) {
+        params.workspace_id = filters.workspace_id
+      }
       if (filters.risk_level) {
         params.risk_level = filters.risk_level
       }
@@ -327,16 +374,16 @@ const Results: React.FC = () => {
   const getRiskBadgeClasses = (level: string): string => {
     // Match both English and Chinese formats
     if (level === 'high_risk' || level === '高风险') {
-      return '!bg-red-100 !text-red-800 !border-red-200'
+      return '!bg-red-500/15 !text-red-300 !border-red-500/20'
     }
     if (level === 'medium_risk' || level === '中风险') {
-      return '!bg-orange-100 !text-orange-800 !border-orange-200'
+      return '!bg-orange-500/15 !text-orange-300 !border-orange-500/20'
     }
     if (level === 'low_risk' || level === '低风险') {
-      return '!bg-yellow-100 !text-yellow-800 !border-yellow-200'
+      return '!bg-yellow-500/15 !text-yellow-300 !border-yellow-500/20'
     }
     // no_risk or other
-    return '!bg-gray-100 !text-gray-800 !border-gray-200'
+    return '!bg-muted !text-foreground !border-border'
   }
 
   // Action colors: pass -> green, reject -> red, replace -> orange
@@ -347,15 +394,15 @@ const Results: React.FC = () => {
     const replaceText = t('action.replace')
 
     if (action === 'pass' || action === passText) {
-      return '!bg-green-100 !text-green-800 !border-green-200'
+      return '!bg-emerald-500/15 !text-emerald-300 !border-emerald-500/20'
     }
     if (action === 'reject' || action === rejectText) {
-      return '!bg-red-100 !text-red-800 !border-red-200'
+      return '!bg-red-500/15 !text-red-300 !border-red-500/20'
     }
     if (action === 'replace' || action === replaceText) {
-      return '!bg-orange-100 !text-orange-800 !border-orange-200'
+      return '!bg-orange-500/15 !text-orange-300 !border-orange-500/20'
     }
-    return '!bg-gray-100 !text-gray-800 !border-gray-200'
+    return '!bg-muted !text-foreground !border-border'
   }
 
   // Helper function to format risk display
@@ -409,11 +456,11 @@ const Results: React.FC = () => {
         const record = row.original
         return (
           <div
-            className="flex items-center gap-2 cursor-pointer text-blue-600 hover:underline"
+            className="flex items-center gap-2 cursor-pointer text-sky-400 hover:underline"
             onClick={() => showDetail(record)}
           >
             {record.is_direct_model_access && (
-              <Badge variant="outline" className="shrink-0 !bg-purple-50 !text-purple-700 !border-purple-300">
+              <Badge variant="outline" className="shrink-0 !bg-purple-500/10 !text-purple-400 !border-purple-300">
                 DMA
               </Badge>
             )}
@@ -426,6 +473,25 @@ const Results: React.FC = () => {
             <span className="truncate max-w-[250px]" title={record.content}>
               {record.content}
             </span>
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: 'application_name',
+      header: t('results.application'),
+      cell: ({ row }) => {
+        const record = row.original
+        return (
+          <div className="text-xs">
+            <div className="font-medium truncate max-w-[100px]" title={record.application_name || ''}>
+              {record.application_name || '-'}
+            </div>
+            {record.workspace_name && (
+              <div className="text-muted-foreground truncate max-w-[100px]" title={record.workspace_name}>
+                {record.workspace_name}
+              </div>
+            )}
           </div>
         )
       },
@@ -544,6 +610,62 @@ const Results: React.FC = () => {
       <Card className="flex-shrink-0">
         <CardContent className="pt-4 pb-4">
           <div className="flex flex-wrap gap-2 items-center">
+            {/* Application Filter */}
+            <div className="relative">
+              <Select
+                value={filters.application_id}
+                onValueChange={(value) => handleFilterChange('application_id', value)}
+              >
+                <SelectTrigger className="w-[140px] h-8 text-xs">
+                  <SelectValue placeholder={t('results.filterApplication')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {applicationOptions.map((app) => (
+                    <SelectItem key={app.id} value={app.id}>
+                      {app.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {filters.application_id && (
+                <button
+                  onClick={() => handleClearFilter('application_id')}
+                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
+                >
+                  <X className="w-2.5 h-2.5 text-white" />
+                </button>
+              )}
+            </div>
+
+            {/* Workspace Filter */}
+            {workspaceOptions.length > 0 && (
+              <div className="relative">
+                <Select
+                  value={filters.workspace_id}
+                  onValueChange={(value) => handleFilterChange('workspace_id', value)}
+                >
+                  <SelectTrigger className="w-[140px] h-8 text-xs">
+                    <SelectValue placeholder={t('results.filterWorkspace')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workspaceOptions.map((ws) => (
+                      <SelectItem key={ws.id} value={ws.id}>
+                        {ws.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {filters.workspace_id && (
+                  <button
+                    onClick={() => handleClearFilter('workspace_id')}
+                    className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
+                  >
+                    <X className="w-2.5 h-2.5 text-white" />
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Risk Level */}
             <div className="relative">
               <Select
@@ -564,7 +686,7 @@ const Results: React.FC = () => {
               {filters.risk_level && (
                 <button
                   onClick={() => handleClearFilter('risk_level')}
-                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -591,7 +713,7 @@ const Results: React.FC = () => {
               {filters.security_risk_level && (
                 <button
                   onClick={() => handleClearFilter('security_risk_level')}
-                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -618,7 +740,7 @@ const Results: React.FC = () => {
               {filters.compliance_risk_level && (
                 <button
                   onClick={() => handleClearFilter('compliance_risk_level')}
-                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -645,7 +767,7 @@ const Results: React.FC = () => {
               {filters.data_risk_level && (
                 <button
                   onClick={() => handleClearFilter('data_risk_level')}
-                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -672,7 +794,7 @@ const Results: React.FC = () => {
               {filters.category && (
                 <button
                   onClick={() => handleClearFilter('category')}
-                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -701,7 +823,7 @@ const Results: React.FC = () => {
               {filters.data_entity_type && (
                 <button
                   onClick={() => handleClearFilter('data_entity_type')}
-                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -719,7 +841,7 @@ const Results: React.FC = () => {
               {filters.content_search && (
                 <button
                   onClick={() => handleClearFilter('content_search')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -739,7 +861,7 @@ const Results: React.FC = () => {
               {filters.request_id_search && (
                 <button
                   onClick={() => handleClearFilter('request_id_search')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-400 hover:bg-gray-500 rounded-full flex items-center justify-center"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -751,7 +873,7 @@ const Results: React.FC = () => {
 
             {/* Reset All Filters Button */}
             {hasActiveFilters() && (
-              <Button variant="ghost" size="sm" onClick={handleResetAllFilters} className="h-8 text-xs text-gray-500 hover:text-gray-700">
+              <Button variant="ghost" size="sm" onClick={handleResetAllFilters} className="h-8 text-xs text-muted-foreground hover:text-slate-200">
                 <RotateCcw className="mr-1 h-3 w-3" />
                 {t('common.reset')}
               </Button>
@@ -782,6 +904,7 @@ const Results: React.FC = () => {
             currentPage={pagination.current}
             pageSize={pagination.pageSize}
             onPageChange={handlePageChange}
+            onPageSizeChange={(size) => handlePageChange(1, size)}
             loading={loading}
             fillHeight={true}
           />
@@ -803,15 +926,30 @@ const Results: React.FC = () => {
           ) : (
             selectedResult && (
               <div className="space-y-4 mt-6">
+                {/* Application & Workspace */}
+                {selectedResult.application_name && (
+                  <div className="grid grid-cols-3 gap-4 border-b pb-3">
+                    <div className="font-medium text-muted-foreground text-sm">{t('results.application')}:</div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <span className="text-sm">{selectedResult.application_name}</span>
+                      {selectedResult.workspace_name && (
+                        <Badge variant="outline" className="text-xs">
+                          {selectedResult.workspace_name}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Request ID */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('results.requestId')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('results.requestId')}:</div>
                   <div className="col-span-2 flex items-center gap-2">
-                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                    <code className="text-xs bg-muted px-2 py-1 rounded">
                       {selectedResult.request_id}
                     </code>
                     {selectedResult.is_direct_model_access && (
-                      <Badge variant="outline" className="!bg-purple-50 !text-purple-700 !border-purple-300 text-xs">
+                      <Badge variant="outline" className="!bg-purple-500/10 !text-purple-400 !border-purple-300 text-xs">
                         Direct Model Access
                       </Badge>
                     )}
@@ -820,7 +958,7 @@ const Results: React.FC = () => {
 
                 {/* Prompt Attack */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('results.promptAttack')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('results.promptAttack')}:</div>
                   <div className="col-span-2">
                     <Badge className={getRiskBadgeClasses(selectedResult.security_risk_level || 'no_risk')}>
                       {formatRiskDisplay(
@@ -833,7 +971,7 @@ const Results: React.FC = () => {
 
                 {/* Content Compliance */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">
+                  <div className="font-medium text-muted-foreground text-sm">
                     {t('results.contentCompliance')}:
                   </div>
                   <div className="col-span-2">
@@ -848,7 +986,7 @@ const Results: React.FC = () => {
 
                 {/* Data Leak */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('results.dataLeak')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('results.dataLeak')}:</div>
                   <div className="col-span-2">
                     <Badge className={getRiskBadgeClasses(selectedResult.data_risk_level || 'no_risk')}>
                       {formatRiskDisplay(
@@ -861,7 +999,7 @@ const Results: React.FC = () => {
 
                 {/* Suggested Action */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('results.suggestedAction')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('results.suggestedAction')}:</div>
                   <div className="col-span-2">
                     <Badge className={getActionBadgeClasses(selectedResult.suggest_action)}>
                       {selectedResult.suggest_action}
@@ -871,7 +1009,7 @@ const Results: React.FC = () => {
 
                 {/* Detection Time */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('results.detectionTime')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('results.detectionTime')}:</div>
                   <div className="col-span-2 text-sm">
                     {format(new Date(selectedResult.created_at), 'yyyy-MM-dd HH:mm:ss')}
                   </div>
@@ -879,10 +1017,10 @@ const Results: React.FC = () => {
 
                 {/* Detection Content */}
                 <div>
-                  <div className="font-medium text-gray-600 mb-3 text-sm">
+                  <div className="font-medium text-muted-foreground mb-3 text-sm">
                     {t('results.detectionContent')}:
                   </div>
-                  <div className="mt-2 p-4 bg-gray-50 rounded-md">
+                  <div className="mt-2 p-4 bg-secondary rounded-md">
                     {selectedResult.content && (
                       <p className="mb-3 whitespace-pre-wrap text-sm">{selectedResult.content}</p>
                     )}
@@ -898,14 +1036,14 @@ const Results: React.FC = () => {
                             {selectedResult.image_urls.map((imageUrl, index) => (
                               <div
                                 key={index}
-                                className="border border-gray-300 rounded p-2 bg-white"
+                                className="border border-border rounded p-2 bg-card"
                               >
                                 <img
                                   src={imageUrl}
                                   alt={`${t('results.image')} ${index + 1}`}
                                   className="w-full h-32 object-cover rounded"
                                 />
-                                <div className="text-xs text-gray-500 text-center mt-1">
+                                <div className="text-xs text-muted-foreground text-center mt-1">
                                   {t('results.image')} {index + 1}
                                 </div>
                               </div>
@@ -914,7 +1052,7 @@ const Results: React.FC = () => {
                         </div>
                       )}
                   </div>
-                  <div className="text-xs text-gray-500 mt-2">
+                  <div className="text-xs text-muted-foreground mt-2">
                     {t('results.contentLengthChars', { length: selectedResult.content.length })}
                     {selectedResult.has_image &&
                       ` | ${t('results.includesImages', { count: selectedResult.image_count })}`}
@@ -924,10 +1062,10 @@ const Results: React.FC = () => {
                 {/* Suggested Answer */}
                 {selectedResult.suggest_answer && (
                   <div>
-                    <div className="font-medium text-gray-600 mb-3 text-sm">
+                    <div className="font-medium text-muted-foreground mb-3 text-sm">
                       {t('results.suggestedAnswer')}:
                     </div>
-                    <div className="mt-2 p-4 bg-blue-50 rounded-md whitespace-pre-wrap text-sm">
+                    <div className="mt-2 p-4 bg-sky-500/10 rounded-md whitespace-pre-wrap text-sm">
                       {selectedResult.suggest_answer}
                     </div>
                   </div>
@@ -941,7 +1079,7 @@ const Results: React.FC = () => {
                   (selectedResult.data_categories &&
                     selectedResult.data_categories.length > 0)) && (
                   <div>
-                    <div className="font-medium text-gray-600 mb-3 text-sm">
+                    <div className="font-medium text-muted-foreground mb-3 text-sm">
                       {t('results.riskDetails')}:
                     </div>
                     <div className="space-y-2">
@@ -991,9 +1129,9 @@ const Results: React.FC = () => {
                 {/* Source IP */}
                 {selectedResult.ip_address && (
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('results.sourceIP')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('results.sourceIP')}:</div>
                     <div className="col-span-2">
-                      <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                      <code className="text-xs bg-muted px-2 py-1 rounded">
                         {selectedResult.ip_address}
                       </code>
                     </div>

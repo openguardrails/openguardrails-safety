@@ -86,7 +86,7 @@
     "responseBlockedSecurity": "Response blocked due to security policy.",
     "cannotProvideInformation": "I cannot provide this information.",
     "responseTemplates": {
-      "securityRisk": "Request blocked by OpenGuardrails due to possible violation of policy related to {scanner_name}.",
+      "securityRisk": "Request blocked by OpenGuardrails due to possible violation of policy related to {guardrail_name}.",
       "dataLeakageRisk": "Request blocked by OpenGuardrails due to possible sensitive data ({entity_type_names}).",
       "default": "Request blocked by OpenGuardrails due to policy violation."
     }

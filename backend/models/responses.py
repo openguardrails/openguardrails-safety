@@ -62,6 +62,11 @@ class DetectionResultResponse(BaseModel):
     image_urls: List[str] = []  # Signed image access URLs
     # Direct Model Access flag
     is_direct_model_access: bool = False  # Whether this is a direct model access call
+    # Application and workspace info (for global results view)
+    application_id: Optional[str] = None
+    application_name: Optional[str] = None
+    workspace_id: Optional[str] = None
+    workspace_name: Optional[str] = None
 
 class BlacklistResponse(BaseModel):
     """Blacklist response model"""
@@ -93,7 +98,7 @@ class ResponseTemplateResponse(BaseModel):
     category: Optional[str] = None
     scanner_type: Optional[str] = None
     scanner_identifier: Optional[str] = None
-    scanner_name: Optional[str] = None  # Scanner name from Scanner table (for custom/marketplace scanners)
+    guardrail_name: Optional[str] = None  # Guardrail name from Scanner table (for custom/marketplace guardrails)
 
     risk_level: str
     template_content: Dict[str, str]  # Multilingual content: {"en": "...", "zh": "...", ...}
@@ -158,7 +163,7 @@ class KnowledgeBaseResponse(BaseModel):
     category: Optional[str] = None
     scanner_type: Optional[str] = None
     scanner_identifier: Optional[str] = None
-    scanner_name: Optional[str] = None  # Scanner human-readable name for display
+    guardrail_name: Optional[str] = None  # Guardrail human-readable name for display
 
     name: str
     description: Optional[str]

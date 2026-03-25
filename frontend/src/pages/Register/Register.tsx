@@ -169,7 +169,7 @@ const Register: React.FC = () => {
               <FormLabel>{t('register.emailPlaceholder')}</FormLabel>
               <FormControl>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                   <Input
                     type="email"
                     placeholder={t('register.emailPlaceholder')}
@@ -195,7 +195,7 @@ const Register: React.FC = () => {
               <FormLabel>{t('register.passwordPlaceholder')}</FormLabel>
               <FormControl>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                   <Input
                     type="password"
                     placeholder={t('register.passwordPlaceholder')}
@@ -221,7 +221,7 @@ const Register: React.FC = () => {
               <FormLabel>{t('register.confirmPasswordPlaceholder')}</FormLabel>
               <FormControl>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                   <Input
                     type="password"
                     placeholder={t('register.confirmPasswordPlaceholder')}
@@ -275,7 +275,7 @@ const Register: React.FC = () => {
                 <FormLabel>{t('register.verificationCodePlaceholder')}</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                     <Input
                       placeholder={t('register.verificationCodePlaceholder')}
                       className="pl-10 h-12 text-center text-lg tracking-widest"
@@ -327,12 +327,12 @@ const Register: React.FC = () => {
   )
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-secondary">
       {/* Left side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-12 flex-col justify-between">
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-white rounded-lg p-2" />
+            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-card rounded-lg p-2" />
             <h1 className="text-2xl font-bold text-white">OpenGuardrails</h1>
           </div>
           <h2 className="text-4xl font-bold text-white mb-4">
@@ -352,10 +352,10 @@ const Register: React.FC = () => {
         <div className="w-full max-w-md">
           <Card className="border shadow-sm">
             <CardHeader className="space-y-1 pb-4">
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-foreground">
                 {t('register.title')}
               </h1>
-              <p className="text-slate-600 text-sm">
+              <p className="text-muted-foreground text-sm">
                 {t('register.subtitle')}
               </p>
             </CardHeader>
@@ -368,12 +368,12 @@ const Register: React.FC = () => {
                     className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
                       currentStep === 0
                         ? 'bg-blue-600 text-white'
-                        : 'bg-slate-200 text-slate-600'
+                        : 'bg-border text-muted-foreground'
                     }`}
                   >
                     1
                   </div>
-                  <span className={`text-xs font-medium ${currentStep === 0 ? 'text-slate-900' : 'text-slate-500'}`}>
+                  <span className={`text-xs font-medium ${currentStep === 0 ? 'text-foreground' : 'text-muted-foreground'}`}>
                     {t('register.stepFillInfo')}
                   </span>
                 </div>
@@ -383,12 +383,12 @@ const Register: React.FC = () => {
                     className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold transition-colors ${
                       currentStep === 1
                         ? 'bg-blue-600 text-white'
-                        : 'bg-slate-200 text-slate-600'
+                        : 'bg-border text-muted-foreground'
                     }`}
                   >
                     2
                   </div>
-                  <span className={`text-xs font-medium ${currentStep === 1 ? 'text-slate-900' : 'text-slate-500'}`}>
+                  <span className={`text-xs font-medium ${currentStep === 1 ? 'text-foreground' : 'text-muted-foreground'}`}>
                     {t('register.stepVerifyEmail')}
                   </span>
                 </div>
@@ -401,8 +401,8 @@ const Register: React.FC = () => {
 
             <CardFooter className="flex-col pt-6">
               <div className="text-center text-sm">
-                <span className="text-slate-600">{t('register.alreadyHaveAccount')} </span>
-                <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
+                <span className="text-muted-foreground">{t('register.alreadyHaveAccount')} </span>
+                <Link to="/login" className="text-sky-400 hover:text-sky-400 font-medium hover:underline">
                   {t('register.loginNow')}
                 </Link>
               </div>
@@ -410,7 +410,7 @@ const Register: React.FC = () => {
           </Card>
 
           {/* Mobile Copyright */}
-          <p className="text-xs text-slate-500 text-center mt-6 lg:hidden">
+          <p className="text-xs text-muted-foreground text-center mt-6 lg:hidden">
             {t('register.copyright')}
           </p>
         </div>

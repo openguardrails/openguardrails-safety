@@ -5,8 +5,8 @@ identity:
     en_US: "OGR Check Response Contextual"
 description:
   human:
-    en_US: "Contextually detect AI response data leakage and content safety based on standards"
-  llm: "Use this tool to analyze AI-generated responses for content safety violations, data leakage, malicious operations and off topic, considering the original prompt context. Essential for ensuring AI responses are safe, appropriate, and comply with content policies."
+    en_US: "Contextually detect AI response data masking and content safety based on standards"
+  llm: "Use this tool to analyze AI-generated responses for content safety violations, data masking, malicious operations and off topic, considering the original prompt context. Essential for ensuring AI responses are safe, appropriate, and comply with content policies."
 parameters:
   - name: prompt
     type: string

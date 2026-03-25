@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Shield, AlertTriangle, Lock, Save } from 'lucide-react'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { gatewayPolicyApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useApplication } from '../../contexts/ApplicationContext'
@@ -60,6 +61,7 @@ interface GatewayPolicy {
 
 const SecurityPolicy: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const { onUserSwitch } = useAuth()
   const { currentApplicationId } = useApplication()
   const [policy, setPolicy] = useState<GatewayPolicy | null>(null)
@@ -189,9 +191,9 @@ const SecurityPolicy: React.FC = () => {
     field: keyof typeof formData
   }) => {
     const levelColors = {
-      high: 'bg-red-100 text-red-800 border-red-200',
-      medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      low: 'bg-green-100 text-green-800 border-green-200',
+      high: 'bg-red-500/15 text-red-300 border-red-500/20',
+      medium: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/20',
+      low: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20',
     }
 
     return (
@@ -265,7 +267,7 @@ const SecurityPolicy: React.FC = () => {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving || !canEdit}>
               <Save className="h-4 w-4 mr-1" />
               {saving ? t('common.saving') : t('common.save')}
             </Button>
@@ -351,12 +353,12 @@ const SecurityPolicy: React.FC = () => {
               </Card>
             </TabsContent>
 
-            {/* Data Leakage Policy Tab */}
+            {/* Data Masking Policy Tab */}
             <TabsContent value="data-leakage" className="mt-4 space-y-4">
               {/* Private model warning */}
               {!hasPrivateModels && (
-                <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-                  <p className="text-sm text-orange-800">
+                <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                  <p className="text-sm text-orange-300">
                     {t('gateway.noPrivateModelsWarning')}
                   </p>
                 </div>

@@ -1,6 +1,5 @@
 import { useLocation } from 'react-router-dom'
-import OfficialScannersManagement from './OfficialScannersManagement'
-import CustomScannersManagement from './CustomScannersManagement'
+import GuardrailsManagement from './GuardrailsManagement'
 import SensitivityThresholdManagement from './SensitivityThresholdManagement'
 import DataSecurity from '../DataSecurity'
 import KeywordListManagement from './KeywordListManagement'
@@ -12,16 +11,13 @@ const Config: React.FC = () => {
   const renderContent = () => {
     const path = location.pathname
 
-    if (path === '/config' || path === '/config/' || path.includes('/official-scanners')) {
-      return <OfficialScannersManagement />
-    }
-    if (path.includes('/custom-scanners')) {
-      return <CustomScannersManagement />
+    if (path === '/config' || path === '/config/' || path.includes('/guardrails')) {
+      return <GuardrailsManagement />
     }
     if (path.includes('/sensitivity-thresholds')) {
       return <SensitivityThresholdManagement />
     }
-    if (path.includes('/data-security')) {
+    if (path.includes('/data-masking') || path.includes('/data-security')) {
       return <DataSecurity />
     }
     if (path.includes('/keyword-list') || path.includes('/blacklist') || path.includes('/whitelist')) {
@@ -32,7 +28,7 @@ const Config: React.FC = () => {
       return <AnswerManagement />
     }
 
-    return <OfficialScannersManagement />
+    return <GuardrailsManagement />
   }
 
   return (

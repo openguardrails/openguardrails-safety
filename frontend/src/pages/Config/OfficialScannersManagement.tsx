@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Info, RefreshCw, ShoppingCart, Eye, Loader2 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { scannerPackagesApi, scannerConfigsApi, purchasesApi } from '../../services/api'
-import { useApplication } from '../../contexts/ApplicationContext'
+import { useCanEdit } from '../../hooks/useCanEdit'
+import api, { scannerPackagesApi, scannerConfigsApi, purchasesApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { eventBus, EVENTS } from '../../utils/eventBus'
 import paymentService, { PaymentConfig } from '../../services/payment'
@@ -62,11 +62,18 @@ interface Package {
   purchase_requested?: boolean
 }
 
-const OfficialScannersManagement: React.FC = () => {
+interface OfficialScannersManagementProps {
+  workspaceId?: string
+}
+
+const OfficialScannersManagement: React.FC<OfficialScannersManagementProps> = ({ workspaceId }) => {
   const { t, i18n } = useTranslation()
+  const canEdit = useCanEdit()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuth()
-  const { currentApplicationId } = useApplication()
+
+  // Workspace-scoped API helpers
+  const wsPrefix = workspaceId ? `/api/v1/workspaces/${workspaceId}/config` : null
 
   // Dynamic price display function based on current language
   const formatPriceDisplay = (price: number | undefined, priceDisplay: string | undefined): string => {
@@ -107,10 +114,7 @@ const OfficialScannersManagement: React.FC = () => {
 
   useEffect(() => {
     loadPackagesOnly()
-
-    if (currentApplicationId) {
-      loadScannerConfigs()
-    }
+    loadScannerConfigs()
 
     // Load payment config (only in SaaS mode)
     if (features.showPayment()) {
@@ -131,7 +135,7 @@ const OfficialScannersManagement: React.FC = () => {
       toast.info(t('payment.cancelled'))
       setSearchParams({})
     }
-  }, [currentApplicationId])
+  }, [])
 
   // Handle payment success with polling verification
   const handlePaymentSuccess = React.useCallback(
@@ -139,13 +143,10 @@ const OfficialScannersManagement: React.FC = () => {
       // Only refresh if this is a package payment
       if (result.order_type === 'package') {
         loadPackagesOnly()
-        // Also reload scanner configs if application is selected
-        if (currentApplicationId) {
-          loadScannerConfigs()
-        }
+        loadScannerConfigs()
       }
     },
-    [currentApplicationId]
+    []
   )
 
   usePaymentSuccess({
@@ -177,8 +178,13 @@ const OfficialScannersManagement: React.FC = () => {
   const loadScannerConfigs = async () => {
     try {
       setLoading(true)
-      // Load scanner configs (requires application)
-      const configs = await scannerConfigsApi.getAll(true)
+      let configs: ScannerConfig[]
+      if (wsPrefix) {
+        const res = await api.get(`${wsPrefix}/scanners`)
+        configs = res.data
+      } else {
+        configs = await scannerConfigsApi.getAll(true)
+      }
       setScannerConfigs(configs.filter((c: ScannerConfig) => !c.is_custom))
     } catch (error) {
       toast.error(t('scannerPackages.loadFailed'))
@@ -192,12 +198,38 @@ const OfficialScannersManagement: React.FC = () => {
     loadScannerConfigs()
   }
 
+  const updateScannerConfig = async (scannerId: string, updates: any) => {
+    if (wsPrefix) {
+      // Workspace mode: bulk update via workspace endpoint
+      const configs = scannerConfigs.map(s => {
+        if (s.id === scannerId) {
+          return {
+            scanner_id: s.id,
+            is_enabled: updates.is_enabled !== undefined ? updates.is_enabled : s.is_enabled,
+            risk_level: s.risk_level !== s.default_risk_level ? s.risk_level : undefined,
+            scan_prompt: updates.scan_prompt !== undefined ? updates.scan_prompt : (s.scan_prompt !== s.default_scan_prompt ? s.scan_prompt : undefined),
+            scan_response: updates.scan_response !== undefined ? updates.scan_response : (s.scan_response !== s.default_scan_response ? s.scan_response : undefined),
+          }
+        }
+        return {
+          scanner_id: s.id,
+          is_enabled: s.is_enabled,
+          risk_level: s.risk_level !== s.default_risk_level ? s.risk_level : undefined,
+          scan_prompt: s.scan_prompt !== s.default_scan_prompt ? s.scan_prompt : undefined,
+          scan_response: s.scan_response !== s.default_scan_response ? s.scan_response : undefined,
+        }
+      })
+      await api.put(`${wsPrefix}/scanners`, { configs })
+    } else {
+      await scannerConfigsApi.update(scannerId, updates)
+    }
+  }
+
   const handleToggleScanner = async (scannerId: string, enabled: boolean) => {
     try {
       setSaving(true)
-      await scannerConfigsApi.update(scannerId, { is_enabled: enabled })
+      await updateScannerConfig(scannerId, { is_enabled: enabled })
       toast.success(t('scannerPackages.configurationSaved'))
-      // Update local state
       setScannerConfigs((prev) => prev.map((s) => (s.id === scannerId ? { ...s, is_enabled: enabled } : s)))
     } catch (error) {
       toast.error(t('scannerPackages.updateFailed'))
@@ -210,9 +242,8 @@ const OfficialScannersManagement: React.FC = () => {
   const handleToggleScanPrompt = async (scannerId: string, enabled: boolean) => {
     try {
       setSaving(true)
-      await scannerConfigsApi.update(scannerId, { scan_prompt: enabled })
+      await updateScannerConfig(scannerId, { scan_prompt: enabled })
       toast.success(t('scannerPackages.configurationSaved'))
-      // Update local state - once user modifies, has_override becomes true
       setScannerConfigs((prev) =>
         prev.map((s) => (s.id === scannerId ? { ...s, scan_prompt: enabled, has_scan_prompt_override: true } : s))
       )
@@ -227,9 +258,8 @@ const OfficialScannersManagement: React.FC = () => {
   const handleToggleScanResponse = async (scannerId: string, enabled: boolean) => {
     try {
       setSaving(true)
-      await scannerConfigsApi.update(scannerId, { scan_response: enabled })
+      await updateScannerConfig(scannerId, { scan_response: enabled })
       toast.success(t('scannerPackages.configurationSaved'))
-      // Update local state - once user modifies, has_override becomes true
       setScannerConfigs((prev) =>
         prev.map((s) => (s.id === scannerId ? { ...s, scan_response: enabled, has_scan_response_override: true } : s))
       )
@@ -242,6 +272,7 @@ const OfficialScannersManagement: React.FC = () => {
   }
 
   const handleReset = async (scannerId: string) => {
+    if (wsPrefix) return // Workspace mode doesn't support individual reset
     try {
       setSaving(true)
       await scannerConfigsApi.reset(scannerId)
@@ -255,6 +286,7 @@ const OfficialScannersManagement: React.FC = () => {
   }
 
   const handleResetAll = async () => {
+    if (wsPrefix) return // Workspace mode doesn't support reset all
     const confirmed = await confirmDialog({
       title: t('scannerPackages.resetAllToDefault'),
       description: t('scannerPackages.confirmResetAll'),
@@ -344,8 +376,8 @@ const OfficialScannersManagement: React.FC = () => {
   const getRiskLevelClassName = (level: string) => {
     const classNames: { [key: string]: string } = {
       high_risk: '',
-      medium_risk: 'bg-orange-100 text-orange-800 border-orange-200',
-      low_risk: 'bg-green-100 text-green-800 border-green-200',
+      medium_risk: 'bg-orange-500/15 text-orange-300 border-orange-500/20',
+      low_risk: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20',
     }
     return classNames[level] || ''
   }
@@ -388,7 +420,7 @@ const OfficialScannersManagement: React.FC = () => {
       accessorKey: 'bundle',
       header: 'Bundle',
       cell: ({ row }) => (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+        <Badge variant="secondary" className="bg-sky-500/15 text-sky-300 border-sky-500/20 text-xs">
           {row.original.bundle || '-'}
         </Badge>
       ),
@@ -406,7 +438,6 @@ const OfficialScannersManagement: React.FC = () => {
           variant="ghost"
           size="sm"
           onClick={() => handleOpenDrawer(row.original)}
-          disabled={!currentApplicationId}
         >
           <Eye className="h-4 w-4 mr-1" />
           {t('scannerPackages.viewScanners')}
@@ -446,7 +477,7 @@ const OfficialScannersManagement: React.FC = () => {
       accessorKey: 'bundle',
       header: 'Bundle',
       cell: ({ row }) => (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+        <Badge variant="secondary" className="bg-sky-500/15 text-sky-300 border-sky-500/20 text-xs">
           {row.original.bundle || '-'}
         </Badge>
       ),
@@ -489,7 +520,7 @@ const OfficialScannersManagement: React.FC = () => {
       accessorKey: 'tag',
       header: t('scannerPackages.scannerTag'),
       cell: ({ row }) => (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+        <Badge variant="secondary" className="bg-sky-500/15 text-sky-300 border-sky-500/20">
           {row.original.tag}
         </Badge>
       ),
@@ -516,7 +547,7 @@ const OfficialScannersManagement: React.FC = () => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger>
-                  <Info className="h-4 w-4 text-blue-600" />
+                  <Info className="h-4 w-4 text-sky-400" />
                 </TooltipTrigger>
                 <TooltipContent>{t('scannerPackages.hasOverrides')}</TooltipContent>
               </Tooltip>
@@ -546,7 +577,7 @@ const OfficialScannersManagement: React.FC = () => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger>
-                  <Info className="h-3 w-3 text-blue-600" />
+                  <Info className="h-3 w-3 text-sky-400" />
                 </TooltipTrigger>
                 <TooltipContent>{t('scannerPackages.hasOverrides')}</TooltipContent>
               </Tooltip>
@@ -569,7 +600,7 @@ const OfficialScannersManagement: React.FC = () => {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger>
-                  <Info className="h-3 w-3 text-blue-600" />
+                  <Info className="h-3 w-3 text-sky-400" />
                 </TooltipTrigger>
                 <TooltipContent>{t('scannerPackages.hasOverrides')}</TooltipContent>
               </Tooltip>
@@ -578,10 +609,10 @@ const OfficialScannersManagement: React.FC = () => {
         </div>
       ),
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('common.actions'),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <Button
           variant="ghost"
           size="sm"
@@ -593,14 +624,14 @@ const OfficialScannersManagement: React.FC = () => {
           {t('scannerPackages.resetToDefault')}
         </Button>
       ),
-    },
+    }] : []),
   ]
 
   return (
     <div className="space-y-4">
       {loading && (
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-400"></div>
         </div>
       )}
 
@@ -613,9 +644,11 @@ const OfficialScannersManagement: React.FC = () => {
                 <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
                 {t('common.refresh')}
               </Button>
-              <Button variant="destructive" onClick={handleResetAll} disabled={saving}>
-                {t('scannerPackages.resetAllToDefault')}
-              </Button>
+              {canEdit && (
+                <Button variant="destructive" onClick={handleResetAll} disabled={saving}>
+                  {t('scannerPackages.resetAllToDefault')}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -665,12 +698,12 @@ const OfficialScannersManagement: React.FC = () => {
         <DialogContent className={paymentLoading ? 'max-w-md' : 'max-w-2xl'}>
           {paymentLoading ? (
             <div className="py-10 text-center space-y-6">
-              <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto" />
+              <Loader2 className="h-12 w-12 animate-spin text-sky-400 mx-auto" />
               <div className="space-y-3">
                 <p className="text-base font-medium">
                   {paymentConfig?.provider === 'alipay' ? t('payment.redirecting.alipay', '正在跳转到支付宝...') : t('payment.redirecting.stripe', '正在跳转到支付页面...')}
                 </p>
-                <p className="text-sm text-gray-600">{t('payment.processing.pleaseWait', '请稍候，请勿关闭页面或刷新')}</p>
+                <p className="text-sm text-muted-foreground">{t('payment.processing.pleaseWait', '请稍候，请勿关闭页面或刷新')}</p>
               </div>
             </div>
           ) : (
@@ -685,32 +718,32 @@ const OfficialScannersManagement: React.FC = () => {
               {purchasePackage && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                    <span className="font-medium text-gray-700">{t('scannerPackages.packageName')}</span>
+                    <span className="font-medium text-slate-300">{t('scannerPackages.packageName')}</span>
                     <span className="col-span-2">{purchasePackage.package_name}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                    <span className="font-medium text-gray-700">{t('scannerPackages.author')}</span>
+                    <span className="font-medium text-slate-300">{t('scannerPackages.author')}</span>
                     <span className="col-span-2">{purchasePackage.author}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                    <span className="font-medium text-gray-700">{t('scannerPackages.version')}</span>
+                    <span className="font-medium text-slate-300">{t('scannerPackages.version')}</span>
                     <span className="col-span-2">{purchasePackage.version}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                    <span className="font-medium text-gray-700">{t('scannerPackages.scannerCount')}</span>
+                    <span className="font-medium text-slate-300">{t('scannerPackages.scannerCount')}</span>
                     <span className="col-span-2">{purchasePackage.scanner_count}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                    <span className="font-medium text-gray-700">Bundle</span>
+                    <span className="font-medium text-slate-300">Bundle</span>
                     <span className="col-span-2">{purchasePackage.bundle || '-'}</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                    <span className="font-medium text-gray-700">{t('scannerPackages.priceDisplay')}</span>
+                    <span className="font-medium text-slate-300">{t('scannerPackages.priceDisplay')}</span>
                     <span className="col-span-2">{formatPriceDisplay(purchasePackage.price, purchasePackage.price_display)}</span>
                   </div>
                   {purchasePackage.description && (
                     <div className="grid grid-cols-3 gap-2 py-2">
-                      <span className="font-medium text-gray-700">{t('scannerPackages.description')}</span>
+                      <span className="font-medium text-slate-300">{t('scannerPackages.description')}</span>
                       <span className="col-span-2">{purchasePackage.description}</span>
                     </div>
                   )}
@@ -741,23 +774,23 @@ const OfficialScannersManagement: React.FC = () => {
             <div className="mt-6 space-y-6">
               <div className="space-y-4">
                 <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                  <span className="font-medium text-gray-700">{t('scannerPackages.description')}</span>
+                  <span className="font-medium text-slate-300">{t('scannerPackages.description')}</span>
                   <span className="col-span-2">{selectedPackage.description || '-'}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                  <span className="font-medium text-gray-700">{t('scannerPackages.author')}</span>
+                  <span className="font-medium text-slate-300">{t('scannerPackages.author')}</span>
                   <span className="col-span-2">{selectedPackage.author}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                  <span className="font-medium text-gray-700">{t('scannerPackages.version')}</span>
+                  <span className="font-medium text-slate-300">{t('scannerPackages.version')}</span>
                   <span className="col-span-2">{selectedPackage.version}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                  <span className="font-medium text-gray-700">Bundle</span>
+                  <span className="font-medium text-slate-300">Bundle</span>
                   <span className="col-span-2">{selectedPackage.bundle || '-'}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 py-2">
-                  <span className="font-medium text-gray-700">{t('scannerPackages.enabled')}</span>
+                  <span className="font-medium text-slate-300">{t('scannerPackages.enabled')}</span>
                   <span className="col-span-2">{getEnabledCount(selectedPackage.id)}</span>
                 </div>
               </div>

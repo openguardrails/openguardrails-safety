@@ -18,7 +18,7 @@
   - [Risk Configuration API](#risk-configuration-api)
   - [Detection Results API](#detection-results-api)
   - [Data Security API](#data-security-api)
-  - [Data Leakage Policy API](#data-leakage-policy-api)
+  - [Data Masking Policy API](#data-leakage-policy-api)
   - [Media API](#media-api)
 - [Request/Response Models](#requestresponse-models)
 - [Error Handling](#error-handling)
@@ -1062,13 +1062,13 @@ Update data security entity configurations.
 
 ---
 
-### Data Leakage Policy API
+### Data Masking Policy API
 
-Configure data leakage prevention disposal policies and private model selection.
+Configure Data Masking disposal policies and private model selection.
 
 #### GET `/api/v1/config/data-leakage-policy`
 
-Get data leakage disposal policy for the current application.
+Get data masking disposal policy for the current application.
 
 **Service**: Admin Service (Port 5000)
 
@@ -1130,7 +1130,7 @@ X-Application-ID: {application_id}
 
 #### PUT `/api/v1/config/data-leakage-policy`
 
-Update data leakage disposal policy for an application.
+Update data masking disposal policy for an application.
 
 **Service**: Admin Service (Port 5000)
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Plus, Edit, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -30,9 +31,9 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/data-table/DataTable'
 import { confirmDialog } from '@/utils/confirm-dialog'
-import { configApi } from '../../services/api'
+import api, { configApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { useApplication } from '../../contexts/ApplicationContext'
+
 import type { Whitelist } from '../../types'
 import { eventBus, EVENTS } from '../../utils/eventBus'
 import type { ColumnDef } from '@tanstack/react-table'
@@ -47,14 +48,29 @@ const whitelistSchema = z.object({
 
 type WhitelistFormData = z.infer<typeof whitelistSchema>
 
-const WhitelistManagement: React.FC = () => {
+interface WhitelistManagementProps {
+  workspaceId?: string
+}
+
+const WhitelistManagement: React.FC<WhitelistManagementProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [data, setData] = useState<Whitelist[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
   const [editingItem, setEditingItem] = useState<Whitelist | null>(null)
   const { onUserSwitch } = useAuth()
-  const { currentApplicationId } = useApplication()
+
+  const whitelistApi = React.useMemo(() => {
+    if (!workspaceId) return configApi.whitelist
+    const prefix = `/api/v1/workspaces/${workspaceId}/config`
+    return {
+      list: (): Promise<Whitelist[]> => api.get(`${prefix}/whitelist`).then(res => res.data),
+      create: (data: any) => api.post(`${prefix}/whitelist`, data).then(res => res.data),
+      update: (id: number, data: any) => api.put(`${prefix}/whitelist/${id}`, data).then(res => res.data),
+      delete: (id: number) => api.delete(`${prefix}/whitelist/${id}`).then(res => res.data),
+    }
+  }, [workspaceId])
 
   const form = useForm<WhitelistFormData>({
     resolver: zodResolver(whitelistSchema),
@@ -67,22 +83,22 @@ const WhitelistManagement: React.FC = () => {
   })
 
   useEffect(() => {
-    if (currentApplicationId) {
-      fetchData()
-    }
-  }, [currentApplicationId])
+    fetchData()
+  }, [workspaceId])
 
   useEffect(() => {
-    const unsubscribe = onUserSwitch(() => {
-      fetchData()
-    })
-    return unsubscribe
-  }, [onUserSwitch])
+    if (!workspaceId) {
+      const unsubscribe = onUserSwitch(() => {
+        fetchData()
+      })
+      return unsubscribe
+    }
+  }, [onUserSwitch, workspaceId])
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      const result = await configApi.whitelist.list()
+      const result = await whitelistApi.list()
       setData(result)
     } catch (error) {
       console.error('Error fetching whitelist:', error)
@@ -124,7 +140,7 @@ const WhitelistManagement: React.FC = () => {
 
     if (confirmed) {
       try {
-        await configApi.whitelist.delete(record.id)
+        await whitelistApi.delete(record.id)
         toast.success(t('common.deleteSuccess'))
         fetchData()
         eventBus.emit(EVENTS.WHITELIST_DELETED, {
@@ -149,10 +165,10 @@ const WhitelistManagement: React.FC = () => {
       }
 
       if (editingItem) {
-        await configApi.whitelist.update(editingItem.id, submitData)
+        await whitelistApi.update(editingItem.id, submitData)
         toast.success(t('common.updateSuccess'))
       } else {
-        await configApi.whitelist.create(submitData)
+        await whitelistApi.create(submitData)
         toast.success(t('common.createSuccess'))
         eventBus.emit(EVENTS.WHITELIST_CREATED)
       }
@@ -167,7 +183,7 @@ const WhitelistManagement: React.FC = () => {
 
   const handleToggleStatus = async (record: Whitelist) => {
     try {
-      await configApi.whitelist.update(record.id, {
+      await whitelistApi.update(record.id, {
         name: record.name,
         keywords: record.keywords,
         description: record.description,
@@ -239,10 +255,10 @@ const WhitelistManagement: React.FC = () => {
         return format(new Date(time), 'yyyy-MM-dd HH:mm:ss')
       },
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('common.action'),
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const record = row.original
         return (
           <div className="flex items-center gap-2">
@@ -259,7 +275,7 @@ const WhitelistManagement: React.FC = () => {
               variant="link"
               size="sm"
               onClick={() => handleDelete(record)}
-              className="h-auto p-0 text-red-600 hover:text-red-700"
+              className="h-auto p-0 text-red-400 hover:text-red-300"
             >
               <Trash2 className="mr-1 h-4 w-4" />
               {t('common.delete')}
@@ -267,17 +283,20 @@ const WhitelistManagement: React.FC = () => {
           </div>
         )
       },
-    },
+    }] : []),
   ]
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">{t('whitelist.title')}</h2>
-        <Button onClick={handleAdd}>
-          <Plus className="mr-2 h-4 w-4" />
-          {t('whitelist.addWhitelist')}
-        </Button>
+        {!workspaceId && <h2 className="text-3xl font-bold tracking-tight">{t('whitelist.title')}</h2>}
+        {workspaceId && <div />}
+        {canEdit && (
+          <Button onClick={handleAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t('whitelist.addWhitelist')}
+          </Button>
+        )}
       </div>
 
       <Card>

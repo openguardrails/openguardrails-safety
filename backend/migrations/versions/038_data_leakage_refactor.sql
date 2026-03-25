@@ -4,10 +4,10 @@
 -- Author: Claude
 
 -- Description:
--- Major refactoring of data leakage prevention system:
+-- Major refactoring of Data Masking system:
 -- 1. Add private model fields to upstream_api_configs (is_data_safe, is_default_private_model, private_model_priority)
 -- 2. Create application_data_leakage_policies table for application-level disposal strategies
--- 3. Enable smart model switching, anonymization, and blocking based on data leakage risk
+-- 3. Enable smart model switching, anonymization, and blocking based on data masking risk
 
 -- ============================================================================
 -- Part 1: Add private model fields to upstream_api_configs

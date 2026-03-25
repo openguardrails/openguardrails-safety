@@ -1,4 +1,4 @@
-# Data Leakage Prevention (DLP) System Design
+# Data MaskingSystem Design
 
 > Comprehensive Technical Documentation for OpenGuardrails DLP System
 
@@ -30,7 +30,7 @@
 
 ### 1.1 What is DLP?
 
-The Data Leakage Prevention (DLP) system in OpenGuardrails is a **multi-layered protection framework** designed to prevent sensitive data from being exposed to external AI models. It provides:
+The Data Maskingsystem in OpenGuardrails is a **multi-layered protection framework** designed to prevent sensitive data from being exposed to external AI models. It provides:
 
 - **Automatic Detection**: Identifies sensitive data using regex patterns and GenAI-powered recognition
 - **Smart Anonymization**: Masks or transforms sensitive data with multiple strategies
@@ -566,7 +566,7 @@ This ensures users see natural responses while data never leaves the secure envi
                          │
                          ▼
                    ┌───────────┐
-                   │  LLM API  │
+                   │  model API  │
                    └───────────┘
 ```
 

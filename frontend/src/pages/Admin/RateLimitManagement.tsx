@@ -232,7 +232,7 @@ const RateLimitManagement: React.FC = () => {
         const record = row.original
         return (
           <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-gray-400" />
+            <User className="h-4 w-4 text-slate-500" />
             <span>{record.email}</span>
           </div>
         )
@@ -261,11 +261,11 @@ const RateLimitManagement: React.FC = () => {
       cell: ({ row }) => {
         const record = row.original
         if (record.requests_per_second === 0) {
-          return <span className="text-sm text-gray-600">{t('rateLimit.allowUnlimitedCalls')}</span>
+          return <span className="text-sm text-muted-foreground">{t('rateLimit.allowUnlimitedCalls')}</span>
         }
         const dailyMax = record.requests_per_second * 86400
         return (
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-muted-foreground">
             {t('rateLimit.dailyMaxCalls', { count: dailyMax.toLocaleString() })}
           </span>
         )
@@ -308,12 +308,12 @@ const RateLimitManagement: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   {t('rateLimit.totalConfigurations')}
                 </p>
                 <p className="text-2xl font-bold mt-2">{stats.totalUsers}</p>
               </div>
-              <User className="h-8 w-8 text-gray-400" />
+              <User className="h-8 w-8 text-slate-500" />
             </div>
           </CardContent>
         </Card>
@@ -322,10 +322,10 @@ const RateLimitManagement: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   {t('rateLimit.unlimitedTenants')}
                 </p>
-                <p className="text-2xl font-bold mt-2 text-green-600">{stats.unlimitedUsers}</p>
+                <p className="text-2xl font-bold mt-2 text-emerald-400">{stats.unlimitedUsers}</p>
               </div>
               <Zap className="h-8 w-8 text-green-500" />
             </div>
@@ -336,7 +336,7 @@ const RateLimitManagement: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   {t('rateLimit.averageRateLimit')}
                 </p>
                 <p className="text-2xl font-bold mt-2">
@@ -352,10 +352,10 @@ const RateLimitManagement: React.FC = () => {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   {t('rateLimit.restrictedTenants')}
                 </p>
-                <p className="text-2xl font-bold mt-2 text-red-600">
+                <p className="text-2xl font-bold mt-2 text-red-400">
                   {stats.totalUsers - stats.unlimitedUsers}
                 </p>
               </div>
@@ -374,7 +374,7 @@ const RateLimitManagement: React.FC = () => {
                 <Zap className="h-5 w-5" />
                 {t('rateLimit.tenantRateLimitConfig')}
               </CardTitle>
-              <div className="flex items-center gap-1 text-sm text-gray-600">
+              <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <span>{t('rateLimit.configureApiCallFrequency')}</span>
                 <Info
                   className="h-4 w-4 cursor-help"
@@ -384,7 +384,7 @@ const RateLimitManagement: React.FC = () => {
             </div>
             <div className="flex gap-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                 <Input
                   placeholder={t('rateLimit.searchByEmail')}
                   value={searchText}

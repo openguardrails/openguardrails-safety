@@ -132,7 +132,7 @@ openguardrails/
 
 ---
 
-## DATA LEAKAGE PREVENTION SYSTEM
+## Data Masking SYSTEM
 
 **Status**: Production-ready (v5.1.0+)
 
@@ -158,13 +158,13 @@ openguardrails/
 - **GenAI entities**: Applied per-segment with parallel processing
 - Risk aggregation: Highest risk from all segments wins
 
-**Data Leakage Disposal Service** (`backend/services/data_leakage_disposal_service.py`):
+**Data Masking Disposal Service** (`backend/services/data_leakage_disposal_service.py`):
 - **Block**: Reject request completely (default for high risk)
 - **Anonymize**: Replace sensitive entities with placeholders (default for medium/low risk)
 - **Switch Private Model**: Redirect to data-private model (optional)
 - **Pass**: Allow request, log only (audit mode)
 
-**Data Leakage Policy Flow**:
+**Data Masking Policy Flow**:
 ```
 User Request → DLP Detection → Sensitive Data Found → Risk Level Determined
                                                               ↓

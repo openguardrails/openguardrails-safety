@@ -185,10 +185,10 @@ sliding_window_processor = SlidingWindowProcessor()
 
 class ScannerDetectionResult:
     """Single scanner detection result"""
-    def __init__(self, scanner_tag: str, scanner_name: str, scanner_type: str,
+    def __init__(self, scanner_tag: str, guardrail_name: str, scanner_type: str,
                  risk_level: str, matched: bool, match_details: Optional[str] = None):
         self.scanner_tag = scanner_tag
-        self.scanner_name = scanner_name
+        self.guardrail_name = guardrail_name
         self.scanner_type = scanner_type
         self.risk_level = risk_level
         self.matched = matched
@@ -360,7 +360,7 @@ class ScannerDetectionService:
             return [
                 ScannerDetectionResult(
                     scanner_tag=s['tag'],
-                    scanner_name=s['name'],
+                    guardrail_name=s['name'],
                     scanner_type='genai',
                     risk_level=s['risk_level'],
                     matched=False
@@ -586,7 +586,7 @@ class ScannerDetectionService:
 
             results.append(ScannerDetectionResult(
                 scanner_tag=tag,
-                scanner_name=scanner['name'],
+                guardrail_name=scanner['name'],
                 scanner_type='genai',
                 risk_level=scanner['risk_level'],
                 matched=info['matched'],
@@ -623,7 +623,7 @@ class ScannerDetectionService:
             for scanner in scanners:
                 results.append(ScannerDetectionResult(
                     scanner_tag=scanner['tag'],
-                    scanner_name=scanner['name'],
+                    guardrail_name=scanner['name'],
                     scanner_type='genai',
                     risk_level=scanner['risk_level'],
                     matched=False
@@ -640,7 +640,7 @@ class ScannerDetectionService:
 
                 results.append(ScannerDetectionResult(
                     scanner_tag=tag,
-                    scanner_name=scanner['name'],
+                    guardrail_name=scanner['name'],
                     scanner_type='genai',
                     risk_level=scanner['risk_level'],
                     matched=matched,
@@ -651,7 +651,7 @@ class ScannerDetectionService:
             for scanner in scanners:
                 results.append(ScannerDetectionResult(
                     scanner_tag=scanner['tag'],
-                    scanner_name=scanner['name'],
+                    guardrail_name=scanner['name'],
                     scanner_type='genai',
                     risk_level=scanner['risk_level'],
                     matched=False
@@ -699,7 +699,7 @@ class ScannerDetectionService:
 
                 results.append(ScannerDetectionResult(
                     scanner_tag=tag,
-                    scanner_name=name,
+                    guardrail_name=name,
                     scanner_type='regex',
                     risk_level=risk_level,
                     matched=matched,
@@ -711,7 +711,7 @@ class ScannerDetectionService:
                 logger.error(f"Invalid regex pattern for scanner {tag}: {e}")
                 results.append(ScannerDetectionResult(
                     scanner_tag=tag,
-                    scanner_name=name,
+                    guardrail_name=name,
                     scanner_type='regex',
                     risk_level=risk_level,
                     matched=False,
@@ -722,7 +722,7 @@ class ScannerDetectionService:
                 logger.error(f"Error executing regex scanner {tag}: {e}")
                 results.append(ScannerDetectionResult(
                     scanner_tag=tag,
-                    scanner_name=name,
+                    guardrail_name=name,
                     scanner_type='regex',
                     risk_level=risk_level,
                     matched=False
@@ -765,7 +765,7 @@ class ScannerDetectionService:
                     logger.warning(f"Keyword scanner {tag} has no valid keywords")
                     results.append(ScannerDetectionResult(
                         scanner_tag=tag,
-                        scanner_name=name,
+                        guardrail_name=name,
                         scanner_type='keyword',
                         risk_level=risk_level,
                         matched=False,
@@ -786,7 +786,7 @@ class ScannerDetectionService:
 
                 results.append(ScannerDetectionResult(
                     scanner_tag=tag,
-                    scanner_name=name,
+                    guardrail_name=name,
                     scanner_type='keyword',
                     risk_level=risk_level,
                     matched=matched,
@@ -797,7 +797,7 @@ class ScannerDetectionService:
                 logger.error(f"Error executing keyword scanner {tag}: {e}")
                 results.append(ScannerDetectionResult(
                     scanner_tag=tag,
-                    scanner_name=name,
+                    guardrail_name=name,
                     scanner_type='keyword',
                     risk_level=risk_level,
                     matched=False
@@ -847,9 +847,9 @@ class ScannerDetectionService:
 
         for scanner in matched_scanners:
             if scanner.scanner_tag == "S9":
-                security_categories.append(scanner.scanner_name)
+                security_categories.append(scanner.guardrail_name)
             else:
-                compliance_categories.append(scanner.scanner_name)
+                compliance_categories.append(scanner.guardrail_name)
 
         logger.info(f"Overall risk: {overall_risk_level}, Compliance: {len(compliance_categories)}, Security: {len(security_categories)}")
 

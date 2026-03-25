@@ -73,8 +73,16 @@ class Settings(BaseSettings):
     # API configuration
     cors_origins: str = "*"
     
-    # Log configuration  
+    # Log configuration
     log_level: str = "INFO"
+
+    # Syslog forwarding configuration (for SIEM integration)
+    # Set SYSLOG_HOST to enable forwarding; when unset, syslog is disabled
+    syslog_host: str = ""
+    syslog_port: int = 514
+    syslog_protocol: str = "UDP"  # UDP | TCP | TLS
+    syslog_facility: str = "LOCAL0"
+    syslog_ca_cert: str = ""  # Path to CA cert for TLS
     
     @property
     def log_dir(self) -> str:

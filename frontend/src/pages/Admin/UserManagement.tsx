@@ -289,10 +289,10 @@ const UserManagement: React.FC = () => {
 
         return (
           <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-gray-400" />
+            <User className="h-4 w-4 text-slate-500" />
             {canSwitch ? (
               <span
-                className="cursor-pointer text-blue-600 hover:underline"
+                className="cursor-pointer text-sky-400 hover:underline"
                 onClick={() => handleSwitchToUser(record.id, record.email)}
                 title={t('admin.clickToSwitch')}
               >
@@ -336,7 +336,7 @@ const UserManagement: React.FC = () => {
         const id = row.getValue('id') as string
         return (
           <div className="flex items-center gap-2">
-            <code className="text-xs bg-gray-100 px-2 py-1 rounded">{id.substring(0, 8)}...</code>
+            <code className="text-xs bg-muted px-2 py-1 rounded">{id.substring(0, 8)}...</code>
             <Button
               variant="ghost"
               size="sm"
@@ -403,7 +403,7 @@ const UserManagement: React.FC = () => {
       cell: ({ row }) => {
         const lastActivity = row.getValue('last_activity') as string | null
         return (
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-muted-foreground">
             {lastActivity ? new Date(lastActivity).toLocaleString() : '-'}
           </span>
         )
@@ -434,7 +434,7 @@ const UserManagement: React.FC = () => {
       },
       cell: ({ row }) => {
         const date = row.getValue('created_at') as string
-        return <span className="text-sm text-gray-600">{new Date(date).toLocaleString()}</span>
+        return <span className="text-sm text-muted-foreground">{new Date(date).toLocaleString()}</span>
       },
     },
     {
@@ -584,13 +584,13 @@ const UserManagement: React.FC = () => {
                     <User className="h-5 w-5" />
                     {t('admin.tenantManagement')}
                   </CardTitle>
-                  <p className="text-sm text-gray-600">{t('admin.manageTenants')}</p>
+                  <p className="text-sm text-muted-foreground">{t('admin.manageTenants')}</p>
                   {adminStats && (
                     <div className="flex gap-4 text-sm">
                       <span>
                         <strong>{adminStats.total_users}</strong> {t('admin.totalTenants')}
                       </span>
-                      <span className="text-gray-400">|</span>
+                      <span className="text-slate-500">|</span>
                       <span>
                         {t('admin.totalDetections')}: <strong>{adminStats.total_detections}</strong>
                       </span>
@@ -663,11 +663,11 @@ const UserManagement: React.FC = () => {
                       {tenantAnalytics.latest_created_tenants.map((tenant) => (
                         <div
                           key={tenant.id}
-                          className="flex items-center justify-between p-1.5 border rounded-md hover:bg-gray-50 text-sm"
+                          className="flex items-center justify-between p-1.5 border rounded-md hover:bg-card/5 text-sm"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">{tenant.email}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-muted-foreground">
                               {tenant.created_at
                                 ? new Date(tenant.created_at).toLocaleString()
                                 : '-'}
@@ -685,7 +685,7 @@ const UserManagement: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center text-gray-500 py-6 text-sm">{t('admin.noData')}</div>
+                    <div className="text-center text-muted-foreground py-6 text-sm">{t('admin.noData')}</div>
                   )}
                 </CardContent>
               </Card>
@@ -708,11 +708,11 @@ const UserManagement: React.FC = () => {
                       {tenantAnalytics.recently_active_tenants.map((tenant) => (
                         <div
                           key={tenant.id}
-                          className="flex items-center justify-between p-1.5 border rounded-md hover:bg-gray-50 text-sm"
+                          className="flex items-center justify-between p-1.5 border rounded-md hover:bg-card/5 text-sm"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate">{tenant.email}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-muted-foreground">
                               {t('admin.lastActivity')}:{' '}
                               {tenant.last_activity
                                 ? new Date(tenant.last_activity).toLocaleString()
@@ -731,7 +731,7 @@ const UserManagement: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center text-gray-500 py-6 text-sm">{t('admin.noData')}</div>
+                    <div className="text-center text-muted-foreground py-6 text-sm">{t('admin.noData')}</div>
                   )}
                 </CardContent>
               </Card>
@@ -785,7 +785,7 @@ const UserManagement: React.FC = () => {
                     <FormLabel>{t('admin.tenantEmailLabel')}</FormLabel>
                     <FormControl>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                         <Input
                           {...field}
                           placeholder={t('admin.tenantEmailPlaceholder')}
@@ -851,15 +851,15 @@ const UserManagement: React.FC = () => {
 
               {editingUser && (
                 <>
-                  <div className="flex items-center justify-between border rounded-lg p-3 bg-gray-50">
+                  <div className="flex items-center justify-between border rounded-lg p-3 bg-secondary">
                     <FormLabel>{t('admin.superAdmin')}</FormLabel>
                     <Switch checked={!!editingUser?.is_super_admin} disabled />
                   </div>
-                  <div className="border rounded-lg p-3 bg-gray-50">
+                  <div className="border rounded-lg p-3 bg-secondary">
                     <FormLabel className="mb-2 block">{t('admin.apiKey')}</FormLabel>
                     <div className="flex items-center gap-2">
                       <code 
-                        className="flex-1 min-w-0 text-xs bg-white px-3 py-2 rounded border overflow-hidden text-ellipsis whitespace-nowrap"
+                        className="flex-1 min-w-0 text-xs bg-card px-3 py-2 rounded border overflow-hidden text-ellipsis whitespace-nowrap"
                         title={editingUser.api_key || t('admin.notGenerated')}
                       >
                         {editingUser.api_key 

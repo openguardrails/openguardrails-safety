@@ -31,13 +31,13 @@ def get_duplicate_groups(db):
         tenant_id,
         application_id,
         COALESCE(scanner_identifier, category) as scanner_key,
-        scanner_name,
+        guardrail_name,
         COUNT(*) as duplicate_count,
         ARRAY_AGG(id ORDER BY created_at DESC, updated_at DESC) as ids,
         STRING_AGG(CAST(id AS TEXT), ', ' ORDER BY created_at DESC, updated_at DESC) as id_list
     FROM response_templates
-    WHERE scanner_name IS NOT NULL
-    GROUP BY tenant_id, application_id, COALESCE(scanner_identifier, category), scanner_name
+    WHERE guardrail_name IS NOT NULL
+    GROUP BY tenant_id, application_id, COALESCE(scanner_identifier, category), guardrail_name
     HAVING COUNT(*) > 1
     ORDER BY tenant_id, duplicate_count DESC
     """)
@@ -64,7 +64,7 @@ def clean_duplicates(db, dry_run=True):
         tenant_id = group.tenant_id
         application_id = group.application_id
         scanner_key = group.scanner_key
-        scanner_name = group.scanner_name
+        guardrail_name = group.guardrail_name
         duplicate_count = group.duplicate_count
         ids = group.ids  # Already ordered by created_at DESC, updated_at DESC
 
@@ -76,7 +76,7 @@ def clean_duplicates(db, dry_run=True):
         logger.info(f"\n🔍 Duplicate Group:")
         logger.info(f"   Tenant: {tenant_id}")
         logger.info(f"   Application: {application_id}")
-        logger.info(f"   Scanner: {scanner_name} ({scanner_key})")
+        logger.info(f"   Scanner: {guardrail_name} ({scanner_key})")
         logger.info(f"   Count: {duplicate_count}")
         logger.info(f"   Keep: {keep_id} (latest)")
         logger.info(f"   Delete: {delete_ids}")

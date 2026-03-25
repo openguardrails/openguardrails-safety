@@ -122,12 +122,12 @@ const Verify: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-secondary">
       {/* Left side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-12 flex-col justify-between">
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-white rounded-lg p-2" />
+            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-card rounded-lg p-2" />
             <h1 className="text-2xl font-bold text-white">OpenGuardrails</h1>
           </div>
           <h2 className="text-4xl font-bold text-white mb-4">
@@ -147,10 +147,10 @@ const Verify: React.FC = () => {
         <div className="w-full max-w-md">
           <Card className="border shadow-sm">
             <CardHeader className="space-y-1 pb-6">
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-foreground">
                 {t('login.title')}
               </h1>
-              <p className="text-slate-600 text-sm">
+              <p className="text-muted-foreground text-sm">
                 {t('verify.title')}
               </p>
             </CardHeader>
@@ -166,7 +166,7 @@ const Verify: React.FC = () => {
                         <FormLabel>{t('register.email')}</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                             <Input
                               type="email"
                               placeholder={t('verify.emailPlaceholder')}
@@ -189,7 +189,7 @@ const Verify: React.FC = () => {
                         <FormLabel>{t('register.verificationCode')}</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                             <Input
                               placeholder={t('verify.verificationCodePlaceholder')}
                               className="pl-10 h-12 text-center text-lg tracking-widest"
@@ -213,11 +213,11 @@ const Verify: React.FC = () => {
 
                   <div className="space-y-3 pt-2">
                     <div className="text-center text-sm">
-                      <span className="text-slate-600">{t('register.resendCodeQuestion')} </span>
+                      <span className="text-muted-foreground">{t('register.resendCodeQuestion')} </span>
                       <Button
                         type="button"
                         variant="link"
-                        className="h-auto p-0 text-blue-600 hover:text-blue-700"
+                        className="h-auto p-0 text-sky-400 hover:text-sky-400"
                         onClick={handleResendCode}
                         disabled={countdown > 0 || resendLoading}
                       >
@@ -228,11 +228,11 @@ const Verify: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-center gap-2 text-sm">
-                      <Link to="/register" className="text-slate-600 hover:text-slate-900 hover:underline">
+                      <Link to="/register" className="text-muted-foreground hover:text-foreground hover:underline">
                         {t('register.backToRegister')}
                       </Link>
-                      <span className="text-slate-400">•</span>
-                      <Link to="/login" className="text-slate-600 hover:text-slate-900 hover:underline">
+                      <span className="text-slate-500">•</span>
+                      <Link to="/login" className="text-muted-foreground hover:text-foreground hover:underline">
                         {t('register.loginNow')}
                       </Link>
                     </div>
@@ -243,7 +243,7 @@ const Verify: React.FC = () => {
           </Card>
 
           {/* Mobile Copyright */}
-          <p className="text-xs text-slate-500 text-center mt-6 lg:hidden">
+          <p className="text-xs text-muted-foreground text-center mt-6 lg:hidden">
             {t('login.copyright')}
           </p>
         </div>

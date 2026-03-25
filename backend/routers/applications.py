@@ -5,7 +5,7 @@ from database.connection import get_admin_db
 from database.models import (
     Application, ApiKey, Tenant, RiskTypeConfig, BanPolicy,
     DataSecurityEntityType, ResponseTemplate, Blacklist, Whitelist, KnowledgeBase,
-    ApplicationScannerConfig, Scanner
+    ApplicationScannerConfig, Scanner, Workspace
 )
 from services.scanner_config_service import ScannerConfigService
 from typing import List, Optional, Dict, Any
@@ -42,6 +42,7 @@ class ApplicationUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    workspace_id: Optional[str] = None
 
 class ApplicationResponse(BaseModel):
     id: str
@@ -53,6 +54,8 @@ class ApplicationResponse(BaseModel):
     source: str = 'manual'
     # External identifier for auto-discovered apps (e.g., gateway consumer name)
     external_id: Optional[str] = None
+    workspace_id: Optional[str] = None
+    workspace_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     api_keys_count: int = 0
@@ -287,6 +290,13 @@ async def list_applications(
                 "knowledge_base_count": knowledge_base_count
             }
 
+        # Get workspace info
+        ws_id = getattr(app, 'workspace_id', None)
+        ws_name = None
+        if ws_id:
+            ws = db.query(Workspace).filter(Workspace.id == ws_id).first()
+            ws_name = ws.name if ws else None
+
         app_dict = {
             "id": str(app.id),
             "tenant_id": str(app.tenant_id),
@@ -295,6 +305,8 @@ async def list_applications(
             "is_active": app.is_active,
             "source": getattr(app, 'source', 'manual') or 'manual',  # Default to 'manual' for backward compatibility
             "external_id": getattr(app, 'external_id', None),
+            "workspace_id": str(ws_id) if ws_id else None,
+            "workspace_name": ws_name,
             "created_at": app.created_at,
             "updated_at": app.updated_at,
             "api_keys_count": key_count,
@@ -356,6 +368,7 @@ async def create_application(
         is_active=app.is_active,
         source=getattr(app, 'source', 'manual') or 'manual',
         external_id=getattr(app, 'external_id', None),
+        workspace_id=str(app.workspace_id) if getattr(app, 'workspace_id', None) else None,
         created_at=app.created_at,
         updated_at=app.updated_at,
         api_keys_count=0
@@ -385,11 +398,27 @@ async def update_application(
         app.description = data.description
     if data.is_active is not None:
         app.is_active = data.is_active
+    if data.workspace_id is not None:
+        if data.workspace_id == "":
+            app.workspace_id = None
+        else:
+            ws = db.query(Workspace).filter(
+                Workspace.id == data.workspace_id,
+                Workspace.tenant_id == tenant_id,
+            ).first()
+            if not ws:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            app.workspace_id = ws.id
 
     db.commit()
     db.refresh(app)
 
     key_count = db.query(ApiKey).filter(ApiKey.application_id == app.id).count()
+
+    ws_name = None
+    if getattr(app, 'workspace_id', None):
+        ws = db.query(Workspace).filter(Workspace.id == app.workspace_id).first()
+        ws_name = ws.name if ws else None
 
     return ApplicationResponse(
         id=str(app.id),
@@ -399,6 +428,8 @@ async def update_application(
         is_active=app.is_active,
         source=getattr(app, 'source', 'manual') or 'manual',
         external_id=getattr(app, 'external_id', None),
+        workspace_id=str(app.workspace_id) if getattr(app, 'workspace_id', None) else None,
+        workspace_name=ws_name,
         created_at=app.created_at,
         updated_at=app.updated_at,
         api_keys_count=key_count

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Edit2, Trash2, Upload as UploadIcon, Search, Info, RefreshCw } from 'lucide-react'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { knowledgeBaseApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { useApplication } from '../../contexts/ApplicationContext'
+
 import type { KnowledgeBase, SimilarQuestionResult } from '../../types'
 import { eventBus, EVENTS } from '../../utils/eventBus'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,6 +28,7 @@ import { ColumnDef } from '@tanstack/react-table'
 
 const KnowledgeBaseManagement: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [data, setData] = useState<KnowledgeBase[]>([])
   const [loading, setLoading] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
@@ -42,7 +44,6 @@ const KnowledgeBaseManagement: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [replaceFile, setReplaceFile] = useState<File | null>(null)
   const { user, onUserSwitch } = useAuth()
-  const { currentApplicationId } = useApplication()
 
   // Available scanners for knowledge base creation
   const [availableScanners, setAvailableScanners] = useState<{
@@ -87,11 +88,9 @@ const KnowledgeBaseManagement: React.FC = () => {
   ]
 
   useEffect(() => {
-    if (currentApplicationId) {
-      fetchData()
-      fetchAvailableScanners()
-    }
-  }, [currentApplicationId])
+    fetchData()
+    fetchAvailableScanners()
+  }, [])
 
   // Listen to user switch event, automatically refresh data
   useEffect(() => {
@@ -472,20 +471,20 @@ const KnowledgeBaseManagement: React.FC = () => {
             if (item) {
               return item.label
             }
-            if (kb.scanner_name) {
-              return `${kb.scanner_identifier} - ${kb.scanner_name}`
+            if (kb.guardrail_name) {
+              return `${kb.scanner_identifier} - ${kb.guardrail_name}`
             }
             return kb.scanner_identifier
           }
           return t('scannerPackages.builtinPackages') || 'Built-in Scanner'
         case 'marketplace_scanner':
-          if (kb.scanner_identifier && kb.scanner_name) {
-            return `${kb.scanner_identifier} - ${kb.scanner_name}`
+          if (kb.scanner_identifier && kb.guardrail_name) {
+            return `${kb.scanner_identifier} - ${kb.guardrail_name}`
           }
           return kb.scanner_identifier || (t('scannerPackages.purchasedPackages') || 'Premium Scanner')
         case 'custom_scanner':
-          if (kb.scanner_identifier && kb.scanner_name) {
-            return `${kb.scanner_identifier} - ${kb.scanner_name}`
+          if (kb.scanner_identifier && kb.guardrail_name) {
+            return `${kb.scanner_identifier} - ${kb.guardrail_name}`
           }
           return kb.scanner_identifier || (t('customScanners.title') || 'Custom Scanner')
         default:
@@ -514,7 +513,7 @@ const KnowledgeBaseManagement: React.FC = () => {
     {
       accessorKey: 'category',
       header: t('results.category'),
-      cell: ({ row }) => <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">{getCategoryLabel(row.original)}</Badge>,
+      cell: ({ row }) => <Badge variant="secondary" className="bg-sky-500/15 text-sky-300 border-sky-500/20">{getCategoryLabel(row.original)}</Badge>,
     },
     {
       accessorKey: 'name',
@@ -541,13 +540,13 @@ const KnowledgeBaseManagement: React.FC = () => {
     {
       accessorKey: 'total_qa_pairs',
       header: t('knowledge.qaPairsCount'),
-      cell: ({ row }) => <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">{row.original.total_qa_pairs}</Badge>,
+      cell: ({ row }) => <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">{row.original.total_qa_pairs}</Badge>,
     },
     {
       accessorKey: 'similarity_threshold',
       header: t('knowledge.similarityThreshold'),
       cell: ({ row }) => (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+        <Badge variant="secondary" className="bg-sky-500/15 text-sky-300 border-sky-500/20">
           {(row.original.similarity_threshold * 100).toFixed(0)}%
         </Badge>
       ),
@@ -560,7 +559,7 @@ const KnowledgeBaseManagement: React.FC = () => {
           return (
             <Tooltip>
               <TooltipTrigger>
-                <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                <Badge variant="secondary" className="bg-orange-500/15 text-orange-300 border-orange-500/20">
                   {t('common.disabled')}
                 </Badge>
               </TooltipTrigger>
@@ -569,7 +568,7 @@ const KnowledgeBaseManagement: React.FC = () => {
           )
         }
         return (
-          <Badge variant={row.original.is_active ? 'secondary' : 'destructive'} className={row.original.is_active ? 'bg-green-100 text-green-800 border-green-200' : ''}>
+          <Badge variant={row.original.is_active ? 'secondary' : 'destructive'} className={row.original.is_active ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20' : ''}>
             {row.original.is_active ? t('common.enabled') : t('common.disabled')}
           </Badge>
         )
@@ -579,7 +578,7 @@ const KnowledgeBaseManagement: React.FC = () => {
       accessorKey: 'is_global',
       header: t('entityType.sourceColumn'),
       cell: ({ row }) => (
-        <Badge variant={row.original.is_global ? 'secondary' : 'default'} className={row.original.is_global ? 'bg-blue-100 text-blue-800 border-blue-200' : ''}>
+        <Badge variant={row.original.is_global ? 'secondary' : 'default'} className={row.original.is_global ? 'bg-sky-500/15 text-sky-300 border-sky-500/20' : ''}>
           {row.original.is_global ? t('entityType.system') : t('entityType.custom')}
         </Badge>
       ),
@@ -589,10 +588,10 @@ const KnowledgeBaseManagement: React.FC = () => {
       header: t('common.createdAt'),
       cell: ({ row }) => new Date(row.original.created_at).toLocaleString(),
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('common.operation'),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <div className="flex items-center gap-2 flex-wrap">
           {(!row.original.is_global || user?.is_super_admin) && (
             <>
@@ -631,21 +630,21 @@ const KnowledgeBaseManagement: React.FC = () => {
                 {row.original.is_disabled_by_me ? t('common.enable') : t('common.disable')}
               </Button>
               {user?.is_super_admin && (
-                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(row.original)}>
+                <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => handleDelete(row.original)}>
                   <Trash2 className="h-4 w-4 mr-1" />
                   {t('common.delete')}
                 </Button>
               )}
             </>
           ) : (
-            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(row.original)}>
+            <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => handleDelete(row.original)}>
               <Trash2 className="h-4 w-4 mr-1" />
               {t('common.delete')}
             </Button>
           )}
         </div>
       ),
-    },
+    }] : []),
   ]
 
   const currentScanners =
@@ -664,7 +663,7 @@ const KnowledgeBaseManagement: React.FC = () => {
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <div>
             <CardTitle>{t('knowledge.knowledgeBaseManagement')}</CardTitle>
-            <p className="text-sm text-gray-600 mt-1">{t('knowledge.knowledgeBaseDescription')}</p>
+            <p className="text-sm text-muted-foreground mt-1">{t('knowledge.knowledgeBaseDescription')}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -678,20 +677,22 @@ const KnowledgeBaseManagement: React.FC = () => {
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               {t('common.refresh')}
             </Button>
-            <Button onClick={handleAdd}>
-              <Plus className="h-4 w-4 mr-1" />
-              {t('knowledge.addKnowledgeBase')}
-            </Button>
+            {canEdit && (
+              <Button onClick={handleAdd}>
+                <Plus className="h-4 w-4 mr-1" />
+                {t('knowledge.addKnowledgeBase')}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="font-medium text-blue-900 mb-2">{t('knowledge.fileFormatDescription')}</p>
-            <p className="text-sm text-blue-800 mb-2">{t('knowledge.fileFormatDetails')}</p>
-            <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto">
+          <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+            <p className="font-medium text-sky-200 mb-2">{t('knowledge.fileFormatDescription')}</p>
+            <p className="text-sm text-sky-300 mb-2">{t('knowledge.fileFormatDetails')}</p>
+            <pre className="bg-muted p-2 rounded text-xs overflow-auto">
               {`{"questionid": "Unique question ID", "question": "Question content", "answer": "Answer content"}`}
             </pre>
-            <p className="text-sm text-blue-800 mt-2 flex items-center gap-2">
+            <p className="text-sm text-sky-300 mt-2 flex items-center gap-2">
               <Info className="h-4 w-4" />
               {t('knowledge.fileFormatNote')}
             </p>
@@ -768,9 +769,9 @@ const KnowledgeBaseManagement: React.FC = () => {
               />
 
               {selectedScannerType === 'marketplace_scanner' && availableScanners.marketplace_scanners.length === 0 && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="font-medium text-blue-900 mb-1">{t('knowledge.noPurchasedScannersTitle') || 'No Purchased Premium Scanners'}</p>
-                  <p className="text-sm text-blue-800">
+                <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+                  <p className="font-medium text-sky-200 mb-1">{t('knowledge.noPurchasedScannersTitle') || 'No Purchased Premium Scanners'}</p>
+                  <p className="text-sm text-sky-300">
                     {t('knowledge.noPurchasedScannersDescription') || "You haven't purchased any premium scanner packages yet. "}
                     <a href="/platform/config/official-scanners#marketplace" target="_blank" rel="noopener noreferrer" className="underline">
                       {t('knowledge.goToMarketplace') || 'Go to Marketplace'}
@@ -852,7 +853,7 @@ const KnowledgeBaseManagement: React.FC = () => {
                         }
                       }}
                     />
-                    {selectedFile && <p className="text-sm text-gray-600 mt-1">{selectedFile.name}</p>}
+                    {selectedFile && <p className="text-sm text-muted-foreground mt-1">{selectedFile.name}</p>}
                   </div>
                 </div>
               )}
@@ -922,9 +923,9 @@ const KnowledgeBaseManagement: React.FC = () => {
             <DialogTitle>{t('knowledge.replaceFileTitle', { name: replacingKb?.name })}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="font-medium text-yellow-900 mb-1">{t('knowledge.attention')}</p>
-              <p className="text-sm text-yellow-800">{t('knowledge.replaceFileWarning')}</p>
+            <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <p className="font-medium text-yellow-200 mb-1">{t('knowledge.attention')}</p>
+              <p className="text-sm text-yellow-300">{t('knowledge.replaceFileWarning')}</p>
             </div>
             <div>
               <Label>{t('knowledge.selectNewFile')}</Label>
@@ -939,7 +940,7 @@ const KnowledgeBaseManagement: React.FC = () => {
                     }
                   }}
                 />
-                {replaceFile && <p className="text-sm text-gray-600 mt-1">{replaceFile.name}</p>}
+                {replaceFile && <p className="text-sm text-muted-foreground mt-1">{replaceFile.name}</p>}
               </div>
             </div>
           </div>
@@ -990,10 +991,10 @@ const KnowledgeBaseManagement: React.FC = () => {
                   <Card key={index}>
                     <CardContent className="pt-4 space-y-2">
                       <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200">
+                        <Badge variant="secondary" className="bg-sky-500/15 text-sky-300 border-sky-500/20">
                           {t('knowledge.similarity', { score: (result.similarity_score * 100).toFixed(1) })}
                         </Badge>
-                        <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                        <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
                           {t('knowledge.rank', { rank: result.rank })}
                         </Badge>
                       </div>

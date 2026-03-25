@@ -1,8 +1,8 @@
 """
-Data Leakage Policy Configuration API
+Data Masking Policy Configuration API
 
 Provides endpoints for managing tenant-level defaults and application-level overrides
-for data leakage prevention policies (input and output).
+for Data Masking policies (input and output).
 """
 
 from typing import List, Optional
@@ -31,7 +31,7 @@ from config import settings
 
 logger = setup_logger()
 
-router = APIRouter(prefix="/api/v1/config", tags=["Data Leakage Policy"])
+router = APIRouter(prefix="/api/v1/config", tags=["Data Masking Policy"])
 
 
 def get_current_user(request: Request) -> dict:
@@ -104,7 +104,7 @@ class UpstreamApiConfigBrief(BaseModel):
 
 # Tenant-level policy models
 class TenantPolicyUpdate(BaseModel):
-    """Update tenant-level default data leakage policy"""
+    """Update tenant-level default data masking policy"""
     # Input policy defaults
     default_input_high_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
     default_input_medium_risk_action: str = Field(..., pattern='^(block|switch_private_model|anonymize|anonymize_restore|pass)$')
@@ -226,7 +226,7 @@ async def get_tenant_default_policy(
     db: Session = Depends(get_admin_db)
 ):
     """
-    Get tenant's default data leakage prevention policy
+    Get tenant's default Data Masking policy
 
     This policy applies to all applications unless overridden.
     """
@@ -291,7 +291,7 @@ async def update_tenant_default_policy(
     db: Session = Depends(get_admin_db)
 ):
     """
-    Update tenant's default data leakage prevention policy
+    Update tenant's default Data Masking policy
 
     Changes apply to all applications that don't have specific overrides.
 
@@ -395,7 +395,7 @@ async def get_application_policy(
     db: Session = Depends(get_admin_db)
 ):
     """
-    Get application's data leakage policy (with resolved values from tenant defaults)
+    Get application's data masking policy (with resolved values from tenant defaults)
 
     Returns both the resolved values (what's actually used) and the overrides.
     NULL overrides mean "use tenant default".
@@ -527,7 +527,7 @@ async def update_application_policy(
     db: Session = Depends(get_admin_db)
 ):
     """
-    Update application's data leakage policy overrides
+    Update application's data masking policy overrides
 
     NULL values mean "use tenant default". Set a field to explicitly override.
 

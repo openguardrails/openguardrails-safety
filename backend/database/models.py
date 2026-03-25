@@ -24,6 +24,7 @@ class Tenant(Base):
 
     # Association relationships
     applications = relationship("Application", back_populates="tenant", cascade="all, delete-orphan")
+    workspaces = relationship("Workspace", back_populates="tenant", cascade="all, delete-orphan")
     detection_results = relationship("DetectionResult", back_populates="tenant")
     test_models = relationship("TestModelConfig", back_populates="tenant")
     blacklists = relationship("Blacklist", back_populates="tenant")
@@ -31,12 +32,34 @@ class Tenant(Base):
     response_templates = relationship("ResponseTemplate", back_populates="tenant")
     risk_config = relationship("RiskTypeConfig", back_populates="tenant", uselist=False)
 
+class Workspace(Base):
+    """Workspace table - Configuration templates that group applications"""
+    __tablename__ = "workspaces"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+    owner = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Association relationships
+    tenant = relationship("Tenant", back_populates="workspaces")
+    applications = relationship("Application", back_populates="workspace")
+
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'name', name='uq_workspaces_tenant_name'),
+    )
+
+
 class Application(Base):
     """Application table - Each tenant can have multiple applications"""
     __tablename__ = "applications"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text)
     is_active = Column(Boolean, default=True, nullable=False, index=True)
@@ -49,6 +72,7 @@ class Application(Base):
 
     # Association relationships
     tenant = relationship("Tenant", back_populates="applications")
+    workspace = relationship("Workspace", back_populates="applications")
     api_keys = relationship("ApiKey", back_populates="application", cascade="all, delete-orphan")
     blacklists = relationship("Blacklist", back_populates="application", cascade="all, delete-orphan")
     whitelists = relationship("Whitelist", back_populates="application", cascade="all, delete-orphan")
@@ -153,7 +177,8 @@ class Blacklist(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)  # Associated tenant (kept for backward compatibility)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)  # Associated application
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Associated application (nullable for workspace-level)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Associated workspace (nullable for app-level)
     name = Column(String(100), nullable=False)  # Blacklist library name
     keywords = Column(JSON, nullable=False)  # Keywords list
     description = Column(Text)  # Description
@@ -164,6 +189,7 @@ class Blacklist(Base):
     # Association relationships
     tenant = relationship("Tenant", back_populates="blacklists")
     application = relationship("Application", back_populates="blacklists")
+    workspace = relationship("Workspace")
 
 class Whitelist(Base):
     """Whitelist table"""
@@ -171,7 +197,8 @@ class Whitelist(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)  # Associated tenant (kept for backward compatibility)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)  # Associated application
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Associated application (nullable for workspace-level)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Associated workspace (nullable for app-level)
     name = Column(String(100), nullable=False)  # Whitelist library name
     keywords = Column(JSON, nullable=False)  # Keywords list
     description = Column(Text)  # Description
@@ -182,6 +209,7 @@ class Whitelist(Base):
     # Association relationships
     tenant = relationship("Tenant", back_populates="whitelists")
     application = relationship("Application", back_populates="whitelists")
+    workspace = relationship("Workspace")
 
 class ResponseTemplate(Base):
     """Response template table - supports all scanner types"""
@@ -198,7 +226,7 @@ class ResponseTemplate(Base):
     # New fields for unified scanner support
     scanner_type = Column(String(50), nullable=True, index=True)  # Scanner type: blacklist, whitelist, official_scanner, marketplace_scanner, custom_scanner
     scanner_identifier = Column(String(255), nullable=True)  # Scanner identifier: blacklist name, whitelist name, or scanner tag (S1, S2, S100, etc.)
-    scanner_name = Column(String(255), nullable=True)  # Scanner human-readable name for display (e.g., "Bank Fraud", "Travel Discussion")
+    guardrail_name = Column(String(255), nullable=True)  # Guardrail human-readable name for display (e.g., "Bank Fraud", "Travel Discussion")
 
     risk_level = Column(String(20), nullable=False)  # Risk level
     template_content = Column(JSON, nullable=False)  # Multilingual response template content: {"en": "...", "zh": "...", ...}
@@ -251,7 +279,8 @@ class RiskTypeConfig(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)  # Kept for backward compatibility
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True, unique=True)  # Associated application (unique constraint moved here)
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True, unique=True)  # Associated application (nullable for workspace-level)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Associated workspace (nullable for app-level)
 
     # S1-S21 risk type switch configuration
     s1_enabled = Column(Boolean, default=True)  # General political topics
@@ -290,6 +319,7 @@ class RiskTypeConfig(Base):
     # Association relationships
     tenant = relationship("Tenant", back_populates="risk_config")
     application = relationship("Application", back_populates="risk_config")
+    workspace = relationship("Workspace")
 
 class TenantRateLimit(Base):
     """Tenant rate limit config table"""
@@ -358,7 +388,7 @@ class UpstreamApiConfig(Base):
     enable_reasoning_detection = Column(Boolean, default=True)  # Whether to detect reasoning content
     stream_chunk_size = Column(Integer, default=50)  # Stream detection interval, detect every N chunks
 
-    # Private model attributes (for data leakage prevention)
+    # Private model attributes (for Data Masking)
     is_private_model = Column(Boolean, default=False, index=True)  # Whether this model is private (on-premise/data-safe)
     is_default_private_model = Column(Boolean, default=False, index=True)  # Whether this is the default private model for tenant
     private_model_names = Column(JSON, default=list)  # Model names available for automatic switching (e.g., ["gpt-4", "gpt-4-turbo"])
@@ -455,7 +485,7 @@ class KnowledgeBase(Base):
     # New fields for unified scanner support
     scanner_type = Column(String(50), nullable=True, index=True)  # Scanner type: blacklist, whitelist, official_scanner, marketplace_scanner, custom_scanner
     scanner_identifier = Column(String(255), nullable=True)  # Scanner identifier: blacklist name, whitelist name, or scanner tag (S1, S2, S100, etc.)
-    scanner_name = Column(String(255), nullable=True)  # Scanner human-readable name for display (e.g., "Bank Fraud", "Travel Discussion")
+    guardrail_name = Column(String(255), nullable=True)  # Guardrail human-readable name for display (e.g., "Bank Fraud", "Travel Discussion")
 
     name = Column(String(255), nullable=False)  # Knowledge base name
     description = Column(Text)  # Description
@@ -553,7 +583,8 @@ class BanPolicy(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)  # Kept for backward compatibility
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)  # Associated application
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Associated application (nullable for workspace-level)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Associated workspace (nullable for app-level)
     enabled = Column(Boolean, nullable=False, default=False)  # Whether ban policy is enabled
     risk_level = Column(String(20), nullable=False, default='high_risk')  # Risk level threshold (high_risk, medium_risk, low_risk)
     trigger_count = Column(Integer, nullable=False, default=3)  # Trigger count threshold (1-100)
@@ -565,6 +596,7 @@ class BanPolicy(Base):
     # Association relationships
     tenant = relationship("Tenant")
     application = relationship("Application", back_populates="ban_policies")
+    workspace = relationship("Workspace")
 
 class UserBanRecord(Base):
     """User ban records table"""
@@ -755,11 +787,12 @@ class Scanner(Base):
 
 
 class ApplicationScannerConfig(Base):
-    """Per-application scanner configuration overrides"""
+    """Per-application/workspace scanner configuration overrides"""
     __tablename__ = "application_scanner_configs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Nullable for workspace-level
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Nullable for app-level
     scanner_id = Column(UUID(as_uuid=True), ForeignKey("scanners.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Override settings (NULL = use package defaults)
@@ -774,6 +807,7 @@ class ApplicationScannerConfig(Base):
 
     # Relationships
     application = relationship("Application")
+    workspace = relationship("Workspace")
     scanner = relationship("Scanner", back_populates="configs")
 
     # Constraints
@@ -783,13 +817,13 @@ class ApplicationScannerConfig(Base):
 
 
 class TenantDataLeakagePolicy(Base):
-    """Tenant-level default data leakage prevention policies"""
+    """Tenant-level default Data Masking policies"""
     __tablename__ = "tenant_data_leakage_policies"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
 
-    # Input Policy Defaults (prevent external data leakage)
+    # Input Policy Defaults (prevent external data masking)
     # Actions: 'block' | 'switch_private_model' | 'anonymize' | 'pass'
     default_input_high_risk_action = Column(String(50), default='block', nullable=False)
     default_input_medium_risk_action = Column(String(50), default='anonymize', nullable=False)
@@ -838,14 +872,15 @@ class TenantDataLeakagePolicy(Base):
 
 
 class ApplicationDataLeakagePolicy(Base):
-    """Application-level data leakage policy overrides. NULL values inherit from tenant defaults."""
+    """Application/workspace-level data masking policy overrides. NULL values inherit from workspace/tenant defaults."""
     __tablename__ = "application_data_leakage_policies"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Nullable for workspace-level
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Nullable for app-level
 
-    # Input Policy Overrides (prevent external data leakage)
+    # Input Policy Overrides (prevent external data masking)
     # Actions: 'block' | 'switch_private_model' | 'anonymize' | 'pass'
     # NULL = use tenant default
     input_high_risk_action = Column(String(50), default=None, nullable=True)
@@ -898,6 +933,7 @@ class ApplicationDataLeakagePolicy(Base):
     # Relationships
     tenant = relationship("Tenant")
     application = relationship("Application")
+    workspace = relationship("Workspace")
     private_model = relationship("UpstreamApiConfig", foreign_keys=[private_model_id])
 
     # Constraints
@@ -907,18 +943,19 @@ class ApplicationDataLeakagePolicy(Base):
 
 
 class ApplicationSettings(Base):
-    """Application-level settings including fixed answer templates"""
+    """Application/workspace-level settings including fixed answer templates"""
     __tablename__ = "application_settings"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Nullable for workspace-level
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Nullable for app-level
 
     # Fixed Answer Templates (stored as JSONB with language keys)
     # Format: {"en": "English template", "zh": "中文模板"}
     security_risk_template = Column(JSON, default={
-        "en": "Request blocked by OpenGuardrails due to possible violation of policy related to {scanner_name}.",
-        "zh": "请求已被OpenGuardrails拦截，原因：可能违反了与{scanner_name}有关的策略要求。"
+        "en": "Request blocked by OpenGuardrails due to possible violation of policy related to {guardrail_name}.",
+        "zh": "请求已被OpenGuardrails拦截，原因：可能违反了与{guardrail_name}有关的策略要求。"
     })
     data_leakage_template = Column(JSON, default={
         "en": "Request blocked by OpenGuardrails due to possible sensitive data ({entity_type_names}).",
@@ -932,6 +969,7 @@ class ApplicationSettings(Base):
     # Relationships
     tenant = relationship("Tenant")
     application = relationship("Application")
+    workspace = relationship("Workspace")
 
     # Constraints
     __table_args__ = (
@@ -1215,3 +1253,60 @@ class ModelRouteApplication(Base):
     )
 
 
+class GatewayConnection(Base):
+    """Gateway connection configuration (Higress, LiteLLM, etc.)"""
+    __tablename__ = "gateway_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    gateway_type = Column(String(32), nullable=False)  # 'higress' or 'litellm'
+    is_enabled = Column(Boolean, default=False, nullable=False)
+    config = Column(JSON, default=dict, nullable=False)  # Type-specific config
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    tenant = relationship("Tenant")
+
+    # Constraints
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'gateway_type', name='uq_gateway_connections_tenant_type'),
+    )
+
+class TenantMember(Base):
+    """Tenant member table - maps users to tenant organizations with roles"""
+    __tablename__ = "tenant_members"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    role = Column(String(20), nullable=False, default='member')  # owner, admin, member
+    invite_status = Column(String(20), nullable=False, default='pending')  # pending, accepted
+    invited_by = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True)
+    invited_at = Column(DateTime(timezone=True), server_default=func.now())
+    accepted_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('user_id', name='uq_tenant_members_user_id'),
+        UniqueConstraint('tenant_id', 'user_id', name='uq_tenant_members_tenant_user'),
+        UniqueConstraint('tenant_id', 'email', name='uq_tenant_member_email'),
+    )
+
+class TenantInvitation(Base):
+    """Tenant invitation table - pending team invitations"""
+    __tablename__ = "tenant_invitations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    role = Column(String(20), nullable=False, default='member')  # admin, member
+    invited_by = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    invitation_token = Column(String(128), unique=True, nullable=False, index=True)
+    status = Column(String(20), nullable=False, default='pending')  # pending, accepted, expired, cancelled
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    accepted_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

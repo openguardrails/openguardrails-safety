@@ -64,7 +64,7 @@
 │  │  └─────────────────────────────────────────────────────────────────────┘ │   │
 │  │                                                                           │   │
 │  │  ┌─────────────────────────────────────────────────────────────────────┐ │   │
-│  │  │                Data Leakage Prevention Services                      │ │   │
+│  │  │                Data Masking Services                      │ │   │
 │  │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐   │ │   │
 │  │  │  │   Format     │  │ Segmentation │  │   Data Security          │   │ │   │
 │  │  │  │  Detection   │  │   Service    │  │     Service              │   │ │   │
@@ -109,7 +109,7 @@
 │  └────────────────────┘  └────────────────────┘  └────────────────────────────┘ │
 │                                                                                  │
 │  ┌────────────────────────────────────────────────────────────────────────────┐ │
-│  │                         Upstream LLM Providers                             │ │
+│  │                         Upstream model providerss                             │ │
 │  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │ │
 │  │  │  OpenAI  │  │ Anthropic│  │  Azure   │  │  Groq    │  │ Private/     │ │ │
 │  │  │          │  │          │  │  OpenAI  │  │          │  │ On-Premise   │ │ │
@@ -257,7 +257,7 @@
     │                      INPUT DETECTION                             │
     │                                                                  │
     │  ┌────────────────────────────────────────────────────────────┐ │
-    │  │                 Data Leakage Detection                      │ │
+    │  │                 Data Masking Detection                      │ │
     │  │                                                             │ │
     │  │   ┌──────────────┐    ┌──────────────┐   ┌──────────────┐  │ │
     │  │   │   Format     │ -> │ Segmentation │ ->│    Entity    │  │ │
@@ -318,7 +318,7 @@
                                            ▼
                             ┌────────────────────────┐
                             │   Forward to Upstream  │
-                            │      LLM Provider      │
+                            │      model providers      │
                             │                        │
                             │  • OpenAI / Azure      │
                             │  • Anthropic           │
@@ -367,7 +367,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                    Data Leakage Prevention (DLP) System                          │
+│                    Data MaskingSystem                          │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
      Input Content
@@ -492,7 +492,7 @@
 │  Stage 5: Disposal Action                                                        │
 │                                                                                  │
 │    ┌───────────────────────────────────────────────────────────────────────┐    │
-│    │                    Data Leakage Disposal Service                       │    │
+│    │                    Data Masking Disposal Service                       │    │
 │    │                                                                        │    │
 │    │   Policy Lookup: Application Policy → Tenant Policy → System Default  │    │
 │    │                                                                        │    │
@@ -706,7 +706,7 @@
                           └────────────────────┘
 
 ┌───────────────────────────────────────────────────────────────────────────────┐
-│                      Data Leakage Prevention Tables                            │
+│                      Data Masking Tables                            │
 └───────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────┐         ┌─────────────────────────────────┐
@@ -815,7 +815,7 @@
     │                                                                          │
     └─────────────────────────────────────────────────────────────────────────┘
 
-    Example: Data Leakage Policy Lookup
+    Example: Data Masking Policy Lookup
 
     ┌─────────────────────────────────────────────────────────────────────────┐
     │                                                                          │
@@ -836,7 +836,7 @@
     Applied To:
 
     ┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
-    │   Risk Type Config   │  │  Data Leakage Policy │  │  Response Templates  │
+    │   Risk Type Config   │  │  Data Masking Policy │  │  Response Templates  │
     ├──────────────────────┤  ├──────────────────────┤  ├──────────────────────┤
     │ s1_enabled           │  │ high_risk_action     │  │ template_content     │
     │ s2_enabled           │  │ medium_risk_action   │  │ risk_level           │

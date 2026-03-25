@@ -86,7 +86,7 @@
     "responseBlockedSecurity": "响应因安全策略被拦截。",
     "cannotProvideInformation": "我无法提供此信息。",
     "responseTemplates": {
-      "securityRisk": "请求已被OpenGuardrails拦截，原因：可能违反了与{scanner_name}有关的策略要求。",
+      "securityRisk": "请求已被OpenGuardrails拦截，原因：可能违反了与{guardrail_name}有关的策略要求。",
       "dataLeakageRisk": "请求已被OpenGuardrails拦截，原因：可能包含敏感数据（{entity_type_names}）。",
       "default": "请求已被OpenGuardrails拦截，原因：违反内容政策。"
     }

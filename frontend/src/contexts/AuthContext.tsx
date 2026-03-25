@@ -13,6 +13,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   switchInfo: SwitchInfo;
+  canEdit: boolean;  // Whether current user can edit configs (owner/admin/super_admin)
   login: (email: string, password: string, language?: string) => Promise<{ requiresPasswordChange?: boolean; passwordMessage?: string }>;
   logout: () => Promise<void>;
   switchToUser: (userId: string) => Promise<void>;
@@ -201,11 +202,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
+  const canEdit = !!user && (
+    user.is_super_admin ||
+    user.member_role === 'owner' ||
+    user.member_role === 'admin'
+  );
+
   const value = {
     user,
     isAuthenticated,
     isLoading,
     switchInfo,
+    canEdit,
     login,
     logout,
     switchToUser,

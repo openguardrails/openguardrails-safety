@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import api, { testModelsApi } from '../../services/api'
-import { PlayCircle, X, Settings, Upload, Download, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { PlayCircle, X, Settings, Upload, Download, FileSpreadsheet, Loader2, Globe, FolderOpen } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Textarea } from '../../components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -87,6 +87,11 @@ interface BatchTestResult {
 
 type BatchTestStatus = 'idle' | 'uploaded' | 'detecting' | 'completed' | 'error'
 
+interface WorkspaceOption {
+  id: string
+  name: string
+}
+
 const OnlineTest: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -108,6 +113,10 @@ const OnlineTest: React.FC = () => {
   const [models, setModels] = useState<TestModel[]>([])
   const [selectedCategory, setSelectedCategory] = useState('security')
 
+  // Workspace selector states
+  const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([])
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>('global')
+
   // Batch test states
   const [batchStatus, setBatchStatus] = useState<BatchTestStatus>('idle')
   const [batchFile, setBatchFile] = useState<File | null>(null)
@@ -116,6 +125,15 @@ const OnlineTest: React.FC = () => {
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 })
   const [batchError, setBatchError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const loadWorkspaces = useCallback(async () => {
+    try {
+      const response = await api.get('/api/v1/workspaces')
+      setWorkspaces(response.data.map((ws: any) => ({ id: ws.id, name: ws.name })))
+    } catch (error) {
+      console.error('Failed to load workspaces:', error)
+    }
+  }, [])
 
   const loadModels = async () => {
     try {
@@ -172,6 +190,7 @@ const OnlineTest: React.FC = () => {
 
   useEffect(() => {
     loadModels()
+    loadWorkspaces()
   }, [])
 
   const testCasesByCategory = {
@@ -310,9 +329,12 @@ const OnlineTest: React.FC = () => {
         toast.info(t('onlineTest.proxyModelHint'))
       }
 
-      const requestData = {
+      const requestData: any = {
         content: testInput,
         input_type: inputType,
+      }
+      if (selectedWorkspaceId !== 'global') {
+        requestData.workspace_id = selectedWorkspaceId
       }
 
       const response = await api.post('/api/v1/test/online', requestData)
@@ -378,37 +400,37 @@ const OnlineTest: React.FC = () => {
   const getRiskColor = (level: string) => {
     switch (level) {
       case 'high_risk':
-        return 'bg-red-100 text-red-800 border-red-200'
+        return 'bg-red-500/15 text-red-300 border-red-500/20'
       case 'medium_risk':
-        return 'bg-orange-100 text-orange-800 border-orange-200'
+        return 'bg-orange-500/15 text-orange-300 border-orange-500/20'
       case 'low_risk':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
+        return 'bg-yellow-500/15 text-yellow-300 border-yellow-500/20'
       case 'no_risk':
       case 'safe':
-        return 'bg-green-100 text-green-800 border-green-200'
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20'
       case 'test_failed':
       case 'detection_failed':
       case 'error':
-        return 'bg-red-100 text-red-800 border-red-200'
+        return 'bg-red-500/15 text-red-300 border-red-500/20'
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+        return 'bg-muted text-foreground border-border'
     }
   }
 
   const getActionColor = (action: string) => {
     switch (action) {
       case 'reject':
-        return 'bg-red-100 text-red-800 border-red-200'
+        return 'bg-red-500/15 text-red-300 border-red-500/20'
       case 'replace':
-        return 'bg-orange-100 text-orange-800 border-orange-200'
+        return 'bg-orange-500/15 text-orange-300 border-orange-500/20'
       case 'pass':
-        return 'bg-green-100 text-green-800 border-green-200'
+        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20'
       case 'test_failed':
       case 'error':
       case 'system_error':
-        return 'bg-red-100 text-red-800 border-red-200'
+        return 'bg-red-500/15 text-red-300 border-red-500/20'
       default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+        return 'bg-muted text-foreground border-border'
     }
   }
 
@@ -496,10 +518,15 @@ const OnlineTest: React.FC = () => {
           inputTypeForRequest = 'qa_pair'
         }
 
-        const response = await api.post('/api/v1/test/online', {
+        const batchRequestData: any = {
           content: content,
           input_type: inputTypeForRequest,
-        })
+        }
+        if (selectedWorkspaceId !== 'global') {
+          batchRequestData.workspace_id = selectedWorkspaceId
+        }
+
+        const response = await api.post('/api/v1/test/online', batchRequestData)
 
         const guardrail = response.data.guardrail
         results.push({
@@ -602,24 +629,52 @@ const OnlineTest: React.FC = () => {
   const getStatusColor = (status: BatchTestStatus) => {
     switch (status) {
       case 'idle':
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-muted text-foreground'
       case 'uploaded':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-sky-500/15 text-sky-300'
       case 'detecting':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-yellow-500/15 text-yellow-300'
       case 'completed':
-        return 'bg-green-100 text-green-800'
+        return 'bg-emerald-500/15 text-emerald-300'
       case 'error':
-        return 'bg-red-100 text-red-800'
+        return 'bg-red-500/15 text-red-300'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-muted text-foreground'
     }
   }
 
   return (
     <div className="max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">{t('onlineTest.title')}</h1>
-      <p className="text-slate-600 mb-6">{t('onlineTest.description')}</p>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-2xl font-bold">{t('onlineTest.title')}</h1>
+        {workspaces.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{t('onlineTest.guardrailConfig')}:</span>
+            <Select value={selectedWorkspaceId} onValueChange={setSelectedWorkspaceId}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="global">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-3.5 w-3.5" />
+                    <span>{t('onlineTest.globalConfig')}</span>
+                  </div>
+                </SelectItem>
+                {workspaces.map((ws) => (
+                  <SelectItem key={ws.id} value={ws.id}>
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="h-3.5 w-3.5" />
+                      <span>{ws.name}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+      </div>
+      <p className="text-muted-foreground mb-6">{t('onlineTest.description')}</p>
 
       <Tabs defaultValue="single" className="w-full">
         <TabsList className="mb-4">
@@ -665,7 +720,7 @@ const OnlineTest: React.FC = () => {
                 <CollapsibleTrigger asChild>
                   <Button variant="outline" size="sm" className="w-full justify-between">
                     <span>{t('onlineTest.presetTestCases')}</span>
-                    <span className="text-xs text-slate-500">{t('onlineTest.clickToExpand')}</span>
+                    <span className="text-xs text-muted-foreground">{t('onlineTest.clickToExpand')}</span>
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-3 space-y-3">
@@ -683,13 +738,13 @@ const OnlineTest: React.FC = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {testCasesByCategory[selectedCategory as keyof typeof testCasesByCategory].map((testCase) => (
-                      <Card key={testCase.id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => useTestCase(testCase)}>
+                      <Card key={testCase.id} className="cursor-pointer hover:bg-card/5 transition-colors" onClick={() => useTestCase(testCase)}>
                         <CardContent className="p-3 space-y-2">
                           <div className="flex items-center justify-between">
                             <p className="text-sm font-semibold">{testCase.name}</p>
-                            <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-800 border border-blue-200">{testCase.category}</span>
+                            <span className="px-2 py-0.5 text-xs rounded bg-sky-500/15 text-sky-300 border border-sky-500/20">{testCase.category}</span>
                           </div>
-                          <p className="text-xs text-slate-600">{testCase.description}</p>
+                          <p className="text-xs text-muted-foreground">{testCase.description}</p>
                           <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testCase.expectedRisk || '')}`}>
                             {t('onlineTest.expected')} {testCase.expectedRisk}
                           </span>
@@ -705,16 +760,16 @@ const OnlineTest: React.FC = () => {
                 <div>
                   <h4 className="text-sm font-medium mb-3">{t('onlineTest.selectTestModels')}</h4>
                   {models.length === 0 ? (
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md">
                       <div className="flex items-start gap-2">
                         <div className="flex-shrink-0 mt-0.5">
-                          <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">i</div>
+                          <div className="h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs">i</div>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-blue-900">{t('onlineTest.noProxyModels')}</p>
-                          <p className="text-sm text-blue-700 mt-1">
+                          <p className="text-sm font-medium text-sky-200">{t('onlineTest.noProxyModels')}</p>
+                          <p className="text-sm text-sky-400 mt-1">
                             {t('onlineTest.noProxyModelsDesc').split(t('onlineTest.securityGateway'))[0]}
-                            <Button variant="link" size="sm" className="h-auto p-0 text-blue-600" onClick={() => navigate('/security-gateway')}>
+                            <Button variant="link" size="sm" className="h-auto p-0 text-sky-400" onClick={() => navigate('/security-gateway')}>
                               {t('onlineTest.securityGateway')}
                             </Button>
                             {t('onlineTest.noProxyModelsDesc').split(t('onlineTest.securityGateway'))[1]}
@@ -726,13 +781,13 @@ const OnlineTest: React.FC = () => {
                     <div className="space-y-2">
                       {models.map((model) => (
                         <Collapsible key={model.id} defaultOpen={model.selected}>
-                          <Card className="bg-slate-50">
+                          <Card className="bg-secondary">
                             <CollapsibleTrigger className="w-full">
                               <CardHeader className="py-3">
                                 <div className="flex items-center justify-between w-full">
                                   <div className="flex items-center gap-2">
                                     <span className="font-medium text-sm">{model.config_name}</span>
-                                    {model.selected && <span className="px-2 py-0.5 text-xs rounded bg-blue-100 text-blue-800 border border-blue-200">{t('onlineTest.selected')}</span>}
+                                    {model.selected && <span className="px-2 py-0.5 text-xs rounded bg-sky-500/15 text-sky-300 border border-sky-500/20">{t('onlineTest.selected')}</span>}
                                   </div>
                                   <Switch
                                     checked={model.selected}
@@ -747,13 +802,13 @@ const OnlineTest: React.FC = () => {
                             <CollapsibleContent>
                               <CardContent className="pt-0 pb-3 space-y-3">
                                 <div>
-                                  <p className="text-xs text-slate-500 mb-1">{t('onlineTest.apiBaseUrl')}</p>
-                                  <p className="text-xs text-slate-700">{model.api_base_url}</p>
+                                  <p className="text-xs text-muted-foreground mb-1">{t('onlineTest.apiBaseUrl')}</p>
+                                  <p className="text-xs text-slate-300">{model.api_base_url}</p>
                                 </div>
 
                                 {model.selected && (
                                   <div>
-                                    <p className="text-xs text-slate-500 mb-1">{t('onlineTest.modelNameLabel')}</p>
+                                    <p className="text-xs text-muted-foreground mb-1">{t('onlineTest.modelNameLabel')}</p>
                                     <Input
                                       size={1}
                                       placeholder={t('onlineTest.modelNamePlaceholder')}
@@ -772,7 +827,7 @@ const OnlineTest: React.FC = () => {
                     </div>
                   )}
                   {models.filter((m) => m.selected).length > 0 && (
-                    <p className="text-xs text-blue-600 mt-2">{t('onlineTest.selectedModels', { count: models.filter((m) => m.selected).length })}</p>
+                    <p className="text-xs text-sky-400 mt-2">{t('onlineTest.selectedModels', { count: models.filter((m) => m.selected).length })}</p>
                   )}
                 </div>
               )}
@@ -811,14 +866,14 @@ const OnlineTest: React.FC = () => {
                   <h4 className="text-base font-semibold mb-4">{t('onlineTest.guardrailResult')}</h4>
 
                   {testResult.guardrail.error ? (
-                    <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-md">
                       <div className="flex items-start gap-2">
                         <div className="flex-shrink-0 mt-0.5">
                           <div className="h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">!</div>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-red-900">{t('onlineTest.detectionFailed')}</p>
-                          <div className="text-sm text-red-700 mt-2">
+                          <p className="text-sm font-medium text-red-200">{t('onlineTest.detectionFailed')}</p>
+                          <div className="text-sm text-red-400 mt-2">
                             <p className="font-semibold">{t('onlineTest.failureReason')}</p>
                             <p>{testResult.guardrail.error}</p>
                           </div>
@@ -834,17 +889,17 @@ const OnlineTest: React.FC = () => {
                           </CardHeader>
                           <CardContent className="space-y-2">
                             <div>
-                              <span className="text-xs text-slate-600">{t('onlineTest.riskLevel')} </span>
+                              <span className="text-xs text-muted-foreground">{t('onlineTest.riskLevel')} </span>
                               <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testResult.guardrail.security?.risk_level)}`}>
                                 {translateRiskLevel(testResult.guardrail.security?.risk_level || 'no_risk')}
                               </span>
                             </div>
                             {testResult.guardrail.security?.categories?.length > 0 && (
                               <div>
-                                <span className="text-xs text-slate-600">{t('onlineTest.riskCategory')} </span>
+                                <span className="text-xs text-muted-foreground">{t('onlineTest.riskCategory')} </span>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {testResult.guardrail.security.categories.map((cat, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-red-100 text-red-800 border border-red-200">
+                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-red-500/15 text-red-300 border border-red-500/20">
                                       {cat}
                                     </span>
                                   ))}
@@ -860,17 +915,17 @@ const OnlineTest: React.FC = () => {
                           </CardHeader>
                           <CardContent className="space-y-2">
                             <div>
-                              <span className="text-xs text-slate-600">{t('onlineTest.riskLevel')} </span>
+                              <span className="text-xs text-muted-foreground">{t('onlineTest.riskLevel')} </span>
                               <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testResult.guardrail.compliance?.risk_level)}`}>
                                 {translateRiskLevel(testResult.guardrail.compliance?.risk_level || 'no_risk')}
                               </span>
                             </div>
                             {testResult.guardrail.compliance?.categories?.length > 0 && (
                               <div>
-                                <span className="text-xs text-slate-600">{t('onlineTest.riskCategory')} </span>
+                                <span className="text-xs text-muted-foreground">{t('onlineTest.riskCategory')} </span>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {testResult.guardrail.compliance.categories.map((cat, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-orange-100 text-orange-800 border border-orange-200">
+                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-orange-500/15 text-orange-300 border border-orange-500/20">
                                       {cat}
                                     </span>
                                   ))}
@@ -886,17 +941,17 @@ const OnlineTest: React.FC = () => {
                           </CardHeader>
                           <CardContent className="space-y-2">
                             <div>
-                              <span className="text-xs text-slate-600">{t('onlineTest.riskLevel')} </span>
+                              <span className="text-xs text-muted-foreground">{t('onlineTest.riskLevel')} </span>
                               <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testResult.guardrail.data?.risk_level || 'no_risk')}`}>
                                 {translateRiskLevel(testResult.guardrail.data?.risk_level || 'no_risk')}
                               </span>
                             </div>
                             {testResult.guardrail.data?.categories && testResult.guardrail.data.categories.length > 0 && (
                               <div>
-                                <span className="text-xs text-slate-600">{t('onlineTest.riskCategory')} </span>
+                                <span className="text-xs text-muted-foreground">{t('onlineTest.riskCategory')} </span>
                                 <div className="flex flex-wrap gap-1 mt-1">
                                   {testResult.guardrail.data.categories.map((cat, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-purple-100 text-purple-800 border border-purple-200">
+                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-purple-500/15 text-purple-300 border border-purple-500/20">
                                       {cat}
                                     </span>
                                   ))}
@@ -909,24 +964,24 @@ const OnlineTest: React.FC = () => {
 
                       <Separator />
 
-                      <Card className="border-slate-200 bg-slate-50">
+                      <Card className="border-border bg-secondary">
                         <CardContent className="pt-4">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
-                              <p className="text-sm font-medium text-slate-700 mb-1">{t('onlineTest.overallRiskLevel')}</p>
+                              <p className="text-sm font-medium text-slate-300 mb-1">{t('onlineTest.overallRiskLevel')}</p>
                               <span className={`inline-block px-3 py-1.5 text-sm font-semibold rounded border ${getRiskColor(testResult.guardrail.overall_risk_level)}`}>
                                 {translateRiskLevel(testResult.guardrail.overall_risk_level)}
                               </span>
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-slate-700 mb-1">{t('onlineTest.suggestedAction')}</p>
+                              <p className="text-sm font-medium text-slate-300 mb-1">{t('onlineTest.suggestedAction')}</p>
                               <span className={`inline-block px-3 py-1.5 text-sm font-semibold rounded border ${getActionColor(testResult.guardrail.suggest_action)}`}>{testResult.guardrail.suggest_action}</span>
                             </div>
                             <div>
                               {testResult.guardrail.suggest_answer && (
                                 <>
-                                  <p className="text-sm font-medium text-slate-700 mb-1">{t('onlineTest.suggestedAnswer')}</p>
-                                  <code className="text-xs bg-white px-3 py-1.5 rounded border border-slate-200 block whitespace-pre-wrap break-all">{testResult.guardrail.suggest_answer}</code>
+                                  <p className="text-sm font-medium text-slate-300 mb-1">{t('onlineTest.suggestedAnswer')}</p>
+                                  <code className="text-xs bg-card px-3 py-1.5 rounded border border-border block whitespace-pre-wrap break-all">{testResult.guardrail.suggest_answer}</code>
                                 </>
                               )}
                             </div>
@@ -941,7 +996,7 @@ const OnlineTest: React.FC = () => {
                 {inputType === 'question' && Object.keys(testResult.original_responses).length > 0 && (
                   <div>
                     <h4 className="text-base font-semibold mb-3">{t('onlineTest.proxyModelOriginalResponse')}</h4>
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-md mb-4 text-sm text-blue-800">{t('onlineTest.proxyModelOriginalResponseDesc')}</div>
+                    <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-md mb-4 text-sm text-sky-300">{t('onlineTest.proxyModelOriginalResponseDesc')}</div>
                     <div className="space-y-3">
                       {Object.entries(testResult.original_responses).map(([modelId, response]) => {
                         const model = models.find((m) => m.id === modelId)
@@ -952,16 +1007,16 @@ const OnlineTest: React.FC = () => {
                             </CardHeader>
                             <CardContent>
                               {response.error ? (
-                                <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">{response.error}</div>
+                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-sm text-red-300">{response.error}</div>
                               ) : response.content ? (
                                 <div>
-                                  <p className="text-xs font-semibold text-slate-700 mb-2">{t('onlineTest.originalResponse')}</p>
-                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-200">
+                                  <p className="text-xs font-semibold text-slate-300 mb-2">{t('onlineTest.originalResponse')}</p>
+                                  <div className="bg-secondary p-3 rounded-md border border-border">
                                     <p className="text-sm whitespace-pre-wrap">{response.content}</p>
                                   </div>
                                 </div>
                               ) : (
-                                <p className="text-sm text-slate-500">{t('onlineTest.emptyResponse')}</p>
+                                <p className="text-sm text-muted-foreground">{t('onlineTest.emptyResponse')}</p>
                               )}
                             </CardContent>
                           </Card>
@@ -985,16 +1040,16 @@ const OnlineTest: React.FC = () => {
                             </CardHeader>
                             <CardContent>
                               {response.error ? (
-                                <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">{response.error}</div>
+                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-sm text-red-300">{response.error}</div>
                               ) : response.content ? (
                                 <div>
-                                  <p className="text-xs font-semibold text-slate-700 mb-2">{t('onlineTest.modelResponse')}</p>
-                                  <div className="bg-slate-50 p-3 rounded-md border border-slate-200">
+                                  <p className="text-xs font-semibold text-slate-300 mb-2">{t('onlineTest.modelResponse')}</p>
+                                  <div className="bg-secondary p-3 rounded-md border border-border">
                                     <p className="text-sm whitespace-pre-wrap">{response.content}</p>
                                   </div>
                                 </div>
                               ) : (
-                                <p className="text-sm text-slate-500">{t('onlineTest.emptyResponse')}</p>
+                                <p className="text-sm text-muted-foreground">{t('onlineTest.emptyResponse')}</p>
                               )}
                             </CardContent>
                           </Card>
@@ -1020,8 +1075,8 @@ const OnlineTest: React.FC = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-slate-600">{t('onlineTest.batchTest.description')}</p>
-                <p className="text-xs text-slate-500">{t('onlineTest.batchTest.formatRequirement')}</p>
+                <p className="text-sm text-muted-foreground">{t('onlineTest.batchTest.description')}</p>
+                <p className="text-xs text-muted-foreground">{t('onlineTest.batchTest.formatRequirement')}</p>
 
                 {/* File upload area */}
                 <div className="space-y-4">
@@ -1037,20 +1092,20 @@ const OnlineTest: React.FC = () => {
                   {batchStatus === 'idle' && !batchFile ? (
                     <label
                       htmlFor="excel-upload"
-                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 transition-colors"
+                      className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg cursor-pointer bg-secondary hover:bg-card/5 transition-colors"
                     >
-                      <Upload className="h-8 w-8 text-slate-400 mb-2" />
-                      <span className="text-sm text-slate-600">{t('onlineTest.batchTest.uploadArea')}</span>
-                      <span className="text-xs text-slate-400 mt-1">{t('onlineTest.batchTest.uploadHint')}</span>
+                      <Upload className="h-8 w-8 text-slate-500 mb-2" />
+                      <span className="text-sm text-muted-foreground">{t('onlineTest.batchTest.uploadArea')}</span>
+                      <span className="text-xs text-slate-500 mt-1">{t('onlineTest.batchTest.uploadHint')}</span>
                     </label>
                   ) : (
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="p-4 bg-secondary rounded-lg border border-border">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <FileSpreadsheet className="h-8 w-8 text-green-600" />
+                          <FileSpreadsheet className="h-8 w-8 text-emerald-400" />
                           <div>
-                            <p className="text-sm font-medium text-slate-700">{batchFile?.name}</p>
-                            <p className="text-xs text-slate-500">
+                            <p className="text-sm font-medium text-slate-300">{batchFile?.name}</p>
+                            <p className="text-xs text-muted-foreground">
                               {batchData.length} {t('onlineTest.batchTest.resultColumns.prompt').toLowerCase()}
                             </p>
                           </div>
@@ -1063,11 +1118,11 @@ const OnlineTest: React.FC = () => {
                       {/* Progress display */}
                       {batchStatus === 'detecting' && (
                         <div className="mt-4">
-                          <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
+                          <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
                             <span>{t('onlineTest.batchTest.progress', { current: batchProgress.current, total: batchProgress.total })}</span>
                             <span>{Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
                           </div>
-                          <div className="w-full bg-slate-200 rounded-full h-2">
+                          <div className="w-full bg-border rounded-full h-2">
                             <div
                               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
                               style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
@@ -1122,21 +1177,21 @@ const OnlineTest: React.FC = () => {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">#</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">{t('onlineTest.batchTest.resultColumns.prompt')}</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">{t('onlineTest.batchTest.resultColumns.response')}</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">{t('onlineTest.batchTest.resultColumns.overallRiskLevel')}</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">{t('onlineTest.batchTest.resultColumns.securityRiskLevel')}</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">{t('onlineTest.batchTest.resultColumns.complianceRiskLevel')}</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">{t('onlineTest.batchTest.resultColumns.dataRiskLevel')}</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-700">{t('onlineTest.batchTest.resultColumns.action')}</th>
+                        <tr className="border-b border-border">
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">#</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.prompt')}</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.response')}</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.overallRiskLevel')}</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.securityRiskLevel')}</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.complianceRiskLevel')}</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.dataRiskLevel')}</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.action')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {batchResults.slice(0, 50).map((result, index) => (
-                          <tr key={index} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="py-2 px-3 text-slate-500">{index + 1}</td>
+                          <tr key={index} className="border-b border-border hover:bg-card/5">
+                            <td className="py-2 px-3 text-muted-foreground">{index + 1}</td>
                             <td className="py-2 px-3 max-w-[200px] truncate" title={result.prompt}>{result.prompt}</td>
                             <td className="py-2 px-3 max-w-[200px] truncate" title={result.response || '-'}>{result.response || '-'}</td>
                             <td className="py-2 px-3">
@@ -1169,7 +1224,7 @@ const OnlineTest: React.FC = () => {
                       </tbody>
                     </table>
                     {batchResults.length > 50 && (
-                      <p className="text-sm text-slate-500 mt-2 text-center">
+                      <p className="text-sm text-muted-foreground mt-2 text-center">
                         ... {t('onlineTest.batchTest.progress', { current: 50, total: batchResults.length })} ...
                       </p>
                     )}

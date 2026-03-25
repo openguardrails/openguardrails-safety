@@ -4,7 +4,7 @@ Gateway Integration Service
 Provides unified API for third-party AI gateways (Higress, LiteLLM, Kong, etc.)
 to integrate OpenGuardrails' full security capabilities including:
 - Blacklist/Whitelist checking
-- Data Leakage Prevention (DLP)
+- Data Masking (DLP)
 - Security/Compliance scanning (21 risk categories)
 - Anonymization with restoration
 - Private model switching

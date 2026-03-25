@@ -85,6 +85,7 @@ func parseConfig(json gjson.Result, config *PluginConfig) error {
 const (
 	ctxKeyBypassed       = "og_bypassed"
 	ctxKeyConsumerID     = "og_consumer_id"
+	ctxKeyConsumerGroup  = "og_consumer_group"
 	ctxKeyIsStreaming     = "og_is_streaming"
 	ctxKeyRequestBody    = "og_request_body"
 	ctxKeyResponseBody   = "og_response_body"
@@ -110,11 +111,18 @@ func onHttpRequestHeaders(ctx wrapper.HttpContext, config PluginConfig) types.Ac
 		return types.ActionContinue
 	}
 
-	// Extract consumer ID for application auto-discovery
+	// Auto-discovery: x-mse-consumer → application, x-mse-consumer-group → workspace
+	// OG platform will auto-create application/workspace and assign app to workspace
 	consumerID, _ := proxywasm.GetHttpRequestHeader("x-mse-consumer")
 	if consumerID != "" {
 		ctx.SetContext(ctxKeyConsumerID, consumerID)
 		proxywasm.LogInfof("[OG-REQ-HDR] Consumer ID: %s", consumerID)
+	}
+
+	consumerGroup, _ := proxywasm.GetHttpRequestHeader("x-mse-consumer-group")
+	if consumerGroup != "" {
+		ctx.SetContext(ctxKeyConsumerGroup, consumerGroup)
+		proxywasm.LogInfof("[OG-REQ-HDR] Consumer Group: %s", consumerGroup)
 	}
 
 	// Remove Content-Length as we may modify the body
@@ -281,6 +289,11 @@ func callOGAPI(ctx wrapper.HttpContext, config PluginConfig, path string, body [
 	consumerID := ctx.GetStringContext(ctxKeyConsumerID, "")
 	if consumerID != "" {
 		headers = append(headers, [2]string{"X-OG-Application-ID", consumerID})
+	}
+
+	consumerGroup := ctx.GetStringContext(ctxKeyConsumerGroup, "")
+	if consumerGroup != "" {
+		headers = append(headers, [2]string{"X-OG-Workspace-ID", consumerGroup})
 	}
 
 	proxywasm.LogWarnf("[OG-API] Calling %s, body_len=%d", path, len(body))

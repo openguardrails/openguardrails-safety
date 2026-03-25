@@ -371,7 +371,7 @@ const PackageMarketplace: React.FC = () => {
           <div className="space-y-4">
             <div>
               <p className="font-semibold">{t('packageMarketplace.packageJsonFormat')}</p>
-              <p className="text-xs text-gray-600">{t('packageMarketplace.jsonFormatHelp')}</p>
+              <p className="text-xs text-muted-foreground">{t('packageMarketplace.jsonFormatHelp')}</p>
             </div>
 
             <div className="space-y-2">
@@ -386,9 +386,9 @@ const PackageMarketplace: React.FC = () => {
                   step="0.01"
                   className="flex-1"
                 />
-                <span className="text-sm text-gray-600">{i18n.language === 'zh' ? '元' : '$'}</span>
+                <span className="text-sm text-muted-foreground">{i18n.language === 'zh' ? '元' : '$'}</span>
               </div>
-              <p className="text-xs text-gray-500">{t('packageMarketplace.priceHelp')}</p>
+              <p className="text-xs text-muted-foreground">{t('packageMarketplace.priceHelp')}</p>
             </div>
 
             <div className="space-y-2">
@@ -398,14 +398,14 @@ const PackageMarketplace: React.FC = () => {
                 value={uploadBundle || ''}
                 onChange={(e) => setUploadBundle(e.target.value || null)}
               />
-              <p className="text-xs text-gray-500">Bundle name for grouping related packages</p>
+              <p className="text-xs text-muted-foreground">Bundle name for grouping related packages</p>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">{t('packageMarketplace.uploadJson')}</label>
               <Input type="file" accept=".json" onChange={handleFileSelect} />
               {selectedFile && (
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   Selected: {selectedFile.name}
                 </p>
               )}
@@ -510,7 +510,7 @@ const PackageMarketplace: React.FC = () => {
                           step="0.01"
                           className="flex-1"
                         />
-                        <span className="text-sm text-gray-600">{i18n.language === 'zh' ? '元' : '$'}</span>
+                        <span className="text-sm text-muted-foreground">{i18n.language === 'zh' ? '元' : '$'}</span>
                       </div>
                     </FormControl>
                     <FormDescription>{t('packageMarketplace.priceTooltip')}</FormDescription>

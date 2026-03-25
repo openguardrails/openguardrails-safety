@@ -23,6 +23,7 @@ export interface LoginResponse {
   api_key?: string;
   tenant_id?: string;
   is_super_admin?: boolean;
+  member_role?: 'owner' | 'admin' | 'member';
   requires_password_change?: boolean;
   password_message?: string;
 }
@@ -35,6 +36,8 @@ export interface UserInfo {
   is_active: boolean;
   is_verified: boolean;
   is_super_admin: boolean;
+  member_role: 'owner' | 'admin' | 'member';
+  org_tenant_id: string;
   rate_limit: number;  // Tenant speed limit (requests per second, 0 means unlimited, default is 1)
   language: string;  // User language preference
   log_direct_model_access: boolean;  // Whether to log direct model access calls

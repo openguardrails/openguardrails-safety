@@ -61,6 +61,7 @@ class OnlineTestRequest(BaseModel):
     input_type: str  # 'question' or 'qa_pair'
     models: Optional[List[ModelIdRequest]] = []
     images: Optional[List[str]] = []  # base64 encoded image data list
+    workspace_id: Optional[str] = None  # workspace ID for testing with workspace-specific guardrail config
 
 class ModelResponse(BaseModel):
     content: Optional[str] = None
@@ -258,44 +259,50 @@ async def online_test(
         if not tenant_id:
             raise HTTPException(status_code=401, detail="User ID not found in auth context")
 
-        # Get application_id from header or auth context (application-level filtering)
+        # Resolve application_id for guardrail config
         from database.models import Application
 
-        # 0) Check for X-Application-ID header (highest priority - from frontend selector)
-        header_app_id = request.headers.get('x-application-id') or request.headers.get('X-Application-ID')
-
-        # 1) Use header application ID if present
         application_id = None
-        if header_app_id:
+        try:
+            tenant_uuid = uuid.UUID(tenant_id)
+        except ValueError:
+            logger.error(f"Invalid tenant_id format: {tenant_id}")
+            raise HTTPException(status_code=400, detail="Invalid user ID format")
+
+        if request_data.workspace_id:
+            # Workspace mode: find an application in the specified workspace
             try:
-                application_id = uuid.UUID(header_app_id)
+                workspace_uuid = uuid.UUID(request_data.workspace_id)
+                ws_app = db.query(Application).filter(
+                    Application.workspace_id == workspace_uuid,
+                    Application.tenant_id == tenant_uuid,
+                ).first()
+                if ws_app:
+                    application_id = ws_app.id
+                else:
+                    logger.warning(f"No application found in workspace {request_data.workspace_id}, falling back to Online Test app")
             except ValueError:
-                logger.error(f"Invalid application_id format from header: {header_app_id}")
-                raise HTTPException(status_code=400, detail="Invalid application ID format")
+                logger.error(f"Invalid workspace_id format: {request_data.workspace_id}")
 
-        # 2) If no header, check auth context (for API key authentication)
-        if not application_id and auth_context:
-            auth_app_id = auth_context['data'].get('application_id')
-            if auth_app_id:
-                try:
-                    application_id = uuid.UUID(auth_app_id)
-                except ValueError:
-                    logger.error(f"Invalid application_id format from auth: {auth_app_id}")
-
-        # 3) If still no application_id, get the first application for this tenant (backward compatibility)
         if not application_id:
-            # Get user UUID first
-            try:
-                tenant_uuid = uuid.UUID(tenant_id)
-            except ValueError:
-                logger.error(f"Invalid tenant_id format: {tenant_id}")
-                raise HTTPException(status_code=400, detail="Invalid user ID format")
-
-            first_app = db.query(Application).filter(
-                Application.tenant_id == tenant_uuid
+            # Global mode: use dedicated "Online Test" application (auto-create if not exists)
+            online_test_app = db.query(Application).filter(
+                Application.tenant_id == tenant_uuid,
+                Application.source == 'online_test',
             ).first()
-            if first_app:
-                application_id = first_app.id
+            if not online_test_app:
+                online_test_app = Application(
+                    tenant_id=tenant_uuid,
+                    name="Online Test",
+                    description="Auto-created application for online testing",
+                    source="online_test",
+                    is_active=True,
+                )
+                db.add(online_test_app)
+                db.commit()
+                db.refresh(online_test_app)
+                logger.info(f"Created Online Test application for tenant {tenant_id}: {online_test_app.id}")
+            application_id = online_test_app.id
 
         # Construct message format
         messages = []

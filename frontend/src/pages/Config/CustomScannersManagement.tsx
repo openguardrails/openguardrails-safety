@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Edit2, Trash2, RefreshCw, Crown, Lock, ChevronDown, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { customScannersApi } from '../../services/api'
-import { useApplication } from '../../contexts/ApplicationContext'
 import { eventBus, EVENTS } from '../../utils/eventBus'
 import { billingService } from '../../services/billing'
 import { features } from '../../config'
@@ -46,10 +46,15 @@ interface CustomScanner {
 
 const PREMIUM_BANNER_DISMISSED_KEY = 'customScanners.premiumBannerDismissed'
 
-const CustomScannersManagement: React.FC = () => {
+interface CustomScannersManagementProps {
+  workspaceId?: string
+}
+
+const CustomScannersManagement: React.FC<CustomScannersManagementProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const navigate = useNavigate()
-  const { currentApplicationId } = useApplication()
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [scanners, setScanners] = useState<CustomScanner[]>([])
@@ -76,10 +81,8 @@ const CustomScannersManagement: React.FC = () => {
       setSubscriptionLoading(false)
     }
 
-    if (currentApplicationId) {
-      loadData()
-    }
-  }, [currentApplicationId])
+    loadData()
+  }, [])
 
   const checkSubscription = async () => {
     try {
@@ -178,7 +181,7 @@ const CustomScannersManagement: React.FC = () => {
       description: (
         <div className="space-y-2">
           <p>{t('customScanners.confirmDelete')}</p>
-          <p className="text-sm text-red-600">{t('customScanners.deleteWarning')}</p>
+          <p className="text-sm text-red-400">{t('customScanners.deleteWarning')}</p>
         </div>
       ),
     })
@@ -268,8 +271,8 @@ const CustomScannersManagement: React.FC = () => {
   const getRiskLevelClassName = (level: string) => {
     const classNames: { [key: string]: string } = {
       high_risk: '',
-      medium_risk: 'bg-orange-100 text-orange-800 border-orange-200',
-      low_risk: 'bg-green-100 text-green-800 border-green-200',
+      medium_risk: 'bg-orange-500/15 text-orange-300 border-orange-500/20',
+      low_risk: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20',
     }
     return classNames[level] || ''
   }
@@ -295,7 +298,7 @@ const CustomScannersManagement: React.FC = () => {
       accessorKey: 'tag',
       header: t('customScanners.scannerTag'),
       cell: ({ row }) => (
-        <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+        <Badge variant="secondary" className="bg-purple-500/15 text-purple-300 border-purple-500/20">
           {row.original.tag}
         </Badge>
       ),
@@ -345,10 +348,10 @@ const CustomScannersManagement: React.FC = () => {
         />
       ),
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('common.actions'),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -361,7 +364,7 @@ const CustomScannersManagement: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
             onClick={() => handleDelete(row.original)}
           >
             <Trash2 className="h-4 w-4 mr-1" />
@@ -369,14 +372,14 @@ const CustomScannersManagement: React.FC = () => {
           </Button>
         </div>
       ),
-    },
+    }] : []),
   ]
 
   // Show loading state while checking subscription
   if (subscriptionLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-400"></div>
       </div>
     )
   }
@@ -394,7 +397,7 @@ const CustomScannersManagement: React.FC = () => {
                   <Lock className="h-5 w-5" />
                   {t('customScanners.premiumFeatureTitle')}
                 </h3>
-                <p className="text-gray-600">{t('customScanners.premiumFeatureSubtitle')}</p>
+                <p className="text-muted-foreground">{t('customScanners.premiumFeatureSubtitle')}</p>
               </div>
 
               <Button
@@ -406,7 +409,7 @@ const CustomScannersManagement: React.FC = () => {
                 {t('customScanners.upgradeNow')}
               </Button>
 
-              <div className="max-w-2xl mx-auto p-6 bg-gray-50 rounded-lg text-left">
+              <div className="max-w-2xl mx-auto p-6 bg-secondary rounded-lg text-left">
                 <h4 className="font-semibold mb-4 flex items-center gap-2">
                   <Crown className="h-5 w-5 text-yellow-500" />
                   {t('customScanners.benefitsTitle')}
@@ -418,11 +421,11 @@ const CustomScannersManagement: React.FC = () => {
                   <li>{t('customScanners.feature4')}</li>
                   <li>{t('customScanners.feature5')}</li>
                 </ul>
-                <div className="mt-6 p-4 bg-white rounded-lg border">
+                <div className="mt-6 p-4 bg-card rounded-lg border">
                   <p className="font-semibold text-base mb-2">
                     {t('customScanners.pricingInfo')}
                   </p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-muted-foreground">
                     {t('customScanners.pricingDetails')}
                   </p>
                 </div>
@@ -437,25 +440,25 @@ const CustomScannersManagement: React.FC = () => {
   return (
     <div className="space-y-4">
       {features.showSubscription() && !premiumBannerDismissed && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg relative">
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg relative">
           <button
             onClick={handleDismissPremiumBanner}
-            className="absolute top-2 right-2 p-1 text-green-600 hover:text-green-800 hover:bg-green-100 rounded"
+            className="absolute top-2 right-2 p-1 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded"
             title={t('common.close')}
           >
             <X className="h-4 w-4" />
           </button>
-          <div className="flex items-center gap-2 text-green-900 font-semibold mb-1 pr-6">
+          <div className="flex items-center gap-2 text-emerald-200 font-semibold mb-1 pr-6">
             <Crown className="h-5 w-5 text-yellow-500" />
             <span>{t('customScanners.premiumActiveMessage')}</span>
           </div>
-          <p className="text-sm text-green-800 pr-6">{t('customScanners.premiumActiveDesc')}</p>
+          <p className="text-sm text-emerald-300 pr-6">{t('customScanners.premiumActiveDesc')}</p>
         </div>
       )}
 
-      <Collapsible open={guideOpen} onOpenChange={setGuideOpen} className="bg-gray-50 rounded-lg border">
+      <Collapsible open={guideOpen} onOpenChange={setGuideOpen} className="bg-secondary rounded-lg border">
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="w-full flex justify-between p-4 hover:bg-gray-100">
+          <Button variant="ghost" className="w-full flex justify-between p-4 hover:bg-card/5">
             <span className="font-semibold">{t('customScanners.usageGuideTitle')}</span>
             <ChevronDown className={`h-5 w-5 transition-transform ${guideOpen ? 'rotate-180' : ''}`} />
           </Button>
@@ -463,7 +466,7 @@ const CustomScannersManagement: React.FC = () => {
         <CollapsibleContent className="px-4 pb-4 space-y-4">
           <div>
             <p className="font-semibold mb-2">{t('customScanners.whatIsCustomScanner')}</p>
-            <p className="text-sm text-gray-700 mb-4">
+            <p className="text-sm text-slate-300 mb-4">
               {t('customScanners.whatIsCustomScannerDesc')}
             </p>
           </div>
@@ -472,8 +475,8 @@ const CustomScannersManagement: React.FC = () => {
             <p className="font-semibold mb-3">{t('customScanners.examplesTitle')}</p>
 
             <div className="space-y-3">
-              <div className="p-4 bg-white border rounded-lg">
-                <h4 className="font-semibold text-blue-600 mb-2">
+              <div className="p-4 bg-card border rounded-lg">
+                <h4 className="font-semibold text-sky-400 mb-2">
                   {t('customScanners.example1Title')}
                 </h4>
                 <p className="font-semibold mb-2">{t('customScanners.example1Name')}</p>
@@ -483,11 +486,11 @@ const CustomScannersManagement: React.FC = () => {
                 <p className="text-sm mb-1">
                   <strong>{t('customScanners.scannerDefinition')}:</strong> {t('customScanners.example1Definition')}
                 </p>
-                <p className="text-sm text-gray-600">{t('customScanners.example1Desc')}</p>
+                <p className="text-sm text-muted-foreground">{t('customScanners.example1Desc')}</p>
               </div>
 
-              <div className="p-4 bg-white border rounded-lg">
-                <h4 className="font-semibold text-blue-600 mb-2">
+              <div className="p-4 bg-card border rounded-lg">
+                <h4 className="font-semibold text-sky-400 mb-2">
                   {t('customScanners.example2Title')}
                 </h4>
                 <p className="font-semibold mb-2">{t('customScanners.example2Name')}</p>
@@ -497,11 +500,11 @@ const CustomScannersManagement: React.FC = () => {
                 <p className="text-sm mb-1">
                   <strong>{t('customScanners.scannerDefinition')}:</strong> {t('customScanners.example2Definition')}
                 </p>
-                <p className="text-sm text-gray-600">{t('customScanners.example2Desc')}</p>
+                <p className="text-sm text-muted-foreground">{t('customScanners.example2Desc')}</p>
               </div>
 
-              <div className="p-4 bg-white border rounded-lg">
-                <h4 className="font-semibold text-red-600 mb-2">
+              <div className="p-4 bg-card border rounded-lg">
+                <h4 className="font-semibold text-red-400 mb-2">
                   {t('customScanners.example3Title')}
                 </h4>
                 <p className="font-semibold mb-2">{t('customScanners.example3Name')}</p>
@@ -511,7 +514,7 @@ const CustomScannersManagement: React.FC = () => {
                 <p className="text-sm mb-1">
                   <strong>{t('customScanners.scannerDefinition')}:</strong> {t('customScanners.example3Definition')}
                 </p>
-                <p className="text-sm text-gray-600">{t('customScanners.example3Desc')}</p>
+                <p className="text-sm text-muted-foreground">{t('customScanners.example3Desc')}</p>
               </div>
             </div>
           </div>
@@ -526,10 +529,12 @@ const CustomScannersManagement: React.FC = () => {
               <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
               {t('common.refresh')}
             </Button>
-            <Button onClick={handleCreate}>
-              <Plus className="h-4 w-4 mr-1" />
-              {t('customScanners.createScanner')}
-            </Button>
+            {canEdit && (
+              <Button onClick={handleCreate}>
+                <Plus className="h-4 w-4 mr-1" />
+                {t('customScanners.createScanner')}
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -571,19 +576,19 @@ const CustomScannersManagement: React.FC = () => {
                         <SelectItem value="genai">
                           <div>
                             <div className="font-semibold">{t('customScanners.typeGenai')}</div>
-                            <div className="text-xs text-gray-500">{t('customScanners.typeGenaiDesc')}</div>
+                            <div className="text-xs text-muted-foreground">{t('customScanners.typeGenaiDesc')}</div>
                           </div>
                         </SelectItem>
                         <SelectItem value="regex">
                           <div>
                             <div className="font-semibold">{t('customScanners.typeRegex')}</div>
-                            <div className="text-xs text-gray-500">{t('customScanners.typeRegexDesc')}</div>
+                            <div className="text-xs text-muted-foreground">{t('customScanners.typeRegexDesc')}</div>
                           </div>
                         </SelectItem>
                         <SelectItem value="keyword">
                           <div>
                             <div className="font-semibold">{t('customScanners.typeKeyword')}</div>
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs text-muted-foreground">
                               {t('customScanners.typeKeywordDesc')} {t('customScanners.typeKeywordFormat')}
                             </div>
                           </div>
@@ -678,8 +683,8 @@ const CustomScannersManagement: React.FC = () => {
               />
 
               {!editingScanner && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-900">{t('customScanners.autoTag')}</p>
+                <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+                  <p className="text-sm text-sky-200">{t('customScanners.autoTag')}</p>
                 </div>
               )}
 

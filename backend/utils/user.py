@@ -187,14 +187,15 @@ def verify_user_email(db: Session, email: str, verification_code: str) -> bool:
             print(f"Failed to create subscription for tenant {tenant.email}: {e}")
             # Not affect tenant activation process, just record error
 
-        # Create default rate limit for new tenant (use configured default)
+        # Create default rate limit for new tenant (skip in enterprise mode)
         try:
             from config import settings
-            from services.rate_limiter import RateLimitService
-            rate_limit_service = RateLimitService(db)
-            default_rps = settings.default_rate_limit_rps
-            rate_limit_service.set_user_rate_limit(str(tenant.id), default_rps)
-            print(f"Created rate limit ({default_rps} RPS) for tenant {tenant.email}")
+            if not settings.is_enterprise_mode:
+                from services.rate_limiter import RateLimitService
+                rate_limit_service = RateLimitService(db)
+                default_rps = settings.default_rate_limit_rps
+                rate_limit_service.set_user_rate_limit(str(tenant.id), default_rps)
+                print(f"Created rate limit ({default_rps} RPS) for tenant {tenant.email}")
         except Exception as e:
             print(f"Failed to create rate limit for tenant {tenant.email}: {e}")
             # Not affect tenant activation process, just record error
@@ -366,7 +367,7 @@ def emergency_clear_rate_limit(db: Session, email: str = None, ip_address: str =
         return 0
 
 
-def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, uuid.UUID], external_id: str) -> Optional[dict]:
+def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, uuid.UUID], external_id: str, workspace_external_name: Optional[str] = None) -> Optional[dict]:
     """
     Get or create an application by external ID (for third-party gateway auto-discovery).
 
@@ -377,12 +378,13 @@ def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, 
         db: Database session
         tenant_id: Tenant UUID
         external_id: External application identifier (e.g., gateway consumer name like "tester1")
+        workspace_external_name: Optional workspace name for auto-assignment (e.g., from X-OG-Workspace-ID header)
 
     Returns:
         dict with keys: application_id, application_name, is_new
         None if creation failed
     """
-    from database.models import Application
+    from database.models import Application, Workspace
 
     if isinstance(tenant_id, str):
         try:
@@ -400,6 +402,9 @@ def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, 
 
     if app:
         logger.debug(f"Found existing application for external_id '{external_id}': app_id={app.id}")
+        # Assign to workspace if specified and not already assigned
+        if workspace_external_name and not app.workspace_id:
+            _assign_app_to_workspace(db, app, tenant_id, workspace_external_name)
         return {
             "application_id": str(app.id),
             "application_name": app.name,
@@ -428,6 +433,10 @@ def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, 
             logger.warning(f"Failed to initialize configs for auto-discovered app '{external_id}': {e}")
             # Continue anyway - the app is created
 
+        # Assign to workspace if specified
+        if workspace_external_name:
+            _assign_app_to_workspace(db, new_app, tenant_id, workspace_external_name)
+
         db.commit()
         logger.info(f"Auto-created application '{external_id}' for tenant {tenant_id}: app_id={new_app.id}")
 
@@ -440,3 +449,29 @@ def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, 
         logger.error(f"Failed to auto-create application for external_id '{external_id}': {e}")
         db.rollback()
         return None
+
+
+def _assign_app_to_workspace(db: Session, app, tenant_id, workspace_name: str):
+    """Find or create a workspace by name and assign the application to it."""
+    from database.models import Workspace
+
+    try:
+        workspace = db.query(Workspace).filter(
+            Workspace.tenant_id == tenant_id,
+            Workspace.name == workspace_name,
+        ).first()
+
+        if not workspace:
+            workspace = Workspace(
+                tenant_id=tenant_id,
+                name=workspace_name,
+                description=f"Auto-discovered from gateway: {workspace_name}",
+            )
+            db.add(workspace)
+            db.flush()
+            logger.info(f"Auto-created workspace '{workspace_name}' for tenant {tenant_id}")
+
+        app.workspace_id = workspace.id
+        logger.debug(f"Assigned app '{app.name}' to workspace '{workspace_name}'")
+    except Exception as e:
+        logger.warning(f"Failed to assign app to workspace '{workspace_name}': {e}")

@@ -7,7 +7,89 @@ All notable changes to OpenGuardrails platform are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [5.3.0] - 2026-03-25
+
+### 🏢 Workspaces & Enterprise Team Management
+
+This major release introduces **Workspaces**, **Team RBAC**, and **Enterprise Private Deployment Mode**, transforming OpenGuardrails from a single-user tool into a multi-team enterprise platform.
+
+#### Added
+
+##### 🗂️ **Workspace System**
+
+- **Workspace management**: Create, edit, delete workspaces to logically group applications
+- **Application assignment**: Assign applications to workspaces, unassign as needed
+- **Per-workspace guardrail configuration**: Each workspace can have its own guardrail settings (risk types, keywords, blacklist/whitelist, ban policy, data masking policy, scanners)
+- **Configuration inheritance chain**: Application → Workspace → Tenant (global). App-level config takes priority, then workspace, then tenant defaults
+- **Workspace config UI**: Settings icon per workspace row opens a config panel with tabs for each config type
+- **Online Test workspace selector**: Test guardrail detection with different workspace configurations or global config; dedicated "Online Test" application auto-created for clean log attribution
+
+##### 👥 **Team RBAC (Role-Based Access Control)**
+
+- **Three roles**: Owner (tenant creator), Admin (full edit + member management), Member (read-only)
+- **Email invitation flow**: Invite team members via email with configurable role
+- **Middleware-level enforcement**: `RoleCheckMiddleware` blocks write operations for members on all config endpoints
+- **Frontend permission controls**: `useCanEdit()` hook applied across ~18 config pages to conditionally show edit controls
+- **JWT role propagation**: `member_role` field in JWT token, propagated through `AuthContextMiddleware`
+
+##### 🏗️ **Enterprise Private Deployment Mode**
+
+- **`DEPLOYMENT_MODE=enterprise`** (default): Disables self-registration; super admin manages users directly via team system
+- **Direct user creation**: `POST /api/v1/team/members` bypasses email verification
+- **Rate limiting disabled**: No per-tenant RPS limits in enterprise mode
+- **Frontend adjustments**: Register page, verify link, and rate limit management hidden in enterprise mode
+- **SaaS mode**: `DEPLOYMENT_MODE=saas` retains all original multi-tenant behavior
+
+##### 📡 **Syslog Forwarding**
+
+- **Real-time log forwarding**: Detection results forwarded to external SIEM/syslog servers
+- **Configurable**: `SYSLOG_ENABLED`, `SYSLOG_HOST`, `SYSLOG_PORT`, `SYSLOG_PROTOCOL` (TCP/UDP)
+- **Best-effort delivery**: Non-blocking, won't affect detection performance
+
+##### 🔗 **Gateway Connections Management**
+
+- **Dedicated connections router**: CRUD operations for gateway connection configurations
+- **Connection testing**: Verify gateway connectivity before saving
+- **Workspace association**: Link connections to specific workspaces
+
+#### Changed
+
+##### 🎨 **Frontend Redesign**
+
+- **Dark theme**: Navy-toned dark theme across all pages (Login, Register, Dashboard, Config, etc.)
+- **Unified sidebar navigation**: Redesigned layout with collapsible sidebar, workspace-centric navigation
+- **Guardrails rename**: "Official Scanners" → "OG Guardrails", "Custom Scanners" → "Custom Guardrails"
+- **Data Masking rename**: "Data Security" / "Data Leakage" → "Data Masking" throughout UI and docs
+- **Merged guardrails page**: OG Guardrails + Custom Guardrails merged into single `/config/guardrails` page
+- **Global-only protection config**: Config API paths no longer send `X-Application-ID` header; config operates at tenant (global) or workspace level only
+- **Improved Dashboard**: Redesigned statistics cards and charts
+- **Enhanced Results page**: Added workspace name display, improved filtering
+
+##### 🔧 **Backend Improvements**
+
+- **Guardrail name rename**: Migration to rename `scanner_name` → `guardrail_name` across tables
+- **Rebuilt built-in entity types**: Migration to rebuild data masking entity types with improved defaults
+- **Workspace owner tracking**: Migration to add owner field to workspaces
+- **Enhanced keyword cache**: Supports workspace-level keyword lists with app→workspace mapping
+- **Improved detection service**: Better tool call handling in `StreamChunkDetector`, preserved system/tool messages in truncation logic
+- **Enhanced message model**: Support for tool role and nullable content fields
+
+##### 🔌 **Integration Updates**
+
+- **og-connector-higress-go**: Updated WASM plugin with latest detection improvements; Makefile now auto-pushes `latest` tag alongside version tag
+- **og-connector-higress (Rust)**: Removed deprecated Rust-based connector (replaced by Go version)
+- **og-connector-dify**: Updated for latest API compatibility
+- **og-connector-litellm**: Updated for latest API compatibility
+
+#### Database Migrations
+
+- `063_add_workspaces.sql` - Create workspaces table
+- `065_add_workspace_guardrail_configs.sql` - Add workspace_id to config tables with inheritance support
+- `066_add_gateway_connections.sql` - Create gateway connections table
+- `067_add_team_members.sql` - Create tenant_members and tenant_invitations tables; auto-create owner memberships
+- `068_rebuild_builtin_entity_types.sql` - Rebuild built-in data masking entity types
+- `069_rename_scanner_name_to_guardrail_name.sql` - Rename scanner_name columns to guardrail_name
+- `070_add_workspace_owner.sql` - Add owner field to workspaces table
 
 ---
 
@@ -298,11 +380,11 @@ Potential improvements in future releases:
 
 ### 🚀 Major Update: Automatic Private Model Switching for Enterprise Data Protection
 
-This release introduces **Automatic Private Model Switching** — a major enhancement to the Data Leakage Prevention (DLP) system that enables enterprise AI agents to seamlessly protect sensitive data **without affecting user experience**.
+This release introduces **Automatic Private Model Switching** — a major enhancement to the Data Maskingsystem that enables enterprise AI agents to seamlessly protect sensitive data **without affecting user experience**.
 
 #### 🎯 Key Value Proposition
 
-**Problem Solved**: Enterprise AI applications often face a dilemma between data security and user experience. Blocking requests with sensitive data disrupts workflows, while allowing them risks data leakage to external AI providers.
+**Problem Solved**: Enterprise AI applications often face a dilemma between data security and user experience. Blocking requests with sensitive data disrupts workflows, while allowing them risks data masking to external AI providers.
 
 **Solution**: Automatic Private Model Switching intelligently routes requests containing sensitive data to private/on-premise models, ensuring:
 - ✅ **Zero User Disruption**: Users continue their workflow seamlessly
@@ -350,7 +432,7 @@ When sensitive data is detected, the system can automatically redirect requests 
 
 ##### 📊 **Enhanced Policy Configuration**
 
-**Per-Application Data Leakage Policies**:
+**Per-Application Data Masking Policies**:
 ```python
 # Example: Configure different actions for different risk levels
 {
@@ -453,9 +535,9 @@ docker exec openguardrails-postgres psql -U openguardrails -d openguardrails \
 
 ## [5.0.8] - 2026-01-05
 
-### 🛡️ Enterprise Data Leakage Prevention System
+### 🛡️ Enterprise Data Masking System
 
-This release introduces a comprehensive **Data Leakage Prevention (DLP) System** with intelligent content processing, multi-layer protection, and flexible disposal strategies for enterprise data security.
+This release introduces a comprehensive **Data MaskingSystem** with intelligent content processing, multi-layer protection, and flexible disposal strategies for enterprise data security.
 
 #### 🎯 What's New
 
@@ -523,7 +605,7 @@ This release introduces a comprehensive **Data Leakage Prevention (DLP) System**
 
 **Risk Aggregation:** Highest risk from all segments wins
 
-##### 📊 **Data Leakage Disposal Service**
+##### 📊 **Data Masking Disposal Service**
 
 **Four Disposal Actions:**
 

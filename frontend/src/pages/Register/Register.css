@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: hsl(225 35% 7%);
   padding: 20px;
 }
 
@@ -15,9 +15,10 @@
 .register-card {
   padding: 40px;
   border-radius: 12px;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
-  border: none;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
+  background: hsl(225 30% 10%);
 }
 
 .register-header {
@@ -26,14 +27,14 @@
 }
 
 .register-title {
-  color: #1f2937;
+  color: #e2e8f0;
   font-weight: 600;
   margin-bottom: 8px !important;
 }
 
 .register-subtitle {
   font-size: 16px;
-  color: #6b7280;
+  color: #94a3b8;
 }
 
 .register-steps {
@@ -60,8 +61,8 @@
 }
 
 .register-steps .ant-steps-item-process .ant-steps-item-icon {
-  background-color: #667eea;
-  border-color: #667eea;
+  background-color: #0ea5e9;
+  border-color: #0ea5e9;
 }
 
 .register-steps .ant-steps-item-finish .ant-steps-item-icon {
@@ -78,36 +79,35 @@
   height: 48px;
   font-size: 16px;
   font-weight: 500;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
   border: none;
   border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 2px 4px rgba(14, 165, 233, 0.3);
   transition: all 0.3s ease;
 }
 
 .register-button:hover,
 .verify-button:hover {
-  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.6);
+  background: linear-gradient(135deg, #0284c7 0%, #4f46e5 100%);
+  box-shadow: 0 4px 8px rgba(14, 165, 233, 0.4);
   transform: translateY(-1px);
 }
 
 .register-footer {
   text-align: center;
   padding-top: 16px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .register-footer a {
-  color: #667eea;
+  color: #0ea5e9;
   font-weight: 500;
 }
 
 .register-footer a:hover {
-  color: #5a67d8;
+  color: #38bdf8;
 }
 
-/* 响应式设计 */
 @media (max-width: 576px) {
   .register-container {
     padding: 10px;

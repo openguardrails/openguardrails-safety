@@ -2,7 +2,7 @@
 Format Detection Service
 
 Detects content format (JSON, YAML, CSV, Markdown, Plain Text) and extracts
-structural metadata to optimize data leakage detection.
+structural metadata to optimize data masking detection.
 """
 
 import json

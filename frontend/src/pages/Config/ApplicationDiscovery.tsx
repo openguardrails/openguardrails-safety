@@ -108,14 +108,14 @@ const ApplicationDiscovery: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t('applicationManagement.discovery.title')}</h1>
-        <p className="text-slate-600 mt-1">{t('applicationManagement.discovery.description')}</p>
+        <h1 className="text-2xl font-bold text-foreground">{t('applicationManagement.discovery.title')}</h1>
+        <p className="text-muted-foreground mt-1">{t('applicationManagement.discovery.description')}</p>
       </div>
 
       {/* Overview Alert */}
-      <Alert className="bg-blue-50 border-blue-200">
-        <Info className="h-5 w-5 text-blue-600" />
-        <AlertDescription className="text-blue-800">
+      <Alert className="bg-sky-500/10 border-sky-500/20">
+        <Info className="h-5 w-5 text-sky-400" />
+        <AlertDescription className="text-sky-300">
           {t('applicationManagement.discovery.overview')}
         </AlertDescription>
       </Alert>
@@ -136,7 +136,7 @@ const ApplicationDiscovery: React.FC = () => {
               size="sm"
               onClick={handleRegenerateApiKey}
               disabled={regenerating}
-              className="text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+              className="text-red-400 hover:text-red-300 border-red-500/20 hover:bg-red-500/10"
             >
               <RotateCcw className={`h-4 w-4 mr-2 ${regenerating ? 'animate-spin' : ''}`} />
               {t('applicationManagement.discovery.regenerateApiKey')}
@@ -145,13 +145,13 @@ const ApplicationDiscovery: React.FC = () => {
         </CardHeader>
         <CardContent>
           {newApiKey && (
-            <Alert className="mb-4 bg-green-50 border-green-200">
-              <AlertDescription className="text-green-800">
+            <Alert className="mb-4 bg-emerald-500/10 border-emerald-500/20">
+              <AlertDescription className="text-emerald-300">
                 {t('applicationManagement.discovery.newApiKeyWarning')}
               </AlertDescription>
             </Alert>
           )}
-          <div className="flex items-center gap-2 bg-slate-100 rounded-md p-3 font-mono text-sm">
+          <div className="flex items-center gap-2 bg-muted rounded-md p-3 font-mono text-sm">
             <code className="flex-1 break-all">{showFullKey ? displayedApiKey : maskedApiKey || t('common.loading')}</code>
             <Button
               variant="ghost"
@@ -191,18 +191,18 @@ const ApplicationDiscovery: React.FC = () => {
               {recentDiscoveredApps.map((app) => (
                 <div
                   key={app.id}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-md"
+                  className="flex items-center justify-between p-3 bg-secondary rounded-md"
                 >
                   <div className="flex items-center gap-3">
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                    <Badge variant="secondary" className="bg-sky-500/15 text-sky-400">
                       {t('applicationManagement.sourceAutoDiscovery')}
                     </Badge>
                     <span className="font-medium">{app.name}</span>
                     {app.external_id && (
-                      <span className="text-xs text-slate-500">({app.external_id})</span>
+                      <span className="text-xs text-muted-foreground">({app.external_id})</span>
                     )}
                   </div>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     {new Date(app.created_at).toLocaleDateString()}
                   </span>
                 </div>
@@ -220,7 +220,7 @@ const ApplicationDiscovery: React.FC = () => {
         </Button>
         <Button
           variant="link"
-          className="text-blue-600"
+          className="text-sky-400"
           onClick={() =>
             window.open(
               'https://github.com/openguardrails/openguardrails/blob/main/docs/THIRD_PARTY_GATEWAY_INTEGRATION.md',

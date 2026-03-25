@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { Upload, AlertTriangle, AlertCircle, Info } from 'lucide-react'
+import { useCanEdit } from '../../hooks/useCanEdit'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -27,7 +28,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { dataLeakagePolicyApi } from '../../services/api'
-import { useApplication } from '../../contexts/ApplicationContext'
 import { useAuth } from '../../contexts/AuthContext'
 
 const inputPolicySchema = z.object({
@@ -74,9 +74,9 @@ interface ApplicationPolicy {
 
 const InputPolicyTab: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [loading, setLoading] = useState(false)
   const [policy, setPolicy] = useState<ApplicationPolicy | null>(null)
-  const { currentApplicationId } = useApplication()
   const { onUserSwitch } = useAuth()
 
   const form = useForm<InputPolicyFormData>({
@@ -93,11 +93,9 @@ const InputPolicyTab: React.FC = () => {
 
   // Fetch policy data
   const fetchPolicy = async () => {
-    if (!currentApplicationId) return
-
     setLoading(true)
     try {
-      const data = await dataLeakagePolicyApi.getPolicy(currentApplicationId)
+      const data = await dataLeakagePolicyApi.getPolicy()
       setPolicy(data)
       form.reset({
         input_high_risk_action: data.input_high_risk_action_override || data.input_high_risk_action || 'block',
@@ -117,7 +115,7 @@ const InputPolicyTab: React.FC = () => {
 
   useEffect(() => {
     fetchPolicy()
-  }, [currentApplicationId])
+  }, [])
 
   // Listen to user switch event
   useEffect(() => {
@@ -129,14 +127,9 @@ const InputPolicyTab: React.FC = () => {
 
   // Save policy
   const onSubmit = async (values: InputPolicyFormData) => {
-    if (!currentApplicationId) {
-      toast.error('No application selected')
-      return
-    }
-
     setLoading(true)
     try {
-      await dataLeakagePolicyApi.updatePolicy(currentApplicationId, {
+      await dataLeakagePolicyApi.updatePolicy({
         input_high_risk_action: values.input_high_risk_action,
         input_medium_risk_action: values.input_medium_risk_action,
         input_low_risk_action: values.input_low_risk_action,
@@ -394,7 +387,7 @@ const InputPolicyTab: React.FC = () => {
                       </SelectContent>
                     </Select>
                     {!hasPrivateModels && (
-                      <FormDescription className="text-orange-600">
+                      <FormDescription className="text-orange-400">
                         {t('dataLeakagePolicy.pleaseConfigurePrivateModelInGateway')}
                       </FormDescription>
                     )}
@@ -460,7 +453,7 @@ const InputPolicyTab: React.FC = () => {
 
           {/* Submit Button */}
           <div className="flex justify-end">
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || !canEdit}>
               {loading ? t('common.loading') : t('dataLeakagePolicy.savePolicy')}
             </Button>
           </div>

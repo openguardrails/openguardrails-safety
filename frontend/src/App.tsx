@@ -16,12 +16,15 @@ import Config from './pages/Config/Config';
 import AdminPanel from './pages/Admin/AdminPanel';
 import Account from './pages/Account/Account';
 import OnlineTest from './pages/OnlineTest/OnlineTest';
-import { LLMProviders, SecurityPolicy, ModelRoutes } from './pages/SecurityGateway';
+import { SecurityPolicy, ProvidersAndRoutes } from './pages/SecurityGateway';
+import GatewayConnection from './pages/Connection/GatewayConnection';
 import Documentation from './pages/Documentation/Documentation';
 import Subscription from './pages/Billing/Subscription';
 import ApplicationManagement from './pages/Config/ApplicationManagement';
-import ApplicationDiscovery from './pages/Config/ApplicationDiscovery';
+import Workspaces from './pages/Config/Workspaces';
 import { AccessControl } from './pages/AccessControl';
+import TeamManagement from './pages/Team/TeamManagement';
+import AcceptInvitation from './pages/Auth/AcceptInvitation';
 import { initSystemConfig, features } from './config';
 
 function App() {
@@ -51,10 +54,15 @@ function App() {
     <ApplicationProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/verify" element={<Verify />} />
+        {features.showRegistration() && (
+          <>
+            <Route path="/register" element={<Register />} />
+            <Route path="/verify" element={<Verify />} />
+          </>
+        )}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/accept-invite" element={<AcceptInvitation />} />
         <Route path="/*" element={
           <ProtectedRoute>
             <Layout>
@@ -66,12 +74,14 @@ function App() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/applications" element={<ApplicationManagement />} />
               <Route path="/applications/list" element={<ApplicationManagement />} />
-              <Route path="/applications/discovery" element={<ApplicationDiscovery />} />
-              <Route path="/security-gateway/providers" element={<LLMProviders />} />
+              <Route path="/applications/workspaces" element={<Workspaces />} />
+              <Route path="/connection/models" element={<ProvidersAndRoutes />} />
+              <Route path="/connection/gateway" element={<GatewayConnection />} />
+              <Route path="/security-gateway/providers" element={<ProvidersAndRoutes />} />
               <Route path="/security-gateway/policy" element={<SecurityPolicy />} />
-              <Route path="/security-gateway/model-routes" element={<ModelRoutes />} />
               <Route path="/config/*" element={<Config />} />
               <Route path="/access-control/*" element={<AccessControl />} />
+              <Route path="/team" element={<TeamManagement />} />
               <Route path="/admin/*" element={<AdminPanel />} />
               <Route path="/account" element={<Account />} />
               {features.showSubscription() && (

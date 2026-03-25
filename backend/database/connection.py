@@ -239,6 +239,24 @@ async def init_db(minimal=False):
                     import traceback
                     traceback.print_exc()
 
+            # Ensure global data security entity types exist (language-aware)
+            # These are re-created after migration 068 deletes old ones
+            if not minimal:
+                from services.data_security_service import create_global_entity_types
+                entity_db = AdminSessionLocal()
+                try:
+                    admin_tenant = entity_db.execute(
+                        text("SELECT id FROM tenants WHERE is_super_admin = true LIMIT 1")
+                    ).fetchone()
+                    if admin_tenant:
+                        created = create_global_entity_types(entity_db, str(admin_tenant[0]))
+                        if created > 0:
+                            logger.info(f"Created {created} global data security entity types")
+                except Exception as e:
+                    logger.error(f"Failed to ensure global entity types: {e}")
+                finally:
+                    entity_db.close()
+
             # Load built-in scanner packages AFTER migrations have run
             # This ensures columns like applications.source exist before being queried
             if not minimal:

@@ -52,8 +52,8 @@ const LanguageSwitcher: React.FC = () => {
 
   return (
     <Select value={i18n.language} onValueChange={handleLanguageChange} disabled={loading}>
-      <SelectTrigger className="w-full h-9 text-sm border-slate-200 focus:ring-blue-500">
-        <Languages className="h-4 w-4 mr-2 text-slate-500" />
+      <SelectTrigger className="w-full h-9 text-sm border-border focus:ring-blue-500">
+        <Languages className="h-4 w-4 mr-2 text-muted-foreground" />
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="min-w-[140px]">

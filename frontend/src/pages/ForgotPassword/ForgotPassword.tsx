@@ -61,12 +61,12 @@ const ForgotPassword: React.FC = () => {
 
   if (emailSent) {
     return (
-      <div className="min-h-screen flex bg-slate-50">
+      <div className="min-h-screen flex bg-secondary">
         {/* Left side - Branding */}
         <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-12 flex-col justify-between">
           <div>
             <div className="flex items-center gap-3 mb-8">
-              <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-white rounded-lg p-2" />
+              <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-card rounded-lg p-2" />
               <h1 className="text-2xl font-bold text-white">OpenGuardrails</h1>
             </div>
             <h2 className="text-4xl font-bold text-white mb-4">
@@ -86,18 +86,18 @@ const ForgotPassword: React.FC = () => {
           <div className="w-full max-w-md">
             <Card className="border shadow-sm">
               <CardHeader className="space-y-1 pb-6">
-                <h1 className="text-2xl font-bold text-slate-900">
+                <h1 className="text-2xl font-bold text-foreground">
                   {t('forgotPassword.title')}
                 </h1>
-                <p className="text-slate-600 text-sm">
+                <p className="text-muted-foreground text-sm">
                   {t('forgotPassword.emailSent')}
                 </p>
               </CardHeader>
 
             <CardContent className="space-y-6">
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <AlertDescription className="ml-2 text-green-900">
+              <Alert className="border-emerald-500/20 bg-emerald-500/10">
+                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                <AlertDescription className="ml-2 text-emerald-200">
                   <p className="font-medium mb-2">{t('forgotPassword.emailSent')}</p>
                   <p className="text-sm">
                     {t('forgotPassword.emailSentDesc', { email: submittedEmail })}
@@ -118,7 +118,7 @@ const ForgotPassword: React.FC = () => {
             </Card>
 
             {/* Mobile Copyright */}
-            <p className="text-xs text-slate-500 text-center mt-6 lg:hidden">
+            <p className="text-xs text-muted-foreground text-center mt-6 lg:hidden">
               {t('forgotPassword.copyright')}
             </p>
           </div>
@@ -135,12 +135,12 @@ const ForgotPassword: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-secondary">
       {/* Left side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-12 flex-col justify-between">
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-white rounded-lg p-2" />
+            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-card rounded-lg p-2" />
             <h1 className="text-2xl font-bold text-white">OpenGuardrails</h1>
           </div>
           <h2 className="text-4xl font-bold text-white mb-4">
@@ -160,10 +160,10 @@ const ForgotPassword: React.FC = () => {
         <div className="w-full max-w-md">
           <Card className="border shadow-sm">
             <CardHeader className="space-y-1 pb-6">
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-foreground">
                 {t('forgotPassword.title')}
               </h1>
-              <p className="text-slate-600 text-sm">
+              <p className="text-muted-foreground text-sm">
                 {t('forgotPassword.subtitle')}
               </p>
             </CardHeader>
@@ -179,7 +179,7 @@ const ForgotPassword: React.FC = () => {
                       <FormLabel>{t('forgotPassword.emailPlaceholder')}</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                           <Input
                             type="email"
                             placeholder={t('forgotPassword.emailPlaceholder')}
@@ -209,7 +209,7 @@ const ForgotPassword: React.FC = () => {
 
             <CardFooter className="flex-col pt-6">
               <div className="text-center text-sm">
-                <Link to="/login" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
+                <Link to="/login" className="text-sky-400 hover:text-sky-400 font-medium hover:underline">
                   {t('forgotPassword.backToLogin')}
                 </Link>
               </div>
@@ -217,7 +217,7 @@ const ForgotPassword: React.FC = () => {
           </Card>
 
           {/* Mobile Copyright */}
-          <p className="text-xs text-slate-500 text-center mt-6 lg:hidden">
+          <p className="text-xs text-muted-foreground text-center mt-6 lg:hidden">
             {t('forgotPassword.copyright')}
           </p>
         </div>

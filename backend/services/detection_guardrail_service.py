@@ -751,7 +751,7 @@ class DetectionGuardrailService:
             suggest_answer = await self._get_suggest_answer(all_categories, tenant_id, application_id, user_query, matched_scanners)
             logger.info(f"Using template answer for general risk: {general_risk_level}")
 
-        # Case 2: Only DLP risk (no general risk) - use data leakage template with entity types
+        # Case 2: Only DLP risk (no general risk) - use data masking template with entity types
         elif data_result.risk_level != "no_risk":
             # Get user's language preference for i18n
             user_language = 'en'  # Default to English
@@ -768,7 +768,7 @@ class DetectionGuardrailService:
                 except Exception as e:
                     logger.warning(f"Failed to get user language for DLP message: {e}")
 
-            # Use data leakage template with detected entity type names (not codes)
+            # Use data masking template with detected entity type names (not codes)
             from services.enhanced_template_service import enhanced_template_service
             # Extract entity_type_name from detected_entities for user-friendly display
             entity_type_names = []
@@ -783,7 +783,7 @@ class DetectionGuardrailService:
             if not entity_type_names:
                 entity_type_names = data_result.categories if data_result.categories else []
             suggest_answer = await enhanced_template_service.get_data_leakage_answer(entity_type_names, user_language, application_id)
-            logger.info(f"Using data leakage template for DLP risk: {data_result.risk_level}, entity_type_names={entity_type_names}")
+            logger.info(f"Using data masking template for DLP risk: {data_result.risk_level}, entity_type_names={entity_type_names}")
 
         # Determine action based on general risk level (DLP handling is done in proxy layer)
         if general_risk_level == "high_risk":
@@ -841,19 +841,19 @@ class DetectionGuardrailService:
         # Extract scanner information from matched scanners (use highest risk scanner)
         scanner_type = None
         scanner_identifier = None
-        scanner_name = None
-        
+        guardrail_name = None
+
         if matched_scanners and len(matched_scanners) > 0:
             # Use the first matched scanner (highest priority)
             first_scanner = matched_scanners[0]
             scanner_type = "official_scanner"  # All scanners in new system are official_scanner type
             scanner_identifier = first_scanner.scanner_tag  # Use scanner tag as identifier (e.g., S8, S100)
-            scanner_name = first_scanner.scanner_name  # Human-readable name for template variable
-            logger.info(f"Using scanner info for answer matching: type={scanner_type}, identifier={scanner_identifier}, name={scanner_name}")
+            guardrail_name = first_scanner.guardrail_name  # Human-readable name for template variable
+            logger.info(f"Using scanner info for answer matching: type={scanner_type}, identifier={scanner_identifier}, name={guardrail_name}")
         elif categories:
-            # Fallback: use first category as scanner_name
-            scanner_name = categories[0]
-            logger.debug(f"No matched_scanners provided, using first category as scanner_name: {scanner_name}")
+            # Fallback: use first category as guardrail_name
+            guardrail_name = categories[0]
+            logger.debug(f"No matched_scanners provided, using first category as guardrail_name: {guardrail_name}")
 
         return await enhanced_template_service.get_suggest_answer(
             categories,
@@ -863,7 +863,7 @@ class DetectionGuardrailService:
             user_language=user_language,
             scanner_type=scanner_type,
             scanner_identifier=scanner_identifier,
-            scanner_name=scanner_name
+            guardrail_name=guardrail_name
         )
 
 
@@ -940,7 +940,7 @@ class DetectionGuardrailService:
             user_language=user_language,
             scanner_type='blacklist',  # Scanner type
             scanner_identifier=list_name,  # Blacklist name
-            scanner_name=list_name  # For {scanner_name} variable replacement
+            guardrail_name=list_name  # For {guardrail_name} variable replacement
         )
 
         detection_data = {
@@ -1017,6 +1017,31 @@ class DetectionGuardrailService:
             suggest_answer=None
         )
     
+    @staticmethod
+    def _mask_sensitive_entities(text: str, detected_entities: List[Dict[str, Any]]) -> str:
+        """Replace detected sensitive entity texts with asterisks in the given text.
+
+        Uses text-based replacement (not position-based) so it works even when
+        the detected entities came from a different text extraction than the logged content.
+        Longer entity texts are replaced first to avoid partial replacements.
+        """
+        if not text or not detected_entities:
+            return text
+
+        # Collect unique entity texts, sort by length descending to replace longer matches first
+        entity_texts = sorted(
+            {entity['text'] for entity in detected_entities if entity.get('text')},
+            key=len,
+            reverse=True,
+        )
+
+        masked = text
+        for entity_text in entity_texts:
+            if entity_text and entity_text in masked:
+                masked = masked.replace(entity_text, '***')
+
+        return masked
+
     async def _log_detection_result(
         self, request_id: str, content: str, compliance_result: ComplianceResult,
         security_result: SecurityResult, data_result: DataSecurityResult,
@@ -1032,14 +1057,21 @@ class DetectionGuardrailService:
         # Clean NUL characters from content
         from utils.validators import clean_null_characters
 
+        # Mask sensitive entities detected by data masking before logging
+        logged_content = clean_null_characters(content) if content else content
+        logged_model_response = clean_null_characters(model_response) if model_response else model_response
+        if data_result.detected_entities:
+            logged_content = self._mask_sensitive_entities(logged_content, data_result.detected_entities)
+            logged_model_response = self._mask_sensitive_entities(logged_model_response, data_result.detected_entities)
+
         detection_data = {
             "request_id": request_id,
             "tenant_id": tenant_id,
             "application_id": application_id,
-            "content": clean_null_characters(content) if content else content,
+            "content": logged_content,
             "suggest_action": suggest_action,
             "suggest_answer": clean_null_characters(suggest_answer) if suggest_answer else suggest_answer,
-            "model_response": clean_null_characters(model_response) if model_response else model_response,
+            "model_response": logged_model_response,
             "ip_address": ip_address,
             "user_agent": clean_null_characters(user_agent) if user_agent else user_agent,
             "security_risk_level": security_result.risk_level,

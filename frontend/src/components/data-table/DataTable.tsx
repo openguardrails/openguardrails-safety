@@ -191,7 +191,7 @@ export function DataTable<TData, TValue>({
                       <TableCell
                         key={cell.id}
                         style={isLast ? stickyColumnStyle : undefined}
-                        className={isLast ? "!bg-white shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]" : ""}
+                        className={isLast ? "!bg-card shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]" : ""}
                       >
                         {flexRender(
                           cell.column.columnDef.cell,
@@ -217,7 +217,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {pagination && totalPages > 0 && (
-        <div className={fillHeight ? "flex-shrink-0 flex items-center justify-between px-2 py-4 border-t bg-white" : "flex items-center justify-between px-2"}>
+        <div className={fillHeight ? "flex-shrink-0 flex items-center justify-between px-2 py-4 border-t bg-card" : "flex items-center justify-between px-2"}>
           <div className="flex items-center space-x-2">
             <p className="text-sm font-medium">Rows per page</p>
             <Select

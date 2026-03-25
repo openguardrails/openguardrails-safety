@@ -143,7 +143,7 @@ const Subscription: React.FC = () => {
       <Card>
         <CardContent className="pt-6">
           <div className="flex items-center justify-center p-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400"></div>
           </div>
         </CardContent>
       </Card>
@@ -156,12 +156,12 @@ const Subscription: React.FC = () => {
         <CardContent className="pt-6">
           <div className="space-y-6">
             <div className="flex items-center gap-2">
-              <CreditCard className="h-6 w-6 text-blue-600" />
+              <CreditCard className="h-6 w-6 text-sky-400" />
               <h2 className="text-2xl font-bold">{t('billing.subscriptionManagement')}</h2>
             </div>
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="font-semibold text-yellow-900">{t('billing.subscriptionNotFound')}</p>
-              <p className="text-sm text-yellow-800 mt-2">
+            <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <p className="font-semibold text-yellow-200">{t('billing.subscriptionNotFound')}</p>
+              <p className="text-sm text-yellow-300 mt-2">
                 {t('billing.subscriptionNotFoundDesc', {
                   email: systemInfo?.support_email || 'support@openguardrails.com',
                 })}
@@ -193,7 +193,7 @@ const Subscription: React.FC = () => {
           <div className="space-y-6">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-2">
-                <CreditCard className="h-6 w-6 text-blue-600" />
+                <CreditCard className="h-6 w-6 text-sky-400" />
                 <h2 className="text-2xl font-bold">{t('billing.subscriptionManagement')}</h2>
               </div>
               <Button variant="outline" onClick={handleRefresh}>
@@ -204,7 +204,7 @@ const Subscription: React.FC = () => {
 
             {/* Current Plan */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-600">
+              <label className="text-sm font-medium text-muted-foreground">
                 {t('billing.currentPlan')}
               </label>
               <div>
@@ -233,10 +233,10 @@ const Subscription: React.FC = () => {
 
             {/* Upgrade Prompt with Tier Selection (Stripe users only) */}
             {!isAlipay && subscription.subscription_type === 'free' && paymentConfig && paymentConfig.tiers && paymentConfig.tiers.length > 0 && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-4">
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg space-y-4">
                 <div>
-                  <p className="font-semibold text-blue-900">{t('billing.upgradeAvailable')}</p>
-                  <p className="text-sm text-blue-800 mt-1">{t('billing.upgradeDescription')}</p>
+                  <p className="font-semibold text-sky-200">{t('billing.upgradeAvailable')}</p>
+                  <p className="text-sm text-sky-300 mt-1">{t('billing.upgradeDescription')}</p>
                 </div>
                 <TierSelector
                   tiers={paymentConfig.tiers}
@@ -254,10 +254,10 @@ const Subscription: React.FC = () => {
 
             {/* Fallback: single-tier upgrade for when tiers are not configured (Stripe users only) */}
             {!isAlipay && subscription.subscription_type === 'free' && paymentConfig && (!paymentConfig.tiers || paymentConfig.tiers.length === 0) && (
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="font-semibold text-blue-900">{t('billing.upgradeAvailable')}</p>
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+                <p className="font-semibold text-sky-200">{t('billing.upgradeAvailable')}</p>
                 <div className="mt-2 space-y-2">
-                  <p className="text-sm text-blue-800">{t('billing.upgradeDescription')}</p>
+                  <p className="text-sm text-sky-300">{t('billing.upgradeDescription')}</p>
                   <p className="font-semibold text-sm">
                     {t('billing.price')}:{' '}
                     {paymentService.formatPrice(
@@ -286,15 +286,15 @@ const Subscription: React.FC = () => {
             {/* Subscription Active Info (Stripe users only - no subscriptions for Alipay) */}
             {!isAlipay && subscription.subscription_type === 'subscribed' && subscriptionStatus && (
               <div className="space-y-4">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
                   <div className="flex items-start gap-3">
-                    <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                    <CheckCircle className="h-5 w-5 text-emerald-400 mt-0.5" />
                     <div className="flex-1 space-y-2">
-                      <p className="font-semibold text-green-900">
+                      <p className="font-semibold text-emerald-200">
                         {t('billing.subscriptionActive')}
                       </p>
                       {subscriptionStatus.expires_at && (
-                        <p className="text-sm text-green-800">
+                        <p className="text-sm text-emerald-300">
                           {subscriptionStatus.cancel_at_period_end
                             ? t('billing.expiresOn', {
                                 date: new Date(subscriptionStatus.expires_at).toLocaleDateString(),
@@ -356,18 +356,18 @@ const Subscription: React.FC = () => {
             {/* Statistics Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <p className="text-sm font-medium text-gray-600">{t('billing.currentUsage')}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('billing.currentUsage')}</p>
                 <p className="text-2xl font-bold mt-1">
                   {subscription.current_month_usage.toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-muted-foreground">
                   / {subscription.monthly_quota.toLocaleString()}
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">{t('billing.remaining')}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('billing.remaining')}</p>
                 <p
-                  className={`text-2xl font-bold mt-1 ${subscription.usage_percentage >= 90 ? 'text-red-600' : 'text-green-600'}`}
+                  className={`text-2xl font-bold mt-1 ${subscription.usage_percentage >= 90 ? 'text-red-400' : 'text-emerald-400'}`}
                 >
                   {Math.max(
                     0,
@@ -376,46 +376,46 @@ const Subscription: React.FC = () => {
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   {t('billing.usagePercentage')}
                 </p>
                 <p
                   className={`text-2xl font-bold mt-1 ${
                     subscription.usage_percentage >= 90
-                      ? 'text-red-600'
+                      ? 'text-red-400'
                       : subscription.usage_percentage >= 80
                         ? 'text-yellow-600'
-                        : 'text-green-600'
+                        : 'text-emerald-400'
                   }`}
                 >
                   {subscription.usage_percentage.toFixed(1)}%
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   {t('billing.daysUntilReset')}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <Calendar className="h-5 w-5 text-gray-400" />
+                  <Calendar className="h-5 w-5 text-slate-500" />
                   <p className="text-2xl font-bold">{daysUntilReset}</p>
-                  <span className="text-sm text-gray-500">{t('billing.days')}</span>
+                  <span className="text-sm text-muted-foreground">{t('billing.days')}</span>
                 </div>
               </div>
             </div>
 
             {/* Purchased Quota Status */}
             {subscription.purchased_quota > 0 && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-green-700">{t('billing.purchasedQuota')}</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
+                    <p className="text-sm font-medium text-emerald-400">{t('billing.purchasedQuota')}</p>
+                    <p className="text-2xl font-bold text-emerald-400 mt-1">
                       {subscription.purchased_quota.toLocaleString()} <span className="text-sm font-normal">{t('billing.calls')}</span>
                     </p>
                   </div>
                   {subscription.purchased_quota_expires_at && (
                     <div>
-                      <p className="text-sm font-medium text-green-700">{t('billing.quotaExpiresOn', {
+                      <p className="text-sm font-medium text-emerald-400">{t('billing.quotaExpiresOn', {
                         date: new Date(subscription.purchased_quota_expires_at).toLocaleDateString(),
                       })}</p>
                     </div>
@@ -426,9 +426,9 @@ const Subscription: React.FC = () => {
 
             {/* Usage Breakdown */}
             {subscription.usage_breakdown && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-secondary rounded-lg">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">
+                  <p className="text-sm font-medium text-muted-foreground">
                     {t('billing.guardrailsProxyCalls')}
                   </p>
                   <p className="text-xl font-bold mt-1">
@@ -436,7 +436,7 @@ const Subscription: React.FC = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-600">
+                  <p className="text-sm font-medium text-muted-foreground">
                     {t('billing.directModelAccessCalls')}
                   </p>
                   <p className="text-xl font-bold mt-1">
@@ -458,10 +458,10 @@ const Subscription: React.FC = () => {
                     ? '[&>div]:bg-red-500'
                     : subscription.usage_percentage >= 80
                       ? '[&>div]:bg-yellow-500'
-                      : '[&>div]:bg-blue-500'
+                      : '[&>div]:bg-sky-500'
                 }`}
               />
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-muted-foreground">
                 {subscription.current_month_usage.toLocaleString()} /{' '}
                 {subscription.monthly_quota.toLocaleString()} (
                 {subscription.usage_percentage.toFixed(1)}%)
@@ -469,27 +469,27 @@ const Subscription: React.FC = () => {
             </div>
 
             {/* Quota Reset Info */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
               <div className="space-y-2">
-                <div className="flex items-center gap-2 font-semibold text-blue-900">
+                <div className="flex items-center gap-2 font-semibold text-sky-200">
                   <Calendar className="h-4 w-4" />
                   {t('billing.quotaResetDate')}
                 </div>
-                <p className="text-sm text-blue-800">
+                <p className="text-sm text-sky-300">
                   {t('billing.quotaResetsOn', {
                     date: resetDate.toLocaleDateString(),
                     time: resetDate.toLocaleTimeString(),
                   })}
                 </p>
-                <p className="text-xs text-blue-700">{t('billing.quotaResetNote')}</p>
+                <p className="text-xs text-sky-400">{t('billing.quotaResetNote')}</p>
               </div>
             </div>
 
             {/* Warning Messages */}
             {subscription.usage_percentage >= 100 && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="font-semibold text-red-900">{t('billing.quotaExceeded')}</p>
-                <p className="text-sm text-red-800 mt-1">
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="font-semibold text-red-200">{t('billing.quotaExceeded')}</p>
+                <p className="text-sm text-red-300 mt-1">
                   {t('billing.quotaExceededDesc', {
                     date: resetDate.toLocaleDateString(),
                   })}
@@ -498,9 +498,9 @@ const Subscription: React.FC = () => {
             )}
 
             {subscription.usage_percentage >= 80 && subscription.usage_percentage < 100 && (
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="font-semibold text-yellow-900">{t('billing.quotaWarning')}</p>
-                <p className="text-sm text-yellow-800 mt-1">
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="font-semibold text-yellow-200">{t('billing.quotaWarning')}</p>
+                <p className="text-sm text-yellow-300 mt-1">
                   {t('billing.quotaWarningDesc', {
                     percentage: subscription.usage_percentage.toFixed(1),
                     email: systemInfo?.support_email || 'support@openguardrails.com',
@@ -521,25 +521,25 @@ const Subscription: React.FC = () => {
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <p className="text-sm font-medium text-gray-600">{t('billing.planType')}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('billing.planType')}</p>
                 <p className="font-semibold mt-1">{subscription.plan_name}</p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">{t('billing.monthlyQuota')}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('billing.monthlyQuota')}</p>
                 <p className="font-semibold mt-1">
                   {subscription.monthly_quota.toLocaleString()} {t('billing.calls')}
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">
+                <p className="text-sm font-medium text-muted-foreground">
                   {t('billing.subscriptionId')}
                 </p>
-                <p className="font-mono text-xs bg-gray-100 px-2 py-1 rounded mt-1 inline-block">
+                <p className="font-mono text-xs bg-muted px-2 py-1 rounded mt-1 inline-block">
                   {subscription.id}
                 </p>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">{t('billing.billingCycle')}</p>
+                <p className="text-sm font-medium text-muted-foreground">{t('billing.billingCycle')}</p>
                 <p className="font-semibold mt-1">{t('billing.monthly')}</p>
               </div>
             </div>
@@ -547,12 +547,12 @@ const Subscription: React.FC = () => {
             {!isAlipay && subscription.subscription_type === 'free' && paymentConfig && (
               <>
                 <Separator />
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
                   <div className="space-y-3">
-                    <p className="font-semibold text-yellow-900">
+                    <p className="font-semibold text-yellow-200">
                       {t('billing.upgradeToUnlockMore')}
                     </p>
-                    <ul className="space-y-1 text-sm text-yellow-800 list-disc pl-5">
+                    <ul className="space-y-1 text-sm text-yellow-300 list-disc pl-5">
                       <li>{t('billing.feature1')}</li>
                       <li>{t('billing.feature2')}</li>
                       <li>{t('billing.feature3')}</li>

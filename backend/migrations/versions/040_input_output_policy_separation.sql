@@ -1,5 +1,5 @@
--- Migration: Separate input and output data leakage policies
--- Description: Split data leakage policies into input (prevent external leakage)
+-- Migration: Separate input and output data masking policies
+-- Description: Split data masking policies into input (prevent external leakage)
 --              and output (prevent internal unauthorized access) configurations.
 --              Add tenant-level defaults with application-level overrides.
 -- Version: 040
@@ -8,14 +8,14 @@
 BEGIN;
 
 -- ============================================================================
--- Step 1: Create tenant-level default data leakage policies table
+-- Step 1: Create tenant-level default data masking policies table
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS tenant_data_leakage_policies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id UUID NOT NULL UNIQUE REFERENCES tenants(id) ON DELETE CASCADE,
 
-    -- Input Policy Defaults (prevent external data leakage)
+    -- Input Policy Defaults (prevent external data masking)
     -- Actions: 'block' | 'switch_private_model' | 'anonymize' | 'pass'
     default_input_high_risk_action VARCHAR(50) NOT NULL DEFAULT 'block',
     default_input_medium_risk_action VARCHAR(50) NOT NULL DEFAULT 'switch_private_model',
@@ -565,7 +565,7 @@ WHERE app.tenant_id = tenant.tenant_id;
 -- ============================================================================
 
 COMMENT ON TABLE tenant_data_leakage_policies IS
-'Tenant-level default data leakage prevention policies. All applications inherit these defaults unless explicitly overridden.';
+'Tenant-level default Data Masking policies. All applications inherit these defaults unless explicitly overridden.';
 
 COMMENT ON COLUMN tenant_data_leakage_policies.default_input_high_risk_action IS
 'Default action for high-risk input data: block | switch_private_model | anonymize | pass';
@@ -574,7 +574,7 @@ COMMENT ON COLUMN tenant_data_leakage_policies.default_output_high_risk_anonymiz
 'Default flag: whether to anonymize high-risk data in model outputs (prevent internal unauthorized access)';
 
 COMMENT ON TABLE application_data_leakage_policies IS
-'Application-level data leakage policy overrides. NULL values inherit from tenant defaults.';
+'Application-level data masking policy overrides. NULL values inherit from tenant defaults.';
 
 COMMENT ON COLUMN application_data_leakage_policies.input_high_risk_action IS
 'Override input action for high-risk data. NULL = use tenant default';

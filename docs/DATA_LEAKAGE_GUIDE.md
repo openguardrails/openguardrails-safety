@@ -1,6 +1,6 @@
-# Data Leakage Prevention Guide
+# Data Masking Guide
 
-> Comprehensive guide for configuring and using OpenGuardrails' data leakage prevention system.
+> Comprehensive guide for configuring and using OpenGuardrails' Data Masking system.
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@
 
 ## Overview
 
-OpenGuardrails' Data Leakage Prevention (DLP) system provides **multi-layer protection** against sensitive data exposure when using AI models. The system automatically:
+OpenGuardrails' Data Maskingsystem provides **multi-layer protection** against sensitive data exposure when using AI models. The system automatically:
 
 1. **Detects sensitive data** in user prompts (ID cards, phone numbers, addresses, etc.)
 2. **Assesses risk levels** (High/Medium/Low) based on entity types and context
@@ -151,9 +151,9 @@ Is Default Private Model: ✓ Enabled
 Private Model Priority: 90
 ```
 
-### Step 2: Configure Data Leakage Policy
+### Step 2: Configure Data Masking Policy
 
-1. Navigate to **Config > Data Leakage Policy**
+1. Navigate to **Config > Data Masking Policy**
 2. Configure **Risk Level Actions**:
    - **High Risk**: Choose disposal action (default: Block)
    - **Medium Risk**: Choose disposal action (default: Switch Private Model)
@@ -695,7 +695,7 @@ My name is 张三, ID: 110101199001011234. My friend 李四's ID is 110101199001
 ```json
 {
   "error": {
-    "message": "Request blocked due to data leakage risk: High risk entities detected (ID card, credit card)",
+    "message": "Request blocked due to data masking risk: High risk entities detected (ID card, credit card)",
     "type": "data_leakage_blocked",
     "code": "high_risk_detected"
   }
@@ -1006,7 +1006,7 @@ My name is 张三, ID card: [ID_CARD_1], phone: [PHONE_NUMBER_1]
 
 ---
 
-#### 2. Monitor for Data Leakage Incidents
+#### 2. Monitor for Data Masking Incidents
 
 **Set up alerts for**:
 - High-risk detections (immediate alert)
@@ -1078,7 +1078,7 @@ My name is 张三, ID card: [ID_CARD_1], phone: [PHONE_NUMBER_1]
 **Possible Causes**:
 
 **Cause 1**: Policy action is not set to "switch_private_model"
-- **Solution**: Check **Config > Data Leakage Policy** → Medium Risk Action
+- **Solution**: Check **Config > Data Masking Policy** → Medium Risk Action
 
 **Cause 2**: Private model API is failing
 - **Solution**: Check logs for private model API errors, verify connectivity
@@ -1118,7 +1118,7 @@ My name is 张三, ID card: [ID_CARD_1], phone: [PHONE_NUMBER_1]
 - **Solution**: Validate content structure before sending
 
 **Solution**: Disable smart segmentation temporarily:
-1. Navigate to **Config > Data Leakage Policy**
+1. Navigate to **Config > Data Masking Policy**
 2. Disable **"Enable Smart Segmentation"**
 3. Save and test
 
@@ -1254,7 +1254,7 @@ curl -X POST http://localhost:5002/v1/chat/completions \
 
 **Automatic Protection**:
 1. Request is intercepted by proxy
-2. Content is analyzed for data leakage
+2. Content is analyzed for data masking
 3. Disposal action is applied (block/switch/anonymize)
 4. Response is returned
 
@@ -1319,7 +1319,7 @@ if not result["is_safe"]:
     action = result["data_risks"][0]["suggested_action"]
 
     if action == "BLOCK":
-        return {"error": "Request blocked due to data leakage risk"}
+        return {"error": "Request blocked due to data masking risk"}
 
     elif action == "SWITCH_private_model":
         # Switch to private model manually
@@ -1459,7 +1459,7 @@ A: **Yes**. Policies are configured per-application using the `X-Application-ID`
 
 **Q: What happens if the private model API fails?**
 
-A: The system logs the error and **falls back to BLOCK** to prevent data leakage. Configure redundant private models to minimize failures.
+A: The system logs the error and **falls back to BLOCK** to prevent data masking. Configure redundant private models to minimize failures.
 
 ---
 
@@ -1482,7 +1482,7 @@ A: **Yes**. Navigate to **Config > Data Security > Entity Type Management** to a
 
 ---
 
-**Q: How do I test data leakage protection without affecting users?**
+**Q: How do I test data masking protection without affecting users?**
 
 A: Use **audit-only mode**:
 1. Set all risk actions to **"Pass"**
@@ -1560,9 +1560,9 @@ A: **Yes**, for detecting credit card numbers. Recommended configuration:
 
 ### Glossary
 
-- **Data Leakage Prevention (DLP)**: System for detecting and protecting sensitive data
+- **Data Masking (DLP)**: System for detecting and protecting sensitive data
 - **Private Model**: Model marked as data-safe for handling sensitive information
-- **Disposal Strategy**: Action taken when data leakage is detected (block, switch, anonymize, pass)
+- **Disposal Strategy**: Action taken when data masking is detected (block, switch, anonymize, pass)
 - **Format Detection**: Automatic identification of content structure (JSON, YAML, etc.)
 - **Smart Segmentation**: Format-aware content splitting for parallel processing
 - **Regex Entity**: Entity detected using regular expressions (e.g., ID card patterns)

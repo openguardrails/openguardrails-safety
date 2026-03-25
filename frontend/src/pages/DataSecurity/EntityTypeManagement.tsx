@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Edit, Trash2, Globe, User, Info, Loader2, Wand2, Play, FileText, Search, Shield, Settings, ChevronDown, ChevronRight, Code, Lock, Crown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { toast } from 'sonner'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -39,7 +40,6 @@ import { DataTable } from '@/components/data-table/DataTable'
 import { confirmDialog } from '@/utils/confirm-dialog'
 import { dataSecurityApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { useApplication } from '../../contexts/ApplicationContext'
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface EntityType {
@@ -69,6 +69,7 @@ interface EntityType {
 
 const EntityTypeManagement: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
 
   const RISK_LEVELS = [
     { value: 'high', label: t('entityType.highRisk'), color: 'destructive' as const },
@@ -139,7 +140,6 @@ const EntityTypeManagement: React.FC = () => {
     }
   } | null>(null)
   const { user, onUserSwitch } = useAuth()
-  const { currentApplicationId } = useApplication()
 
   const formSchema = z.object({
     entity_type: z.string().min(1, t('entityType.entityTypeCodeRequired')).refine(
@@ -241,11 +241,9 @@ const EntityTypeManagement: React.FC = () => {
   })
 
   useEffect(() => {
-    if (currentApplicationId) {
-      loadEntityTypes()
-      loadFeatureAvailability()
-    }
-  }, [currentApplicationId])
+    loadEntityTypes()
+    loadFeatureAvailability()
+  }, [])
 
   // Listen to user switch event, automatically refresh data
   useEffect(() => {
@@ -843,7 +841,7 @@ const EntityTypeManagement: React.FC = () => {
       accessorKey: 'entity_type',
       header: t('entityType.entityTypeColumn'),
       cell: ({ row }) => (
-        <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap">
+        <code className="text-xs bg-muted px-1.5 py-0.5 rounded whitespace-nowrap">
           {row.getValue('entity_type')}
         </code>
       ),
@@ -959,13 +957,13 @@ const EntityTypeManagement: React.FC = () => {
         }
       },
     },
-    {
+    ...(canEdit ? [{
       id: 'action',
       header: t('entityType.operationColumn'),
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const record = row.original
         const sourceType = record.source_type || (record.is_global ? 'system_template' : 'custom')
-        const canEdit = sourceType === 'system_template' ? user?.is_super_admin : true
+        const canEditRow = sourceType === 'system_template' ? user?.is_super_admin : true
         const canDelete =
           sourceType === 'system_template' ? user?.is_super_admin : sourceType === 'custom'
 
@@ -975,8 +973,8 @@ const EntityTypeManagement: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={() => handleEdit(record)}
-              disabled={!canEdit}
-              title={canEdit ? t('common.edit') : t('entityType.noEditPermission')}
+              disabled={!canEditRow}
+              title={canEditRow ? t('common.edit') : t('entityType.noEditPermission')}
             >
               <Edit className="h-4 w-4" />
             </Button>
@@ -998,7 +996,7 @@ const EntityTypeManagement: React.FC = () => {
           </div>
         )
       },
-    },
+    }] : []),
   ]
 
   // Filter data
@@ -1021,10 +1019,12 @@ const EntityTypeManagement: React.FC = () => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t('entityType.entityTypeConfig')}</CardTitle>
-          <Button onClick={handleCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t('entityType.addEntityTypeConfig')}
-          </Button>
+          {canEdit && (
+            <Button onClick={handleCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t('entityType.addEntityTypeConfig')}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <div className="space-y-4 mb-4">
@@ -1076,16 +1076,16 @@ const EntityTypeManagement: React.FC = () => {
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
               {editingEntity && editingEntity.source_type === 'system_copy' && (
-                <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <Info className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <p className="text-sm text-blue-900">{t('entityType.systemCopyEditHint')}</p>
+                <div className="flex items-start gap-2 p-3 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+                  <Info className="h-4 w-4 text-sky-400 mt-0.5" />
+                  <p className="text-sm text-sky-200">{t('entityType.systemCopyEditHint')}</p>
                 </div>
               )}
 
               {/* ========== Section 1: Basic Information ========== */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b">
-                  <FileText className="h-4 w-4 text-blue-600" />
+                  <FileText className="h-4 w-4 text-sky-400" />
                   <h3 className="font-medium text-sm">{t('entityType.sectionBasicInfo')}</h3>
                 </div>
 
@@ -1126,11 +1126,11 @@ const EntityTypeManagement: React.FC = () => {
                               placeholder={editingEntity ? t('entityType.entityTypeCodePlaceholder') : t('entityType.entityTypeCodeAutoGenerate')}
                               disabled={!!editingEntity || generatingEntityTypeCode}
                               readOnly={!editingEntity}
-                              className={!editingEntity ? 'bg-gray-50' : ''}
+                              className={!editingEntity ? 'bg-secondary' : ''}
                             />
                             {generatingEntityTypeCode && (
                               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                                <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
                               </div>
                             )}
                           </div>
@@ -1170,7 +1170,7 @@ const EntityTypeManagement: React.FC = () => {
               {/* ========== Section 2: Recognition Configuration ========== */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b">
-                  <Search className="h-4 w-4 text-green-600" />
+                  <Search className="h-4 w-4 text-emerald-400" />
                   <h3 className="font-medium text-sm">{t('entityType.sectionRecognition')}</h3>
                 </div>
 
@@ -1225,7 +1225,7 @@ const EntityTypeManagement: React.FC = () => {
                 )}
 
                 {form.watch('recognition_method') === 'regex' ? (
-                  <div className="space-y-4 p-4 border rounded-lg bg-blue-50/30">
+                  <div className="space-y-4 p-4 border rounded-lg bg-sky-500/10/30">
                     <FormField
                       control={form.control}
                       name="recognition_natural_desc"
@@ -1294,26 +1294,26 @@ const EntityTypeManagement: React.FC = () => {
                     />
 
                     {recognitionTestResult && (
-                      <div className={`p-3 border rounded-lg ${recognitionTestResult.error ? 'bg-red-50 border-red-200' : recognitionTestResult.matched ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                      <div className={`p-3 border rounded-lg ${recognitionTestResult.error ? 'bg-red-500/10 border-red-500/20' : recognitionTestResult.matched ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
                         {recognitionTestResult.error ? (
-                          <p className="text-sm text-red-700">{recognitionTestResult.error}</p>
+                          <p className="text-sm text-red-400">{recognitionTestResult.error}</p>
                         ) : recognitionTestResult.matched ? (
                           <div>
-                            <p className="text-sm font-medium text-green-700 mb-1">{t('entityType.recognitionTestMatched', { count: recognitionTestResult.matches.length })}</p>
+                            <p className="text-sm font-medium text-emerald-400 mb-1">{t('entityType.recognitionTestMatched', { count: recognitionTestResult.matches.length })}</p>
                             <div className="flex flex-wrap gap-1">
                               {recognitionTestResult.matches.map((match, idx) => (
-                                <code key={idx} className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">{match}</code>
+                                <code key={idx} className="text-xs bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded">{match}</code>
                               ))}
                             </div>
                           </div>
                         ) : (
-                          <p className="text-sm text-yellow-700">{t('entityType.recognitionTestNotMatched')}</p>
+                          <p className="text-sm text-yellow-400">{t('entityType.recognitionTestNotMatched')}</p>
                         )}
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="space-y-4 p-4 border rounded-lg bg-green-50/30">
+                  <div className="space-y-4 p-4 border rounded-lg bg-emerald-500/10/30">
                     <FormField
                       control={form.control}
                       name="entity_definition"
@@ -1362,20 +1362,20 @@ const EntityTypeManagement: React.FC = () => {
                     />
 
                     {entityDefinitionTestResult && (
-                      <div className={`p-3 border rounded-lg ${entityDefinitionTestResult.error ? 'bg-red-50 border-red-200' : entityDefinitionTestResult.matched ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                      <div className={`p-3 border rounded-lg ${entityDefinitionTestResult.error ? 'bg-red-500/10 border-red-500/20' : entityDefinitionTestResult.matched ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-yellow-500/10 border-yellow-500/20'}`}>
                         {entityDefinitionTestResult.error ? (
-                          <p className="text-sm text-red-700">{entityDefinitionTestResult.error}</p>
+                          <p className="text-sm text-red-400">{entityDefinitionTestResult.error}</p>
                         ) : entityDefinitionTestResult.matched ? (
                           <div>
-                            <p className="text-sm font-medium text-green-700 mb-1">{t('entityType.entityDefinitionTestMatched', { count: entityDefinitionTestResult.matches.length })}</p>
+                            <p className="text-sm font-medium text-emerald-400 mb-1">{t('entityType.entityDefinitionTestMatched', { count: entityDefinitionTestResult.matches.length })}</p>
                             <div className="flex flex-wrap gap-1">
                               {entityDefinitionTestResult.matches.map((match, idx) => (
-                                <code key={idx} className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">{match}</code>
+                                <code key={idx} className="text-xs bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded">{match}</code>
                               ))}
                             </div>
                           </div>
                         ) : (
-                          <p className="text-sm text-yellow-700">{t('entityType.entityDefinitionTestNotMatched')}</p>
+                          <p className="text-sm text-yellow-400">{t('entityType.entityDefinitionTestNotMatched')}</p>
                         )}
                       </div>
                     )}
@@ -1391,7 +1391,7 @@ const EntityTypeManagement: React.FC = () => {
                 </div>
 
                 {/* Anonymization Method Configuration */}
-                <div className="space-y-4 p-4 border rounded-lg bg-purple-50/30">
+                <div className="space-y-4 p-4 border rounded-lg bg-purple-500/10/30">
                     <FormField
                       control={form.control}
                       name="anonymization_method"
@@ -1447,7 +1447,7 @@ const EntityTypeManagement: React.FC = () => {
                             <FormControl>
                               <Input {...field} placeholder={t('entityType.replaceTextPlaceholder')} />
                             </FormControl>
-                            <p className="text-xs text-gray-500 mt-1">{t('entityType.replaceTextHint')}</p>
+                            <p className="text-xs text-muted-foreground mt-1">{t('entityType.replaceTextHint')}</p>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -1480,7 +1480,7 @@ const EntityTypeManagement: React.FC = () => {
                             </FormItem>
                           )} />
                         </div>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted-foreground">
                           {t('entityType.maskExampleTitle')} 138****3234
                         </p>
                       </div>
@@ -1516,7 +1516,7 @@ const EntityTypeManagement: React.FC = () => {
                             <FormItem>
                               <FormLabel>{t('entityType.regexReplacement')}</FormLabel>
                               <FormControl><Input {...field} placeholder="\1****\2" className="font-mono" /></FormControl>
-                              <p className="text-xs text-gray-500 mt-1">{t('entityType.regexReplacementHint')}</p>
+                              <p className="text-xs text-muted-foreground mt-1">{t('entityType.regexReplacementHint')}</p>
                               <FormMessage />
                             </FormItem>
                           )} />
@@ -1536,10 +1536,10 @@ const EntityTypeManagement: React.FC = () => {
                             <FormMessage />
                           </FormItem>
                         )} />
-                        <Card className="bg-green-50 border-green-200">
+                        <Card className="bg-emerald-500/10 border-emerald-500/20">
                           <CardContent className="p-3">
-                            <p className="text-xs font-semibold text-green-900 mb-2">{t('entityType.genaiAnonymizationExamplesTitle')}</p>
-                            <ul className="text-xs text-green-800 space-y-1 list-none">
+                            <p className="text-xs font-semibold text-emerald-200 mb-2">{t('entityType.genaiAnonymizationExamplesTitle')}</p>
+                            <ul className="text-xs text-emerald-300 space-y-1 list-none">
                               <li>• {t('entityType.genaiAnonymizationExample1')}</li>
                               <li>• {t('entityType.genaiAnonymizationExample2')}</li>
                               <li>• {t('entityType.genaiAnonymizationExample3')}</li>
@@ -1553,9 +1553,9 @@ const EntityTypeManagement: React.FC = () => {
                     {form.watch('anonymization_method') === 'genai_code' && (
                       <div className="space-y-4">
                         {/* Description */}
-                        <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                          <div className="text-sm text-blue-800">
+                        <div className="flex items-start gap-2 p-3 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+                          <Info className="h-4 w-4 text-sky-400 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm text-sky-300">
                             <p className="font-medium mb-1">{t('entityType.genaiCodeIntro')}</p>
                             <p>{t('entityType.genaiCodeIntroDesc')}</p>
                           </div>
@@ -1592,16 +1592,16 @@ const EntityTypeManagement: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setShowGenaiCode(!showGenaiCode)}
-                              className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                              className="w-full flex items-center justify-between p-3 bg-secondary hover:bg-card/5 transition-colors"
                             >
-                              <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                              <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
                                 <Code className="h-4 w-4" />
                                 {t('entityType.viewGeneratedCode')}
                               </div>
                               {showGenaiCode ? (
-                                <ChevronDown className="h-4 w-4 text-gray-500" />
+                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
                               ) : (
-                                <ChevronRight className="h-4 w-4 text-gray-500" />
+                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
                               )}
                             </button>
                             {showGenaiCode && (
@@ -1638,13 +1638,13 @@ const EntityTypeManagement: React.FC = () => {
                             />
 
                             {genaiCodeTestResult && (
-                              <div className={`p-3 border rounded-lg ${genaiCodeTestResult.error ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                              <div className={`p-3 border rounded-lg ${genaiCodeTestResult.error ? 'bg-red-500/10 border-red-500/20' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
                                 {genaiCodeTestResult.error ? (
-                                  <p className="text-sm text-red-700">{genaiCodeTestResult.error}</p>
+                                  <p className="text-sm text-red-400">{genaiCodeTestResult.error}</p>
                                 ) : (
                                   <div>
-                                    <p className="text-sm font-medium text-green-700 mb-1">{t('entityType.genaiCodeAnonymizedResult')}</p>
-                                    <code className="text-sm bg-white/50 text-green-800 px-2 py-1 rounded block">{genaiCodeTestResult.anonymized_text}</code>
+                                    <p className="text-sm font-medium text-emerald-400 mb-1">{t('entityType.genaiCodeAnonymizedResult')}</p>
+                                    <code className="text-sm bg-card/50 text-emerald-300 px-2 py-1 rounded block">{genaiCodeTestResult.anonymized_text}</code>
                                   </div>
                                 )}
                               </div>
@@ -1652,10 +1652,10 @@ const EntityTypeManagement: React.FC = () => {
                           </>
                         )}
 
-                        <Card className="bg-purple-50 border-purple-200">
+                        <Card className="bg-purple-500/10 border-purple-500/20">
                           <CardContent className="p-3">
                             <p className="text-xs font-semibold text-purple-900 mb-2">{t('entityType.genaiCodeExamplesTitle')}</p>
-                            <ul className="text-xs text-purple-800 space-y-1 list-none">
+                            <ul className="text-xs text-purple-300 space-y-1 list-none">
                               <li>• {t('entityType.genaiCodeExample1')}</li>
                             </ul>
                           </CardContent>
@@ -1665,7 +1665,7 @@ const EntityTypeManagement: React.FC = () => {
 
                     {/* hash/encrypt/shuffle/random - no config needed */}
                     {['hash', 'encrypt', 'shuffle', 'random'].includes(form.watch('anonymization_method') || '') && (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-muted-foreground">
                         {t('entityType.anonymizationMethodNoConfig')}
                       </p>
                     )}
@@ -1708,9 +1708,9 @@ const EntityTypeManagement: React.FC = () => {
                         )}
                       />
                       {testResult && (
-                        <div className="mt-2 p-3 bg-white border rounded-lg">
-                          <p className="text-sm font-medium text-gray-700">{t('entityType.testResult')}:</p>
-                          <code className="text-sm text-green-700 bg-green-50 px-2 py-1 rounded mt-1 block">{testResult}</code>
+                        <div className="mt-2 p-3 bg-card border rounded-lg">
+                          <p className="text-sm font-medium text-slate-300">{t('entityType.testResult')}:</p>
+                          <code className="text-sm text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded mt-1 block">{testResult}</code>
                         </div>
                       )}
                     </div>
@@ -1721,7 +1721,7 @@ const EntityTypeManagement: React.FC = () => {
               {/* ========== Section 4: Other Settings ========== */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 pb-2 border-b">
-                  <Settings className="h-4 w-4 text-gray-600" />
+                  <Settings className="h-4 w-4 text-muted-foreground" />
                   <h3 className="font-medium text-sm">{t('entityType.sectionOtherSettings')}</h3>
                 </div>
 
@@ -1757,7 +1757,7 @@ const EntityTypeManagement: React.FC = () => {
                     <FormItem className="flex items-center justify-between border rounded-lg p-3">
                       <div className="flex items-center gap-2">
                         <FormLabel>{t('entityType.systemConfigLabel')}</FormLabel>
-                        <Info className="h-4 w-4 text-gray-400" title={t('entityType.systemConfigTooltip')} />
+                        <Info className="h-4 w-4 text-slate-500" title={t('entityType.systemConfigTooltip')} />
                       </div>
                       <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                     </FormItem>

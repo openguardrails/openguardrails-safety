@@ -276,15 +276,15 @@ const FalsePositiveAppeal: React.FC = () => {
   // Risk badge styling helpers
   const getRiskBadgeClasses = (level: string): string => {
     if (level === 'high_risk' || level === '高风险') {
-      return '!bg-red-100 !text-red-800 !border-red-200'
+      return '!bg-red-500/15 !text-red-300 !border-red-500/20'
     }
     if (level === 'medium_risk' || level === '中风险') {
-      return '!bg-orange-100 !text-orange-800 !border-orange-200'
+      return '!bg-orange-500/15 !text-orange-300 !border-orange-500/20'
     }
     if (level === 'low_risk' || level === '低风险') {
-      return '!bg-yellow-100 !text-yellow-800 !border-yellow-200'
+      return '!bg-yellow-500/15 !text-yellow-300 !border-yellow-500/20'
     }
-    return '!bg-gray-100 !text-gray-800 !border-gray-200'
+    return '!bg-muted !text-foreground !border-border'
   }
 
   const getActionBadgeClasses = (action: string): string => {
@@ -292,15 +292,15 @@ const FalsePositiveAppeal: React.FC = () => {
     const rejectText = t('action.reject')
     const replaceText = t('action.replace')
     if (action === 'pass' || action === passText) {
-      return '!bg-green-100 !text-green-800 !border-green-200'
+      return '!bg-emerald-500/15 !text-emerald-300 !border-emerald-500/20'
     }
     if (action === 'reject' || action === rejectText) {
-      return '!bg-red-100 !text-red-800 !border-red-200'
+      return '!bg-red-500/15 !text-red-300 !border-red-500/20'
     }
     if (action === 'replace' || action === replaceText) {
-      return '!bg-orange-100 !text-orange-800 !border-orange-200'
+      return '!bg-orange-500/15 !text-orange-300 !border-orange-500/20'
     }
-    return '!bg-gray-100 !text-gray-800 !border-gray-200'
+    return '!bg-muted !text-foreground !border-border'
   }
 
   const formatRiskDisplay = (riskLevel: string, categories: string[]) => {
@@ -649,9 +649,9 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* Request ID */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('results.requestId')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('results.requestId')}:</div>
                   <div className="col-span-2">
-                    <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                    <code className="text-xs bg-muted px-2 py-1 rounded">
                       {selectedAppeal.request_id}
                     </code>
                   </div>
@@ -659,7 +659,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* Appeal User */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('appealConfig.appealUserColumn')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.appealUserColumn')}:</div>
                   <div className="col-span-2 text-sm">
                     {selectedAppeal.user_id || t('appealConfig.anonymous')}
                   </div>
@@ -667,7 +667,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* Application */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('appealConfig.applicationColumn')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.applicationColumn')}:</div>
                   <div className="col-span-2 text-sm">
                     {selectedAppeal.application_name || '-'}
                   </div>
@@ -675,7 +675,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* Appeal Status */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('appealConfig.appealStatus')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.appealStatus')}:</div>
                   <div className="col-span-2">
                     <Badge variant={getAppealStatusVariant(selectedAppeal.status)}>
                       {getAppealStatusText(selectedAppeal.status)}
@@ -685,7 +685,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* Original Risk Level */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('appealConfig.originalRiskLevel')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.originalRiskLevel')}:</div>
                   <div className="col-span-2">
                     <Badge className={getRiskBadgeClasses(selectedAppeal.original_risk_level)}>
                       {translateRiskLevel(selectedAppeal.original_risk_level, t)}
@@ -696,7 +696,7 @@ const FalsePositiveAppeal: React.FC = () => {
                 {/* Original Categories */}
                 {selectedAppeal.original_categories && selectedAppeal.original_categories.length > 0 && (
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('appealConfig.originalCategories')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.originalCategories')}:</div>
                     <div className="col-span-2">
                       {selectedAppeal.original_categories.map((cat, idx) => (
                         <Badge key={idx} variant="outline" className="mr-1 mb-1 text-xs">
@@ -709,7 +709,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* AI Review Result */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('appealConfig.aiReviewResult')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.aiReviewResult')}:</div>
                   <div className="col-span-2">
                     {selectedAppeal.ai_approved !== undefined && selectedAppeal.ai_approved !== null ? (
                       <Badge variant={selectedAppeal.ai_approved ? 'default' : 'destructive'}>
@@ -724,7 +724,7 @@ const FalsePositiveAppeal: React.FC = () => {
                 {/* AI Review Reason */}
                 {selectedAppeal.ai_review_result && (
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('appealConfig.reasonColumn')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.reasonColumn')}:</div>
                     <div className="col-span-2 text-sm whitespace-pre-wrap">
                       {selectedAppeal.ai_review_result}
                     </div>
@@ -734,7 +734,7 @@ const FalsePositiveAppeal: React.FC = () => {
                 {/* Processor Info */}
                 {selectedAppeal.processor_type && (
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('appealConfig.processorInfo')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.processorInfo')}:</div>
                     <div className="col-span-2 text-sm">
                       {getProcessorText(selectedAppeal)}
                       {selectedAppeal.processor_reason && (
@@ -748,7 +748,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* Appeal Time */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                  <div className="font-medium text-gray-600 text-sm">{t('appealConfig.appealTime')}:</div>
+                  <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.appealTime')}:</div>
                   <div className="col-span-2 text-sm">
                     {selectedAppeal.created_at ? format(new Date(selectedAppeal.created_at), 'yyyy-MM-dd HH:mm:ss') : '-'}
                   </div>
@@ -757,7 +757,7 @@ const FalsePositiveAppeal: React.FC = () => {
                 {/* Process Time */}
                 {(selectedAppeal.processed_at || selectedAppeal.ai_reviewed_at) && (
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('appealConfig.processTime')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.processTime')}:</div>
                     <div className="col-span-2 text-sm">
                       {format(new Date(selectedAppeal.processed_at || selectedAppeal.ai_reviewed_at!), 'yyyy-MM-dd HH:mm:ss')}
                     </div>
@@ -766,8 +766,8 @@ const FalsePositiveAppeal: React.FC = () => {
 
                 {/* Original Content */}
                 <div>
-                  <div className="font-medium text-gray-600 mb-3 text-sm">{t('appealConfig.originalContent')}:</div>
-                  <div className="mt-2 p-4 bg-gray-50 rounded-md">
+                  <div className="font-medium text-muted-foreground mb-3 text-sm">{t('appealConfig.originalContent')}:</div>
+                  <div className="mt-2 p-4 bg-secondary rounded-md">
                     <p className="whitespace-pre-wrap text-sm">{selectedAppeal.original_content}</p>
                   </div>
                 </div>
@@ -780,7 +780,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                   {/* Prompt Attack */}
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('results.promptAttack')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('results.promptAttack')}:</div>
                     <div className="col-span-2">
                       <Badge className={getRiskBadgeClasses(selectedResult.security_risk_level || 'no_risk')}>
                         {formatRiskDisplay(
@@ -793,7 +793,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                   {/* Content Compliance */}
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">
+                    <div className="font-medium text-muted-foreground text-sm">
                       {t('results.contentCompliance')}:
                     </div>
                     <div className="col-span-2">
@@ -808,7 +808,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                   {/* Data Leak */}
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('results.dataLeak')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('results.dataLeak')}:</div>
                     <div className="col-span-2">
                       <Badge className={getRiskBadgeClasses(selectedResult.data_risk_level || 'no_risk')}>
                         {formatRiskDisplay(
@@ -821,7 +821,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                   {/* Suggested Action */}
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('results.suggestedAction')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('results.suggestedAction')}:</div>
                     <div className="col-span-2">
                       <Badge className={getActionBadgeClasses(selectedResult.suggest_action || '')}>
                         {selectedResult.suggest_action || '-'}
@@ -831,7 +831,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
                   {/* Detection Time */}
                   <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                    <div className="font-medium text-gray-600 text-sm">{t('results.detectionTime')}:</div>
+                    <div className="font-medium text-muted-foreground text-sm">{t('results.detectionTime')}:</div>
                     <div className="col-span-2 text-sm">
                       {format(new Date(selectedResult.created_at), 'yyyy-MM-dd HH:mm:ss')}
                     </div>
@@ -840,10 +840,10 @@ const FalsePositiveAppeal: React.FC = () => {
                   {/* Suggested Answer */}
                   {selectedResult.suggest_answer && (
                     <div>
-                      <div className="font-medium text-gray-600 mb-3 text-sm">
+                      <div className="font-medium text-muted-foreground mb-3 text-sm">
                         {t('results.suggestedAnswer')}:
                       </div>
-                      <div className="mt-2 p-4 bg-blue-50 rounded-md whitespace-pre-wrap text-sm">
+                      <div className="mt-2 p-4 bg-sky-500/10 rounded-md whitespace-pre-wrap text-sm">
                         {selectedResult.suggest_answer}
                       </div>
                     </div>
@@ -852,9 +852,9 @@ const FalsePositiveAppeal: React.FC = () => {
                   {/* Source IP */}
                   {selectedResult.ip_address && (
                     <div className="grid grid-cols-3 gap-4 border-b pb-3">
-                      <div className="font-medium text-gray-600 text-sm">{t('appealConfig.ipAddress')}:</div>
+                      <div className="font-medium text-muted-foreground text-sm">{t('appealConfig.ipAddress')}:</div>
                       <div className="col-span-2">
-                        <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                        <code className="text-xs bg-muted px-2 py-1 rounded">
                           {selectedResult.ip_address}
                         </code>
                       </div>
@@ -864,7 +864,7 @@ const FalsePositiveAppeal: React.FC = () => {
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               {t('appealConfig.detectionResultNotFound')}
             </div>
           )}

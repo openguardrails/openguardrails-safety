@@ -107,12 +107,12 @@ const ApplicationSelector: React.FC = () => {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-xs font-medium text-slate-700 whitespace-nowrap">{t('applicationSelector.label')}:</span>
+      <span className="text-xs font-medium text-slate-300 whitespace-nowrap">{t('applicationSelector.label')}:</span>
       <Select value={displayValue} onValueChange={handleChange} disabled={loading}>
-        <SelectTrigger className="w-[280px] h-9 text-xs border-slate-200 focus:ring-blue-500 !px-2">
+        <SelectTrigger className="w-[280px] h-9 text-xs border-border focus:ring-blue-500 !px-2">
           {loading ? (
             <div className="flex items-center gap-2">
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-500" />
               <SelectValue placeholder={t('applicationSelector.placeholder')} />
             </div>
           ) : applications.length === 0 ? (

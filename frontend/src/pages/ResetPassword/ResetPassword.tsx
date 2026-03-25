@@ -123,7 +123,7 @@ const ResetPassword: React.FC = () => {
             </div>
 
             <CardHeader className="text-center space-y-2 pb-6">
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-bold text-foreground">
                 {t('resetPassword.title')}
               </h1>
             </CardHeader>
@@ -167,7 +167,7 @@ const ResetPassword: React.FC = () => {
             </div>
 
             <CardHeader className="text-center space-y-2 pb-6">
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl font-bold text-foreground">
                 {t('resetPassword.title')}
               </h1>
               <p className="text-muted-foreground text-base">
@@ -176,9 +176,9 @@ const ResetPassword: React.FC = () => {
             </CardHeader>
 
             <CardContent className="space-y-6">
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <AlertDescription className="ml-2 text-green-900">
+              <Alert className="border-emerald-500/20 bg-emerald-500/10">
+                <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                <AlertDescription className="ml-2 text-emerald-200">
                   <p className="font-medium mb-1">{t('resetPassword.resetSuccess')}</p>
                   <p className="text-sm">{t('resetPassword.resetSuccessDesc')}</p>
                 </AlertDescription>
@@ -212,7 +212,7 @@ const ResetPassword: React.FC = () => {
           </div>
 
           <CardHeader className="text-center space-y-2 pb-8">
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-foreground">
               {t('resetPassword.title')}
             </h1>
             <p className="text-muted-foreground text-base">
@@ -231,7 +231,7 @@ const ResetPassword: React.FC = () => {
                       <FormLabel>{t('resetPassword.newPasswordPlaceholder')}</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                           <Input
                             type="password"
                             placeholder={t('resetPassword.newPasswordPlaceholder')}
@@ -254,7 +254,7 @@ const ResetPassword: React.FC = () => {
                       <FormLabel>{t('resetPassword.confirmPasswordPlaceholder')}</FormLabel>
                       <FormControl>
                         <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                           <Input
                             type="password"
                             placeholder={t('resetPassword.confirmPasswordPlaceholder')}

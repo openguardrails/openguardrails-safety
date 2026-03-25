@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, Edit, Trash2, Key, Copy, Eye, EyeOff, Info, Search, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Edit, Trash2, Key, Copy, Eye, EyeOff, Info, Search, X, ArrowUpDown, ArrowUp, ArrowDown, ArrowRightLeft } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { copyToClipboard } from '@/utils/clipboard'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -84,6 +85,8 @@ interface Application {
   source?: 'manual' | 'auto_discovery'
   // External identifier for auto-discovered apps (e.g., gateway consumer name)
   external_id?: string
+  workspace_id?: string | null
+  workspace_name?: string | null
   created_at: string
   updated_at: string
   api_keys_count: number
@@ -102,6 +105,7 @@ interface ApiKey {
 
 const ApplicationManagement: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const { refreshApplications } = useApplication()
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(false)
@@ -116,6 +120,8 @@ const ApplicationManagement: React.FC = () => {
   const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'auto_discovery'>('all')
   // Filter by application status: 'all', 'active', or 'inactive'
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  // Filter by workspace
+  const [workspaceFilter, setWorkspaceFilter] = useState<string>('all')
   // Search by application name
   const [searchText, setSearchText] = useState('')
   // Sort configuration: field and direction
@@ -124,6 +130,12 @@ const ApplicationManagement: React.FC = () => {
   // Detail drawer state
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false)
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
+  // Workspaces
+  const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([])
+  // Batch workspace assignment
+  const [batchMoveDialogOpen, setBatchMoveDialogOpen] = useState(false)
+  const [batchMoveTargetWs, setBatchMoveTargetWs] = useState<string>('__none__')
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
 
   // Filter and sort applications
   const filteredApplications = useMemo(() => {
@@ -135,6 +147,14 @@ const ApplicationManagement: React.FC = () => {
     // Filter by status
     if (statusFilter !== 'all') {
       result = result.filter((app) => statusFilter === 'active' ? app.is_active : !app.is_active)
+    }
+    // Filter by workspace
+    if (workspaceFilter !== 'all') {
+      if (workspaceFilter === 'none') {
+        result = result.filter((app) => !app.workspace_id)
+      } else {
+        result = result.filter((app) => app.workspace_id === workspaceFilter)
+      }
     }
     // Filter by search text (name or external_id)
     if (searchText.trim()) {
@@ -155,7 +175,7 @@ const ApplicationManagement: React.FC = () => {
       return sortDirection === 'asc' ? comparison : -comparison
     })
     return result
-  }, [applications, sourceFilter, statusFilter, searchText, sortField, sortDirection])
+  }, [applications, sourceFilter, statusFilter, workspaceFilter, searchText, sortField, sortDirection])
 
   // Toggle sort direction or change sort field
   const handleSort = (field: 'created_at' | 'name') => {
@@ -185,6 +205,7 @@ const ApplicationManagement: React.FC = () => {
 
   useEffect(() => {
     fetchApplications()
+    fetchWorkspaces()
   }, [])
 
   const fetchApplications = async () => {
@@ -196,6 +217,60 @@ const ApplicationManagement: React.FC = () => {
       toast.error(t('applicationManagement.fetchError'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchWorkspaces = async () => {
+    try {
+      const response = await api.get('/api/v1/workspaces')
+      setWorkspaces(response.data.map((w: any) => ({ id: w.id, name: w.name })))
+    } catch (error) {
+      console.error('Failed to fetch workspaces:', error)
+    }
+  }
+
+  const handleBatchMoveToWorkspace = async () => {
+    if (selectedRowIds.size === 0) return
+
+    try {
+      const appIds = Array.from(selectedRowIds)
+      if (batchMoveTargetWs === '__none__') {
+        // Unassign from workspace
+        for (const appId of appIds) {
+          await api.put(`/api/v1/applications/${appId}`, { workspace_id: '' })
+        }
+      } else {
+        await api.post(`/api/v1/workspaces/${batchMoveTargetWs}/assign`, {
+          application_ids: appIds,
+        })
+      }
+
+      toast.success(t('workspaces.assignSuccess'))
+      setBatchMoveDialogOpen(false)
+      setSelectedRowIds(new Set())
+      fetchApplications()
+    } catch (error) {
+      toast.error(t('workspaces.assignError'))
+    }
+  }
+
+  const toggleRowSelection = (appId: string) => {
+    setSelectedRowIds(prev => {
+      const next = new Set(prev)
+      if (next.has(appId)) {
+        next.delete(appId)
+      } else {
+        next.add(appId)
+      }
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedRowIds.size === filteredApplications.length) {
+      setSelectedRowIds(new Set())
+    } else {
+      setSelectedRowIds(new Set(filteredApplications.map(app => app.id)))
     }
   }
 
@@ -360,15 +435,36 @@ const ApplicationManagement: React.FC = () => {
   // Helper to render sort icon
   const SortIcon = ({ field }: { field: 'created_at' | 'name' }) => {
     if (sortField !== field) {
-      return <ArrowUpDown className="ml-1 h-3 w-3 text-gray-400" />
+      return <ArrowUpDown className="ml-1 h-3 w-3 text-slate-500" />
     }
     return sortDirection === 'asc'
       ? <ArrowUp className="ml-1 h-3 w-3" />
       : <ArrowDown className="ml-1 h-3 w-3" />
   }
 
-  // Column order: name, description, protection, source, status, created_at, actions
+  // Column order: select, name, description, protection, source, workspace, status, created_at, actions
   const columns: ColumnDef<Application>[] = [
+    {
+      id: 'select',
+      header: () => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-border cursor-pointer"
+          checked={filteredApplications.length > 0 && selectedRowIds.size === filteredApplications.length}
+          onChange={toggleSelectAll}
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-border cursor-pointer"
+          checked={selectedRowIds.has(row.original.id)}
+          onChange={() => toggleRowSelection(row.original.id)}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ),
+      enableSorting: false,
+    },
     {
       accessorKey: 'name',
       header: () => (
@@ -404,13 +500,13 @@ const ApplicationManagement: React.FC = () => {
         return (
           <div className="flex items-center gap-3 text-xs">
             <div className="flex items-center gap-1" title={t('applicationManagement.riskTypesTooltip')}>
-              <span className="text-gray-600">{t('applicationManagement.scanners')}:</span>
+              <span className="text-muted-foreground">{t('applicationManagement.scanners')}:</span>
               <Badge variant="default">
                 {summary.risk_types_enabled}/{summary.total_risk_types}
               </Badge>
             </div>
             <div className="flex items-center gap-1" title={t('applicationManagement.dlpEntitiesTooltip')}>
-              <span className="text-gray-600">{t('applicationManagement.dlpEntities')}:</span>
+              <span className="text-muted-foreground">{t('applicationManagement.dlpEntities')}:</span>
               <Badge variant="default">{summary.data_security_entities}</Badge>
             </div>
           </div>
@@ -429,6 +525,18 @@ const ApplicationManagement: React.FC = () => {
               ? t('applicationManagement.sourceAutoDiscovery')
               : t('applicationManagement.sourceManual')}
           </Badge>
+        )
+      },
+    },
+    {
+      accessorKey: 'workspace_name',
+      header: t('workspaces.workspace'),
+      cell: ({ row }) => {
+        const wsName = row.original.workspace_name
+        return wsName ? (
+          <Badge variant="outline">{wsName}</Badge>
+        ) : (
+          <span className="text-muted-foreground text-xs">{t('workspaces.global')}</span>
         )
       },
     },
@@ -461,10 +569,10 @@ const ApplicationManagement: React.FC = () => {
         return format(new Date(time), 'yyyy-MM-dd HH:mm:ss')
       },
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('applicationManagement.actions'),
-      cell: ({ row }) => {
+      cell: ({ row }: { row: any }) => {
         const record = row.original
         return (
           <div className="flex items-center gap-2">
@@ -480,14 +588,14 @@ const ApplicationManagement: React.FC = () => {
               variant="link"
               size="sm"
               onClick={() => handleDelete(record.id)}
-              className="h-auto p-0 text-red-600 hover:text-red-700"
+              className="h-auto p-0 text-red-400 hover:text-red-300"
             >
               {t('common.delete')}
             </Button>
           </div>
         )
       },
-    },
+    }] : []),
   ]
 
   const keyColumns: ColumnDef<ApiKey>[] = [
@@ -507,7 +615,7 @@ const ApplicationManagement: React.FC = () => {
         const record = row.original
         return (
           <div className="flex items-center gap-2">
-            <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+            <code className="text-xs bg-muted px-2 py-1 rounded">
               {visibleKeys.has(record.id) ? key : maskApiKey(key)}
             </code>
             <Button
@@ -560,7 +668,7 @@ const ApplicationManagement: React.FC = () => {
             variant="link"
             size="sm"
             onClick={() => handleDeleteKey(record.id)}
-            className="h-auto p-0 text-red-600 hover:text-red-700"
+            className="h-auto p-0 text-red-400 hover:text-red-300"
           >
             <Trash2 className="mr-1 h-4 w-4" />
             {t('common.delete')}
@@ -571,13 +679,13 @@ const ApplicationManagement: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-3xl font-bold tracking-tight">{t('applicationManagement.title')}</h2>
-        <div className="flex items-center gap-4">
+    <div className="space-y-6 min-w-0">
+      <div className="flex flex-wrap justify-between items-center gap-4">
+        <h2 className="text-3xl font-bold tracking-tight shrink-0">{t('applicationManagement.title')}</h2>
+        <div className="flex flex-wrap items-center gap-4">
           {/* Name search */}
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-500" />
             <Input
               placeholder={t('applicationManagement.searchPlaceholder')}
               value={searchText}
@@ -586,7 +694,7 @@ const ApplicationManagement: React.FC = () => {
             />
             {searchText && (
               <button
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-500 hover:text-slate-300"
                 onClick={() => setSearchText('')}
               >
                 <X className="h-4 w-4" />
@@ -621,10 +729,43 @@ const ApplicationManagement: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={handleCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            {t('applicationManagement.createApplication')}
-          </Button>
+          {/* Workspace filter */}
+          {workspaces.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{t('workspaces.workspace')}:</span>
+              <Select value={workspaceFilter} onValueChange={setWorkspaceFilter}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('applicationManagement.filterAll')}</SelectItem>
+                  <SelectItem value="none">{t('workspaces.unassigned')}</SelectItem>
+                  {workspaces.map(ws => (
+                    <SelectItem key={ws.id} value={ws.id}>{ws.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {/* Batch move to workspace */}
+          {selectedRowIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBatchMoveTargetWs('__none__')
+                setBatchMoveDialogOpen(true)
+              }}
+            >
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              {t('workspaces.batchMove', { count: selectedRowIds.size })}
+            </Button>
+          )}
+          {canEdit && (
+            <Button onClick={handleCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t('applicationManagement.createApplication')}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -653,8 +794,8 @@ const ApplicationManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card>
-        <CardContent className="p-0">
+      <Card className="overflow-hidden">
+        <CardContent className="p-0 overflow-x-auto">
           <DataTable columns={columns} data={filteredApplications} loading={loading} pageSize={10} />
         </CardContent>
       </Card>
@@ -747,7 +888,7 @@ const ApplicationManagement: React.FC = () => {
             <DialogTitle>
               <div className="flex items-center gap-2">
                 <span>{t('applicationManagement.manageApiKeys')}</span>
-                <span className="text-gray-500 text-sm font-normal">({currentAppName})</span>
+                <span className="text-muted-foreground text-sm font-normal">({currentAppName})</span>
               </div>
             </DialogTitle>
           </DialogHeader>
@@ -794,7 +935,7 @@ const ApplicationManagement: React.FC = () => {
             <SheetDescription>
               {selectedApp?.name}
               {selectedApp?.source === 'auto_discovery' && selectedApp?.external_id && (
-                <span className="text-gray-500 ml-2">({selectedApp.external_id})</span>
+                <span className="text-muted-foreground ml-2">({selectedApp.external_id})</span>
               )}
             </SheetDescription>
           </SheetHeader>
@@ -818,21 +959,21 @@ const ApplicationManagement: React.FC = () => {
                 </div>
                 <div className="rounded-lg border p-3 space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t('applicationManagement.name')}:</span>
+                    <span className="text-muted-foreground">{t('applicationManagement.name')}:</span>
                     <span className="font-medium">{selectedApp.name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t('applicationManagement.description')}:</span>
+                    <span className="text-muted-foreground">{t('applicationManagement.description')}:</span>
                     <span className="max-w-[250px] text-right">{selectedApp.description || '-'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t('applicationManagement.status')}:</span>
+                    <span className="text-muted-foreground">{t('applicationManagement.status')}:</span>
                     <Badge variant={selectedApp.is_active ? 'outline' : 'destructive'}>
                       {selectedApp.is_active ? t('applicationManagement.active') : t('applicationManagement.inactive')}
                     </Badge>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t('applicationManagement.source')}:</span>
+                    <span className="text-muted-foreground">{t('applicationManagement.source')}:</span>
                     <Badge variant={selectedApp.source === 'auto_discovery' ? 'default' : 'secondary'}>
                       {selectedApp.source === 'auto_discovery'
                         ? t('applicationManagement.sourceAutoDiscovery')
@@ -840,7 +981,7 @@ const ApplicationManagement: React.FC = () => {
                     </Badge>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">{t('applicationManagement.createdAt')}:</span>
+                    <span className="text-muted-foreground">{t('applicationManagement.createdAt')}:</span>
                     <span>{format(new Date(selectedApp.created_at), 'yyyy-MM-dd HH:mm:ss')}</span>
                   </div>
                 </div>
@@ -878,11 +1019,11 @@ const ApplicationManagement: React.FC = () => {
                   {currentAppKeys.length > 0 ? (
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
                       {currentAppKeys.map((apiKey) => (
-                        <div key={apiKey.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                        <div key={apiKey.id} className="flex items-center justify-between p-2 bg-secondary rounded text-sm">
                           <div className="flex-1 min-w-0">
                             <div className="font-medium truncate">{apiKey.name || t('applicationManagement.unnamed')}</div>
                             <div className="flex items-center gap-1 mt-1">
-                              <code className={`text-xs bg-gray-200 px-1 py-0.5 rounded ${visibleKeys.has(apiKey.id) ? 'break-all' : 'truncate max-w-[200px]'}`}>
+                              <code className={`text-xs bg-border px-1 py-0.5 rounded ${visibleKeys.has(apiKey.id) ? 'break-all' : 'truncate max-w-[200px]'}`}>
                                 {visibleKeys.has(apiKey.id) ? apiKey.key : maskApiKey(apiKey.key)}
                               </code>
                               <Button
@@ -912,7 +1053,7 @@ const ApplicationManagement: React.FC = () => {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleDeleteKey(apiKey.id)}
-                              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                              className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
@@ -921,7 +1062,7 @@ const ApplicationManagement: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <div className="text-sm text-gray-500 text-center py-2">
+                    <div className="text-sm text-muted-foreground text-center py-2">
                       {t('applicationManagement.noApiKeys')}
                     </div>
                   )}
@@ -935,37 +1076,37 @@ const ApplicationManagement: React.FC = () => {
                   <div className="rounded-lg border p-3 space-y-3 text-sm">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{t('applicationManagement.scanners')}:</span>
+                        <span className="text-muted-foreground">{t('applicationManagement.scanners')}:</span>
                         <Badge variant="default">
                           {selectedApp.protection_summary.risk_types_enabled}/{selectedApp.protection_summary.total_risk_types}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{t('applicationManagement.dlpEntities')}:</span>
+                        <span className="text-muted-foreground">{t('applicationManagement.dlpEntities')}:</span>
                         <Badge variant="default">{selectedApp.protection_summary.data_security_entities}</Badge>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{t('applicationManagement.sensitivityLevel')}:</span>
+                        <span className="text-muted-foreground">{t('applicationManagement.sensitivityLevel')}:</span>
                         <Badge variant="secondary">
                           {t(`sensitivity.${selectedApp.protection_summary.sensitivity_level}`)}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{t('applicationManagement.banPolicy')}:</span>
+                        <span className="text-muted-foreground">{t('applicationManagement.banPolicy')}:</span>
                         <Badge variant={selectedApp.protection_summary.ban_policy_enabled ? 'outline' : 'secondary'}>
                           {selectedApp.protection_summary.ban_policy_enabled ? t('common.enabled') : t('common.disabled')}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{t('applicationManagement.blacklist')}:</span>
+                        <span className="text-muted-foreground">{t('applicationManagement.blacklist')}:</span>
                         <Badge variant="destructive">{selectedApp.protection_summary.blacklist_count}</Badge>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{t('applicationManagement.whitelist')}:</span>
+                        <span className="text-muted-foreground">{t('applicationManagement.whitelist')}:</span>
                         <Badge variant="outline">{selectedApp.protection_summary.whitelist_count}</Badge>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-gray-600">{t('applicationManagement.knowledgeBase')}:</span>
+                        <span className="text-muted-foreground">{t('applicationManagement.knowledgeBase')}:</span>
                         <Badge variant="secondary">{selectedApp.protection_summary.knowledge_base_count}</Badge>
                       </div>
                     </div>
@@ -976,6 +1117,41 @@ const ApplicationManagement: React.FC = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Batch Move to Workspace Dialog */}
+      <Dialog open={batchMoveDialogOpen} onOpenChange={setBatchMoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('workspaces.batchMoveTitle', { count: selectedRowIds.size })}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('workspaces.batchMoveDesc')}
+            </p>
+            <Select value={batchMoveTargetWs} onValueChange={setBatchMoveTargetWs}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('workspaces.selectWorkspace')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">{t('workspaces.unassigned')}</SelectItem>
+                {workspaces.map(ws => (
+                  <SelectItem key={ws.id} value={ws.id}>{ws.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchMoveDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleBatchMoveToWorkspace}>
+              {t('common.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

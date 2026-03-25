@@ -102,7 +102,7 @@ async def process_input(
     This endpoint performs:
     1. Ban policy check (user/IP)
     2. Blacklist/Whitelist keyword check
-    3. Data leakage prevention (DLP) detection
+    3. Data Maskingdetection
     4. Security/Compliance scanning (21 risk categories)
     5. Risk aggregation and disposition decision
 

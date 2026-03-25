@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from database.connection import get_admin_db
-from database.models import Tenant, EmailVerification
+from database.models import Tenant, EmailVerification, TenantMember
 from utils.auth import create_access_token, verify_token, verify_password, get_password_hash
 from utils.user import create_user, verify_user_email, regenerate_api_key, get_user_by_email, get_user_by_api_key, record_login_attempt, check_login_rate_limit
 from utils.email import send_verification_email, generate_verification_code, get_verification_expiry
@@ -39,8 +39,9 @@ class LoginResponse(BaseModel):
     token_type: str
     expires_in: int
     api_key: str
-    tenant_id: str  # Changed to string UUID
+    tenant_id: str  # Organization tenant ID (may differ from user ID for members)
     is_super_admin: bool
+    member_role: str = "owner"  # owner, admin, member
     requires_password_change: bool = False
     password_message: Optional[str] = None
 
@@ -52,6 +53,8 @@ class UserInfo(BaseModel):
     is_active: bool
     is_verified: bool
     is_super_admin: bool
+    member_role: str = "owner"  # owner, admin, member
+    org_tenant_id: str = ""  # Organization tenant ID
     rate_limit: int  # Speed limit (requests per second, 0 means unlimited, default is 1)
     language: str  # User language preference
     log_direct_model_access: bool  # Whether to log direct model access calls
@@ -89,7 +92,10 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
 
 @router.post("/register")
 async def register_user(register_data: RegisterRequest, db: Session = Depends(get_admin_db)):
-    """Tenant registration"""
+    """Tenant registration (disabled in enterprise mode)"""
+    if settings.is_enterprise_mode:
+        raise HTTPException(status_code=403, detail="Self-registration is disabled. Please contact your administrator.")
+
     # Validate enterprise email (reject personal emails)
     from utils.validators import validate_enterprise_email
     email_validation = validate_enterprise_email(register_data.email)
@@ -150,7 +156,10 @@ async def register_user(register_data: RegisterRequest, db: Session = Depends(ge
 
 @router.post("/verify-email")
 async def verify_email(verify_data: VerifyEmailRequest, db: Session = Depends(get_admin_db)):
-    """Verify email"""
+    """Verify email (disabled in enterprise mode)"""
+    if settings.is_enterprise_mode:
+        raise HTTPException(status_code=403, detail="Self-registration is disabled. Please contact your administrator.")
+
     if not verify_user_email(db, verify_data.email, verify_data.verification_code):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -161,7 +170,10 @@ async def verify_email(verify_data: VerifyEmailRequest, db: Session = Depends(ge
 
 @router.post("/resend-verification-code")
 async def resend_verification_code(resend_data: ResendCodeRequest, db: Session = Depends(get_admin_db)):
-    """Resend verification code"""
+    """Resend verification code (disabled in enterprise mode)"""
+    if settings.is_enterprise_mode:
+        raise HTTPException(status_code=403, detail="Self-registration is disabled. Please contact your administrator.")
+
     try:
         # Check if tenant exists and is not verified
         tenant = get_user_by_email(db, resend_data.email)
@@ -263,8 +275,26 @@ async def login_user(login_data: LoginRequest, request: Request, db: Session = D
 
     access_token_expires = timedelta(minutes=settings.jwt_access_token_expire_minutes)
     is_super_admin = admin_service.is_super_admin(tenant)
+
+    # Look up team membership to resolve org tenant_id and role
+    membership = db.query(TenantMember).filter(TenantMember.user_id == tenant.id).first()
+    if membership:
+        org_tenant_id = str(membership.tenant_id)
+        member_role = membership.role
+    else:
+        # Legacy user without membership record - treat as owner
+        org_tenant_id = str(tenant.id)
+        member_role = "owner"
+
     access_token = create_access_token(
-        data={"sub": str(tenant.id), "email": tenant.email, "tenant_id": str(tenant.id), "user_id": str(tenant.id), "is_super_admin": is_super_admin},
+        data={
+            "sub": str(tenant.id),
+            "email": tenant.email,
+            "tenant_id": org_tenant_id,
+            "user_id": str(tenant.id),
+            "is_super_admin": is_super_admin,
+            "member_role": member_role,
+        },
         expires_delta=access_token_expires
     )
 
@@ -273,8 +303,9 @@ async def login_user(login_data: LoginRequest, request: Request, db: Session = D
         token_type="bearer",
         expires_in=settings.jwt_access_token_expire_minutes * 60,
         api_key=tenant.api_key,
-        tenant_id=str(tenant.id),
+        tenant_id=org_tenant_id,
         is_super_admin=is_super_admin,
+        member_role=member_role,
         requires_password_change=requires_password_change,
         password_message=password_message
     )
@@ -287,22 +318,28 @@ async def get_current_user_info(
     """Get current tenant information"""
     tenant = get_current_user_from_token(credentials, db)
 
-    # Get tenant speed limit configuration
-    try:
-        from services.rate_limiter import RateLimitService
-        from utils.logger import setup_logger
-        logger = setup_logger()
+    # Get tenant speed limit configuration (skip in enterprise mode)
+    rate_limit = 0
+    if not settings.is_enterprise_mode:
+        try:
+            from services.rate_limiter import RateLimitService
+            from utils.logger import setup_logger
+            logger = setup_logger()
 
-        rate_limit_service = RateLimitService(db)
-        rate_limit_config = rate_limit_service.get_user_rate_limit(str(tenant.id))
-        # If there is a configuration and it is active, use the configuration value; otherwise use default value 10 RPS
-        rate_limit = rate_limit_config.requests_per_second if rate_limit_config and rate_limit_config.is_active else 10
-        logger.info(f"Tenant {tenant.email} speed limit: {rate_limit} (configuration exists: {rate_limit_config is not None})")
-    except Exception as e:
-        from utils.logger import setup_logger
-        logger = setup_logger()
-        logger.error(f"Get tenant speed limit failed: {e}")
-        rate_limit = 10  # Default value
+            rate_limit_service = RateLimitService(db)
+            rate_limit_config = rate_limit_service.get_user_rate_limit(str(tenant.id))
+            rate_limit = rate_limit_config.requests_per_second if rate_limit_config and rate_limit_config.is_active else 10
+            logger.info(f"Tenant {tenant.email} speed limit: {rate_limit} (configuration exists: {rate_limit_config is not None})")
+        except Exception as e:
+            from utils.logger import setup_logger
+            logger = setup_logger()
+            logger.error(f"Get tenant speed limit failed: {e}")
+            rate_limit = 10
+
+    # Look up team membership
+    membership = db.query(TenantMember).filter(TenantMember.user_id == tenant.id).first()
+    member_role = membership.role if membership else "owner"
+    org_tenant_id = str(membership.tenant_id) if membership else str(tenant.id)
 
     return UserInfo(
         id=str(tenant.id),  # Convert to string format
@@ -312,6 +349,8 @@ async def get_current_user_info(
         is_active=tenant.is_active,
         is_verified=tenant.is_verified,
         is_super_admin=admin_service.is_super_admin(tenant),
+        member_role=member_role,
+        org_tenant_id=org_tenant_id,
         rate_limit=rate_limit,
         language=tenant.language,
         log_direct_model_access=tenant.log_direct_model_access

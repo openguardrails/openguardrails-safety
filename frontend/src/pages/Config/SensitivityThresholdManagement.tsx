@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Info, Edit, Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -22,9 +23,9 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { DataTable } from '@/components/data-table/DataTable'
 import { InputNumber } from '@/components/ui/input-number'
-import { sensitivityThresholdApi } from '../../services/api'
+import api, { sensitivityThresholdApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { useApplication } from '../../contexts/ApplicationContext'
+
 import type { ColumnDef } from '@tanstack/react-table'
 
 interface SensitivityThresholdConfig {
@@ -42,34 +43,56 @@ interface SensitivityLevel {
   target: string
 }
 
-const SensitivityThresholdManagement: React.FC = () => {
+interface SensitivityThresholdManagementProps {
+  workspaceId?: string
+}
+
+const SensitivityThresholdManagement: React.FC<SensitivityThresholdManagementProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [config, setConfig] = useState<SensitivityThresholdConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [editModalVisible, setEditModalVisible] = useState(false)
   const [editingLevels, setEditingLevels] = useState<SensitivityLevel[]>([])
   const [saving, setSaving] = useState(false)
   const { onUserSwitch } = useAuth()
-  const { currentApplicationId } = useApplication()
 
-  useEffect(() => {
-    if (currentApplicationId) {
-      loadConfig()
+  // For workspace mode, use the workspace risk-types endpoint and extract threshold fields
+  const thresholdApi = React.useMemo(() => {
+    if (!workspaceId) return sensitivityThresholdApi
+    const prefix = `/api/v1/workspaces/${workspaceId}/config`
+    return {
+      get: async () => {
+        const data = await api.get(`${prefix}/risk-types`).then(res => res.data)
+        return {
+          high_sensitivity_threshold: data.high_sensitivity_threshold ?? 0.40,
+          medium_sensitivity_threshold: data.medium_sensitivity_threshold ?? 0.60,
+          low_sensitivity_threshold: data.low_sensitivity_threshold ?? 0.95,
+          sensitivity_trigger_level: data.sensitivity_trigger_level ?? 'medium',
+        }
+      },
+      update: (config: SensitivityThresholdConfig) =>
+        api.put(`${prefix}/risk-types`, config).then(res => res.data),
     }
-  }, [currentApplicationId])
+  }, [workspaceId])
 
-  // Listen to user switch event, automatically refresh config
   useEffect(() => {
-    const unsubscribe = onUserSwitch(() => {
-      loadConfig()
-    })
-    return unsubscribe
-  }, [onUserSwitch])
+    loadConfig()
+  }, [workspaceId])
+
+  useEffect(() => {
+    if (!workspaceId) {
+      const unsubscribe = onUserSwitch(() => {
+        loadConfig()
+      })
+      return unsubscribe
+    }
+  }, [onUserSwitch, workspaceId])
 
   const loadConfig = async () => {
     try {
       setLoading(true)
-      const data = await sensitivityThresholdApi.get()
+      const data = await thresholdApi.get()
       setConfig(data)
     } catch (error) {
       toast.error(t('sensitivity.fetchFailed'))
@@ -159,7 +182,7 @@ const SensitivityThresholdManagement: React.FC = () => {
         sensitivity_trigger_level: config?.sensitivity_trigger_level || 'medium',
       }
 
-      await sensitivityThresholdApi.update(newConfig)
+      await thresholdApi.update(newConfig)
       setConfig(newConfig)
       setEditModalVisible(false)
       toast.success(t('sensitivity.saveSuccess'))
@@ -179,7 +202,7 @@ const SensitivityThresholdManagement: React.FC = () => {
       setSaving(true)
       const newConfig = { ...config, sensitivity_trigger_level: value }
 
-      await sensitivityThresholdApi.update(newConfig)
+      await thresholdApi.update(newConfig)
       setConfig(newConfig)
 
       const levelNames = {
@@ -221,7 +244,7 @@ const SensitivityThresholdManagement: React.FC = () => {
       header: t('sensitivity.threshold'),
       cell: ({ row }) => {
         const value = row.getValue('threshold') as number
-        return <code className="text-xs bg-gray-100 px-2 py-1 rounded">{value.toFixed(2)}</code>
+        return <code className="text-xs bg-muted px-2 py-1 rounded">{value.toFixed(2)}</code>
       },
     },
     {
@@ -273,7 +296,7 @@ const SensitivityThresholdManagement: React.FC = () => {
     return (
       <div className="flex items-center justify-center p-12">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-400 mx-auto"></div>
         </div>
       </div>
     )
@@ -295,17 +318,19 @@ const SensitivityThresholdManagement: React.FC = () => {
                 <Info className="h-5 w-5" />
                 {t('sensitivity.title')}
               </h3>
-              <p className="text-gray-600 mt-2">{t('sensitivity.description')}</p>
+              <p className="text-muted-foreground mt-2">{t('sensitivity.description')}</p>
             </div>
 
             {/* Current config table */}
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-base">{t('sensitivity.currentSensitivityLevel')}</CardTitle>
-                <Button onClick={handleEdit} size="sm">
-                  <Edit className="mr-2 h-4 w-4" />
-                  {t('sensitivity.editThresholds')}
-                </Button>
+                {canEdit && (
+                  <Button onClick={handleEdit} size="sm">
+                    <Edit className="mr-2 h-4 w-4" />
+                    {t('sensitivity.editThresholds')}
+                  </Button>
+                )}
               </CardHeader>
               <CardContent>
                 <DataTable columns={columns} data={sensitivityLevels} pagination={false} />
@@ -318,11 +343,11 @@ const SensitivityThresholdManagement: React.FC = () => {
                 <CardTitle className="text-base">{t('sensitivity.currentSensitivityLevel')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-sm font-medium text-blue-900 mb-2">
+                <div className="bg-sky-500/10 border border-sky-500/20 rounded-lg p-4">
+                  <p className="text-sm font-medium text-sky-200 mb-2">
                     {t('sensitivity.configurationExplanation')}
                   </p>
-                  <div className="space-y-1 text-xs text-blue-800">
+                  <div className="space-y-1 text-xs text-sky-300">
                     <p>
                       •{' '}
                       {t('sensitivity.highSensitivityDesc', {
@@ -349,7 +374,7 @@ const SensitivityThresholdManagement: React.FC = () => {
                   <Select
                     value={config?.sensitivity_trigger_level}
                     onValueChange={handleTriggerLevelChange}
-                    disabled={saving}
+                    disabled={saving || !canEdit}
                   >
                     <SelectTrigger className="w-[200px]">
                       <SelectValue />
@@ -377,8 +402,8 @@ const SensitivityThresholdManagement: React.FC = () => {
                   </Select>
                 </div>
 
-                <div className="mt-2 p-2 bg-gray-50 rounded border border-dashed border-gray-300">
-                  <p className="text-xs text-gray-600">
+                <div className="mt-2 p-2 bg-secondary rounded border border-dashed border-border">
+                  <p className="text-xs text-muted-foreground">
                     {config?.sensitivity_trigger_level === 'high' &&
                       t('sensitivity.currentDetectionRule', {
                         threshold: config.high_sensitivity_threshold,
@@ -407,11 +432,11 @@ const SensitivityThresholdManagement: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-yellow-900 mb-2">
+            <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4">
+              <p className="text-sm font-medium text-yellow-200 mb-2">
                 {t('sensitivity.editInstructions')}
               </p>
-              <div className="space-y-1 text-xs text-yellow-800">
+              <div className="space-y-1 text-xs text-yellow-300">
                 <p>• {t('sensitivity.editDescription1')}</p>
                 <p>• {t('sensitivity.editDescription2')}</p>
               </div>

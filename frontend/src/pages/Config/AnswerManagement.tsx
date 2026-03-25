@@ -8,14 +8,15 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Label } from '@/components/ui/label'
 import { FileText, BookOpen, Info, X, Edit2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import KnowledgeBaseManagement from './KnowledgeBaseManagement'
-import { fixedAnswerTemplatesApi } from '../../services/api'
+import api, { fixedAnswerTemplatesApi } from '../../services/api'
 
 /**
  * Answer Management Page
  *
  * Combines two tabs:
- * 1. Fixed Answer (据答): Simple explanation - uses generic template with {scanner_name}
+ * 1. Fixed Answer (据答): Simple explanation - uses generic template with {guardrail_name}
  * 2. Proxy Answer (代答): Knowledge base for generating AI-assisted responses
  */
 const FIXED_ANSWER_INFO_DISMISSED_KEY = 'answerManagement.fixedAnswerInfoDismissed'
@@ -27,8 +28,8 @@ interface TemplateData {
 
 const defaultTemplates: TemplateData = {
   security_risk_template: {
-    en: 'Request blocked by OpenGuardrails due to possible violation of policy related to {scanner_name}.',
-    zh: '请求已被OpenGuardrails拦截，原因：可能违反了与{scanner_name}有关的策略要求。'
+    en: 'Request blocked by OpenGuardrails due to possible violation of policy related to {guardrail_name}.',
+    zh: '请求已被OpenGuardrails拦截，原因：可能违反了与{guardrail_name}有关的策略要求。'
   },
   data_leakage_template: {
     en: 'Request blocked by OpenGuardrails due to possible sensitive data ({entity_type_names}).',
@@ -36,9 +37,23 @@ const defaultTemplates: TemplateData = {
   }
 }
 
-const AnswerManagement: React.FC = () => {
+interface AnswerManagementProps {
+  workspaceId?: string
+}
+
+const AnswerManagement: React.FC<AnswerManagementProps> = ({ workspaceId }) => {
   const { t, i18n } = useTranslation()
+  const canEdit = useCanEdit()
   const [activeTab, setActiveTab] = useState('fixed-answer')
+
+  const templatesApi = React.useMemo(() => {
+    if (!workspaceId) return fixedAnswerTemplatesApi
+    const prefix = `/api/v1/workspaces/${workspaceId}/config`
+    return {
+      get: () => api.get(`${prefix}/fixed-answer-templates`).then(res => res.data),
+      update: (data: any) => api.put(`${prefix}/fixed-answer-templates`, data).then(res => res.data),
+    }
+  }, [workspaceId])
   const [infoDismissed, setInfoDismissed] = useState(() => {
     return localStorage.getItem(FIXED_ANSWER_INFO_DISMISSED_KEY) === 'true'
   })
@@ -62,7 +77,7 @@ const AnswerManagement: React.FC = () => {
   const loadTemplates = async () => {
     try {
       setLoading(true)
-      const data = await fixedAnswerTemplatesApi.get()
+      const data = await templatesApi.get()
       if (data) {
         setTemplates({
           security_risk_template: data.security_risk_template || defaultTemplates.security_risk_template,
@@ -100,7 +115,7 @@ const AnswerManagement: React.FC = () => {
         [currentLang]: editValue
       }
 
-      await fixedAnswerTemplatesApi.update({
+      await templatesApi.update({
         [templateKey]: updatedTemplate
       })
 
@@ -171,15 +186,17 @@ const AnswerManagement: React.FC = () => {
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h5 className="text-sm font-medium">{t('answer.securityRiskTemplate')}</h5>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditTemplate('security_risk')}
-                      disabled={loading}
-                    >
-                      <Edit2 className="h-4 w-4 mr-1" />
-                      {t('common.edit')}
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditTemplate('security_risk')}
+                        disabled={loading}
+                      >
+                        <Edit2 className="h-4 w-4 mr-1" />
+                        {t('common.edit')}
+                      </Button>
+                    )}
                   </div>
                   <div className="bg-muted rounded p-3 font-mono text-sm">
                     {securityRiskTemplate}
@@ -189,19 +206,21 @@ const AnswerManagement: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Data Leakage Template */}
+                {/* Data Masking Template */}
                 <div className="rounded-lg border p-4">
                   <div className="flex items-center justify-between mb-2">
                     <h5 className="text-sm font-medium">{t('answer.dataLeakageTemplate')}</h5>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleEditTemplate('data_leakage')}
-                      disabled={loading}
-                    >
-                      <Edit2 className="h-4 w-4 mr-1" />
-                      {t('common.edit')}
-                    </Button>
+                    {canEdit && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditTemplate('data_leakage')}
+                        disabled={loading}
+                      >
+                        <Edit2 className="h-4 w-4 mr-1" />
+                        {t('common.edit')}
+                      </Button>
+                    )}
                   </div>
                   <div className="bg-muted rounded p-3 font-mono text-sm">
                     {dataLeakageTemplate}
@@ -222,8 +241,8 @@ const AnswerManagement: React.FC = () => {
                     <p className="text-sm text-muted-foreground">
                       {t('answer.proxyAnswerDesc')}
                     </p>
-                    <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-md">
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                    <div className="mt-3 p-3 bg-sky-500/10 dark:bg-blue-900/20 rounded-md">
+                      <p className="text-sm text-sky-400 dark:text-blue-300">
                         <strong>{t('answer.proxyAnswerNote')}:</strong> {t('answer.proxyAnswerNoteDesc')}
                       </p>
                     </div>

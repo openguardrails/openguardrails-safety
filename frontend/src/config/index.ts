@@ -95,6 +95,20 @@ export const features = {
    */
   showThirdPartyPackages: (): boolean => {
     return isSaasMode();
+  },
+
+  /**
+   * Show self-registration
+   */
+  showRegistration: (): boolean => {
+    return isSaasMode();
+  },
+
+  /**
+   * Show rate limit management
+   */
+  showRateLimits: (): boolean => {
+    return isSaasMode();
   }
 };
 

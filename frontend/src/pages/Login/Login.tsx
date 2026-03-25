@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import LanguageSwitcher from '../../components/LanguageSwitcher/LanguageSwitcher'
+import { features } from '../../config'
 
 import { loginSchema, type LoginFormData } from '@/lib/validators'
 
@@ -95,12 +96,12 @@ const Login: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-secondary">
       {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-12 flex-col justify-between">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#0a1628] via-[#0d1f3c] to-[#1a1040] p-12 flex-col justify-between">
         <div>
           <div className="flex items-center gap-3 mb-8">
-            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-white rounded-lg p-2" />
+            <img src="/platform/logo-dark.png" alt="Logo" className="h-12 w-12 bg-card rounded-lg p-2" />
             <h1 className="text-2xl font-bold text-white">OpenGuardrails</h1>
           </div>
           <h2 className="text-4xl font-bold text-white mb-4">
@@ -120,10 +121,10 @@ const Login: React.FC = () => {
         <div className="w-full max-w-md">
           <Card className="border shadow-sm">
             <CardHeader className="space-y-1 pb-6">
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-foreground">
                 {t('login.title')}
               </h1>
-              <p className="text-slate-600 text-sm">
+              <p className="text-muted-foreground text-sm">
                 {t('login.subtitle')}
               </p>
             </CardHeader>
@@ -175,7 +176,7 @@ const Login: React.FC = () => {
                         <FormLabel>{t('login.emailPlaceholder')}</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                             <Input
                               type="email"
                               placeholder={t('login.emailPlaceholder')}
@@ -198,7 +199,7 @@ const Login: React.FC = () => {
                         <FormLabel>{t('login.passwordPlaceholder')}</FormLabel>
                         <FormControl>
                           <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                             <Input
                               type="password"
                               placeholder={t('login.passwordPlaceholder')}
@@ -226,18 +227,24 @@ const Login: React.FC = () => {
 
             <CardFooter className="flex-col space-y-3 pt-6">
               <div className="flex flex-col gap-2 text-sm text-center">
+                {features.showRegistration() && (
+                  <div>
+                    <span className="text-muted-foreground">{t('login.noAccount')} </span>
+                    <Link to="/register" className="text-sky-400 hover:text-sky-400 font-medium hover:underline">
+                      {t('login.registerNow')}
+                    </Link>
+                  </div>
+                )}
                 <div>
-                  <span className="text-slate-600">{t('login.noAccount')} </span>
-                  <Link to="/register" className="text-blue-600 hover:text-blue-700 font-medium hover:underline">
-                    {t('login.registerNow')}
-                  </Link>
-                </div>
-                <div>
-                  <Link to="/verify" className="text-slate-600 hover:text-slate-900 hover:underline">
-                    {t('login.verifyPage')}
-                  </Link>
-                  <span className="text-slate-400 mx-2">•</span>
-                  <Link to="/forgot-password" className="text-slate-600 hover:text-slate-900 hover:underline">
+                  {features.showRegistration() && (
+                    <>
+                      <Link to="/verify" className="text-muted-foreground hover:text-foreground hover:underline">
+                        {t('login.verifyPage')}
+                      </Link>
+                      <span className="text-slate-500 mx-2">•</span>
+                    </>
+                  )}
+                  <Link to="/forgot-password" className="text-muted-foreground hover:text-foreground hover:underline">
                     {t('login.forgotPassword')}
                   </Link>
                 </div>
@@ -246,7 +253,7 @@ const Login: React.FC = () => {
           </Card>
 
           {/* Mobile Copyright */}
-          <p className="text-xs text-slate-500 text-center mt-6 lg:hidden">
+          <p className="text-xs text-muted-foreground text-center mt-6 lg:hidden">
             {t('login.copyright')}
           </p>
         </div>

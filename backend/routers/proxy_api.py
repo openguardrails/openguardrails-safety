@@ -512,7 +512,7 @@ async def _sync_output_detection(model_config, input_messages: list, response_co
                 disposal_service = DataLeakageDisposalService(db)
                 disposal_action = disposal_service.get_disposal_action(application_id, data_risk_level, direction='output')
 
-                logger.info(f"Output data leakage detected (risk={data_risk_level}), disposal_action={disposal_action}")
+                logger.info(f"Output data masking detected (risk={data_risk_level}), disposal_action={disposal_action}")
 
                 if disposal_action == 'block':
                     dlp_blocked = True
@@ -538,7 +538,7 @@ async def _sync_output_detection(model_config, input_messages: list, response_co
                 # 'pass' action: just log but don't modify content
 
             except Exception as e:
-                logger.error(f"Output data leakage disposal failed: {e}", exc_info=True)
+                logger.error(f"Output data masking disposal failed: {e}", exc_info=True)
 
         # ============ General Risk Handling (security + compliance) ============
         suggest_answer = detection_result.get('suggest_answer')

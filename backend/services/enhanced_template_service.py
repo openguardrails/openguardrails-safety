@@ -3,7 +3,7 @@ Enhanced Template Service
 
 Provides intelligent answer generation for blocked content:
 1. Proxy Answer (代答): When knowledge base is hit, generate safe response using guardrail model
-2. Fixed Answer (据答): When no KB hit, use generic template with scanner_name
+2. Fixed Answer (据答): When no KB hit, use generic template with guardrail_name
 
 Flow:
   User Query → Risk Detected → Search Knowledge Base
@@ -32,8 +32,8 @@ from utils.i18n_loader import get_translation
 # Default templates (same as in config_api.py)
 DEFAULT_TEMPLATES = {
     "security_risk_template": {
-        "en": "Request blocked by OpenGuardrails due to possible violation of policy related to {scanner_name}.",
-        "zh": "请求已被OpenGuardrails拦截，原因：可能违反了与{scanner_name}有关的策略要求。"
+        "en": "Request blocked by OpenGuardrails due to possible violation of policy related to {guardrail_name}.",
+        "zh": "请求已被OpenGuardrails拦截，原因：可能违反了与{guardrail_name}有关的策略要求。"
     },
     "data_leakage_template": {
         "en": "Request blocked by OpenGuardrails due to possible sensitive data ({entity_type_names}).",
@@ -69,7 +69,7 @@ class EnhancedTemplateService:
         user_language: Optional[str] = None,
         scanner_type: Optional[str] = None,
         scanner_identifier: Optional[str] = None,
-        scanner_name: Optional[str] = None
+        guardrail_name: Optional[str] = None
     ) -> str:
         """
         Get suggested answer - proxy answer (代答) or fixed answer (据答).
@@ -87,7 +87,7 @@ class EnhancedTemplateService:
             user_language: User's preferred language ('en', 'zh')
             scanner_type: Scanner type
             scanner_identifier: Scanner identifier (e.g., S8, S100)
-            scanner_name: Human-readable scanner name
+            guardrail_name: Human-readable guardrail name
 
         Returns:
             Suggested answer (proxy or fixed)
@@ -96,13 +96,13 @@ class EnhancedTemplateService:
 
         lang = user_language or 'en'
 
-        # If no scanner_name provided, try to extract from categories
-        if not scanner_name and categories:
-            scanner_name = categories[0]
+        # If no guardrail_name provided, try to extract from categories
+        if not guardrail_name and categories:
+            guardrail_name = categories[0]
 
-        # If no scanner_name still, use default
-        if not scanner_name:
-            scanner_name = "policy violation" if lang != 'zh' else "政策违规"
+        # If no guardrail_name still, use default
+        if not guardrail_name:
+            guardrail_name = "policy violation" if lang != 'zh' else "政策违规"
 
         # Try proxy answer (代答) if user_query is provided
         if user_query and user_query.strip() and application_id:
@@ -113,7 +113,7 @@ class EnhancedTemplateService:
                     application_id=application_id,
                     scanner_type=scanner_type,
                     scanner_identifier=scanner_identifier,
-                    scanner_name=scanner_name,
+                    guardrail_name=guardrail_name,
                     categories=categories,
                     user_language=lang
                 )
@@ -123,7 +123,7 @@ class EnhancedTemplateService:
                 logger.error(f"Proxy answer generation failed: {e}", exc_info=True)
 
         # Fallback to fixed answer (据答)
-        return self._get_fixed_answer(scanner_name, lang, application_id)
+        return self._get_fixed_answer(guardrail_name, lang, application_id)
 
     async def _search_and_generate_proxy_answer(
         self,
@@ -132,7 +132,7 @@ class EnhancedTemplateService:
         application_id: str,
         scanner_type: Optional[str],
         scanner_identifier: Optional[str],
-        scanner_name: str,
+        guardrail_name: str,
         categories: List[str],
         user_language: str
     ) -> Optional[str]:
@@ -145,7 +145,7 @@ class EnhancedTemplateService:
             application_id: Application ID
             scanner_type: Scanner type
             scanner_identifier: Scanner identifier
-            scanner_name: Human-readable scanner name
+            guardrail_name: Human-readable guardrail name
             categories: Risk categories
             user_language: User's preferred language
 
@@ -167,12 +167,12 @@ class EnhancedTemplateService:
             return None
 
         # Generate proxy answer using guardrail model
-        logger.info(f"KB hit, generating proxy answer for scanner: {scanner_name}")
+        logger.info(f"KB hit, generating proxy answer for scanner: {guardrail_name}")
 
         proxy_answer = await proxy_answer_service.generate_proxy_answer(
             user_query=user_query,
             kb_reference=kb_content,
-            scanner_name=scanner_name,
+            guardrail_name=guardrail_name,
             risk_level="medium_risk",  # Could be passed from caller
             user_language=user_language
         )
@@ -290,17 +290,17 @@ class EnhancedTemplateService:
         }
         return category_mapping.get(category)
 
-    def _get_fixed_answer(self, scanner_name: str, language: str, application_id: Optional[str] = None) -> str:
+    def _get_fixed_answer(self, guardrail_name: str, language: str, application_id: Optional[str] = None) -> str:
         """
         Get fixed answer (据答) using user-configured or default template.
 
         Args:
-            scanner_name: Human-readable scanner name
+            guardrail_name: Human-readable guardrail name
             language: User's preferred language
             application_id: Application ID for user-configured templates
 
         Returns:
-            Fixed answer with scanner_name filled in
+            Fixed answer with guardrail_name filled in
         """
         template = None
 
@@ -316,8 +316,8 @@ class EnhancedTemplateService:
         if not template:
             template = DEFAULT_TEMPLATES["security_risk_template"].get(language) or DEFAULT_TEMPLATES["security_risk_template"]["en"]
 
-        if '{scanner_name}' in template:
-            return template.replace('{scanner_name}', scanner_name)
+        if '{guardrail_name}' in template:
+            return template.replace('{guardrail_name}', guardrail_name)
         return template
 
     async def get_data_leakage_answer(
@@ -327,7 +327,7 @@ class EnhancedTemplateService:
         application_id: Optional[str] = None
     ) -> str:
         """
-        Get suggested answer for data leakage risk using user-configured or default template.
+        Get suggested answer for data masking risk using user-configured or default template.
 
         Args:
             entity_types: List of detected entity type names

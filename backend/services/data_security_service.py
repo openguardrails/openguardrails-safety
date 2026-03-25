@@ -1968,32 +1968,22 @@ Return JSON only, no markdown:
 
 
 def get_default_entity_types_config() -> List[Dict[str, Any]]:
-    """Get default entity types configuration (used for global initialization)"""
-    return [
-        {
-            'entity_type': 'ID_CARD_NUMBER_SYS',
-            'entity_type_name': 'ID Card Number',
-            'risk_level': 'high',
-            'pattern': r'[1-8]\d{5}(19|20)\d{2}((0[1-9])|(1[0-2]))((0[1-9])|([12]\d)|(3[01]))\d{3}[\dxX]',
-            'anonymization_method': 'mask',
-            'anonymization_config': {'mask_char': '*', 'keep_prefix': 3, 'keep_suffix': 4},
-            'check_input': True,
-            'check_output': True
-        },
-        {
-            'entity_type': 'PHONE_NUMBER_SYS',
-            'entity_type_name': 'Phone Number',
-            'risk_level': 'medium',
-            'pattern': r'1[3-9]\d{9}',
-            'anonymization_method': 'mask',
-            'anonymization_config': {'mask_char': '*', 'keep_prefix': 3, 'keep_suffix': 4},
-            'check_input': True,
-            'check_output': True
-        },
+    """Get default entity types configuration based on DEFAULT_LANGUAGE setting.
+
+    Chinese (zh): Chinese ID card, phone, name (genai), address (genai), bank card
+    English (en): US SSN, US bank card (Luhn-compatible patterns)
+    Common (all languages): Email, IPv4, IPv6
+    """
+    from config import settings
+    language = getattr(settings, 'default_language', 'en')
+
+    # Common entity types for all languages
+    common_types = [
         {
             'entity_type': 'EMAIL_SYS',
             'entity_type_name': 'Email',
             'risk_level': 'low',
+            'recognition_method': 'regex',
             'pattern': r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
             'anonymization_method': 'mask',
             'anonymization_config': {'mask_char': '*', 'keep_prefix': 2, 'keep_suffix': 0},
@@ -2001,36 +1991,123 @@ def get_default_entity_types_config() -> List[Dict[str, Any]]:
             'check_output': True
         },
         {
-            'entity_type': 'BANK_CARD_NUMBER_SYS',
-            'entity_type_name': 'Bank Card Number',
+            'entity_type': 'IPV4_ADDRESS_SYS',
+            'entity_type_name': 'IPv4 Address',
+            'risk_level': 'low',
+            'recognition_method': 'regex',
+            'pattern': r'(?<![0-9])(?:(?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5])[.](?:[0-1]?[0-9]{1,2}|2[0-4][0-9]|25[0-5]))(?![0-9])',
+            'anonymization_method': 'replace',
+            'anonymization_config': {'replacement': '<IPV4_ADDRESS>'},
+            'check_input': True,
+            'check_output': True
+        },
+        {
+            'entity_type': 'IPV6_ADDRESS_SYS',
+            'entity_type_name': 'IPv6 Address',
+            'risk_level': 'low',
+            'recognition_method': 'regex',
+            'pattern': r'((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?',
+            'anonymization_method': 'replace',
+            'anonymization_config': {'replacement': '<IPV6_ADDRESS>'},
+            'check_input': True,
+            'check_output': True
+        },
+    ]
+
+    # Chinese-specific entity types
+    zh_types = [
+        {
+            'entity_type': 'CN_ID_CARD_NUMBER_SYS',
+            'entity_type_name': '身份证号',
             'risk_level': 'high',
-            'pattern': r'\d{16,19}',
+            'recognition_method': 'regex',
+            'pattern': r'(?:[1-9]\d{5})(?:(?:18|19|[23]\d)\d{2}(?:(?:0[1-9])|(?:10|11|12))(?:(?:[0-2][1-9])|10|20|30|31)\d{3}[0-9Xx])|(?:[1-9]\d{5}\d{2}(?:(?:0[1-9])|(?:10|11|12))(?:(?:[0-2][1-9])|10|20|30|31)\d{3})',
+            'anonymization_method': 'mask',
+            'anonymization_config': {'mask_char': '*', 'keep_prefix': 3, 'keep_suffix': 4},
+            'check_input': True,
+            'check_output': True
+        },
+        {
+            'entity_type': 'CN_PHONE_NUMBER_SYS',
+            'entity_type_name': '手机号码',
+            'risk_level': 'medium',
+            'recognition_method': 'regex',
+            'pattern': r'(?<!\d)1(?:3\d|4[5-9]|5[0-35-9]|6[2567]|7[0-8]|8\d|9[0-35-9])\d{8}(?!\d)',
+            'anonymization_method': 'mask',
+            'anonymization_config': {'mask_char': '*', 'keep_prefix': 3, 'keep_suffix': 4},
+            'check_input': True,
+            'check_output': True
+        },
+        {
+            'entity_type': 'CN_PERSON_NAME_SYS',
+            'entity_type_name': '中文姓名',
+            'risk_level': 'medium',
+            'recognition_method': 'genai',
+            'entity_definition': '中文人名，包括常见的两字名、三字名和四字名（如复姓），例如：张三、李四、欧阳明月。不包括公司名称、地名、产品名等非人名实体。',
+            'anonymization_method': 'replace',
+            'anonymization_config': {'replacement': '<PERSON_NAME>'},
+            'check_input': True,
+            'check_output': True
+        },
+        {
+            'entity_type': 'CN_ADDRESS_SYS',
+            'entity_type_name': '中文地址',
+            'risk_level': 'medium',
+            'recognition_method': 'genai',
+            'entity_definition': '中国的详细地址信息，包含省/市/区/街道/门牌号等，例如：北京市海淀区中关村大街1号、广东省深圳市南山区科技园。不包括仅含省份或城市名称的模糊地理描述。',
+            'anonymization_method': 'replace',
+            'anonymization_config': {'replacement': '<ADDRESS>'},
+            'check_input': True,
+            'check_output': True
+        },
+        {
+            'entity_type': 'CN_BANK_CARD_NUMBER_SYS',
+            'entity_type_name': '银行卡号',
+            'risk_level': 'high',
+            'recognition_method': 'regex',
+            'pattern': r'(?<!\d)(?:62[0-9]{14,17}|[3-6][0-9]{15,18})(?!\d)',
             'anonymization_method': 'mask',
             'anonymization_config': {'mask_char': '*', 'keep_prefix': 4, 'keep_suffix': 4},
             'check_input': True,
             'check_output': True
         },
+    ]
+
+    # English-specific entity types
+    en_types = [
         {
-            'entity_type': 'PASSPORT_NUMBER_SYS',
-            'entity_type_name': 'Passport Number',
+            'entity_type': 'US_SSN_SYS',
+            'entity_type_name': 'US Social Security Number',
             'risk_level': 'high',
-            'pattern': r'[EGP]\d{8}',
+            'recognition_method': 'regex',
+            'pattern': r'(?<!\d)(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)',
             'anonymization_method': 'mask',
-            'anonymization_config': {'mask_char': '*', 'keep_prefix': 1, 'keep_suffix': 2},
+            'anonymization_config': {'mask_char': '*', 'keep_prefix': 0, 'keep_suffix': 4},
             'check_input': True,
             'check_output': True
         },
         {
-            'entity_type': 'IP_ADDRESS_SYS',
-            'entity_type_name': 'IP Address',
-            'risk_level': 'low',
-            'pattern': r'(?:\d{1,3}\.){3}\d{1,3}',
-            'anonymization_method': 'replace',
-            'anonymization_config': {'replacement': '<IP_ADDRESS>'},
+            'entity_type': 'US_BANK_CARD_NUMBER_SYS',
+            'entity_type_name': 'Credit/Debit Card Number',
+            'risk_level': 'high',
+            'recognition_method': 'regex',
+            'pattern': r'(?<!\d)(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|6(?:011|5[0-9]{2})[0-9]{12}|(?:2131|1800|35\d{3})\d{11})(?!\d)',
+            'anonymization_method': 'mask',
+            'anonymization_config': {'mask_char': '*', 'keep_prefix': 4, 'keep_suffix': 4},
             'check_input': True,
             'check_output': True
-        }
+        },
     ]
+
+    # Build final list based on language
+    entity_types = []
+    if language == 'zh':
+        entity_types.extend(zh_types)
+    else:
+        entity_types.extend(en_types)
+    entity_types.extend(common_types)
+
+    return entity_types
 
 
 def create_global_entity_types(db: Session, admin_tenant_id: str) -> int:
@@ -2063,7 +2140,9 @@ def create_global_entity_types(db: Session, admin_tenant_id: str) -> int:
                     entity_type=entity_data['entity_type'],
                     entity_type_name=entity_data['entity_type_name'],
                     risk_level=entity_data['risk_level'],
-                    pattern=entity_data['pattern'],
+                    recognition_method=entity_data.get('recognition_method', 'regex'),
+                    pattern=entity_data.get('pattern'),
+                    entity_definition=entity_data.get('entity_definition'),
                     anonymization_method=entity_data['anonymization_method'],
                     anonymization_config=entity_data['anonymization_config'],
                     check_input=entity_data['check_input'],

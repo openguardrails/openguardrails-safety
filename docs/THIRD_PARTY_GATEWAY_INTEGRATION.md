@@ -52,7 +52,7 @@ This approach ensures:
 │  ┌───────────────────────────┼───────────────────────────────┐    │
 │  │              Existing Service Layer                        │    │
 │  │ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │    │
-│  │ │ Detection       │  │ Data Leakage    │  │ Restore     │ │    │
+│  │ │ Detection       │  │ Data Masking    │  │ Restore     │ │    │
 │  │ │ Guardrail Svc   │  │ Disposal Svc    │  │ Anonym Svc  │ │    │
 │  │ └─────────────────┘  └─────────────────┘  └─────────────┘ │    │
 │  │ ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │    │
@@ -326,7 +326,7 @@ When multiple risks are detected, the highest risk level determines the action:
 high_risk > medium_risk > low_risk > no_risk
 ```
 
-### Data Leakage Disposal Actions
+### Data Masking Disposal Actions
 
 The DLP disposal action is configurable per application in OpenGuardrails:
 

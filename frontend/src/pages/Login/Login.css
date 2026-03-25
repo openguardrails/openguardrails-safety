@@ -1,9 +1,10 @@
+/* Login page styles - dark theme */
 .login-container {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: hsl(225 35% 7%);
   padding: 20px;
 }
 
@@ -14,10 +15,11 @@
 
 .login-card {
   border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  border: none;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   padding: 20px;
   position: relative;
+  background: hsl(225 30% 10%);
 }
 
 .login-header {
@@ -27,12 +29,13 @@
 
 .login-title {
   margin-bottom: 8px !important;
-  color: #1890ff;
+  color: #0ea5e9;
   font-weight: 600;
 }
 
 .login-subtitle {
   font-size: 16px;
+  color: #94a3b8;
 }
 
 .login-button {
@@ -48,31 +51,11 @@
   text-align: center;
 }
 
-.ant-form-item {
-  margin-bottom: 20px;
-}
-
-.ant-input-affix-wrapper,
-.ant-input {
-  border-radius: 8px;
-  height: 48px;
-}
-
-.ant-input-affix-wrapper .ant-input {
-  height: auto;
-}
-
-.ant-btn:focus,
-.ant-btn:hover {
-  transform: translateY(-1px);
-  transition: all 0.3s ease;
-}
-
 @media (max-width: 480px) {
   .login-container {
     padding: 10px;
   }
-  
+
   .login-card {
     padding: 15px;
   }

@@ -220,7 +220,7 @@ Risk profiles SHALL be reviewed when significant changes occur.
 ### OG-A1.3 Tenant and Boundary Isolation
 
 The organization SHALL ensure logical or physical isolation between tenants, applications, or business units
-to prevent unauthorized access, data leakage, or policy crossover during AI runtime.
+to prevent unauthorized access, data masking, or policy crossover during AI runtime.
 
 
 ### OG-A1.4 Policy Ownership and Approval
@@ -276,7 +276,7 @@ Non-compliant prompts SHALL be blocked or modified according to policy.
 ### OG-A3.2 Context and Memory Control
 
 The organization SHALL inspect retrieved context, memory, or external knowledge sources
-used during inference to prevent policy violations or data leakage.
+used during inference to prevent policy violations or data masking.
 
 
 ### OG-A3.3 Tool and Function Call Control

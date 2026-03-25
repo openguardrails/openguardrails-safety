@@ -250,7 +250,7 @@ const ModelRoutes: React.FC = () => {
       header: t('modelRoutes.pattern'),
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <code className="px-2 py-1 bg-slate-100 rounded text-sm">{row.original.model_pattern}</code>
+          <code className="px-2 py-1 bg-muted rounded text-sm">{row.original.model_pattern}</code>
           <Badge variant={row.original.match_type === 'exact' ? 'default' : 'secondary'}>
             {t(`modelRoutes.matchType.${row.original.match_type}`)}
           </Badge>
@@ -639,13 +639,13 @@ const ModelRoutes: React.FC = () => {
             </Button>
 
             {testResult && (
-              <div className={`p-4 rounded-md ${testResult.matched ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+              <div className={`p-4 rounded-md ${testResult.matched ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-yellow-500/10 border border-yellow-500/20'}`}>
                 {testResult.matched ? (
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-green-700 font-medium">
+                    <div className="flex items-center gap-2 text-emerald-400 font-medium">
                       <span>{t('modelRoutes.routeMatched')}</span>
                     </div>
-                    <div className="text-sm text-green-600">
+                    <div className="text-sm text-emerald-400">
                       <p><strong>{t('modelRoutes.upstreamApi')}:</strong> {testResult.upstream_api_config?.config_name}</p>
                       {testResult.upstream_api_config?.provider && (
                         <p><strong>{t('modelRoutes.provider')}:</strong> {testResult.upstream_api_config.provider}</p>
@@ -653,7 +653,7 @@ const ModelRoutes: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-yellow-700">
+                  <div className="text-yellow-400">
                     <p className="font-medium">{t('modelRoutes.noRouteMatched')}</p>
                     <p className="text-sm">{testResult.message}</p>
                   </div>

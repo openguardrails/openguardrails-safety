@@ -27,7 +27,6 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { dataLeakagePolicyApi, dataSecurityApi } from '../../services/api'
-import { useApplication } from '../../contexts/ApplicationContext'
 
 interface FeatureAvailability {
   is_enterprise: boolean
@@ -90,7 +89,6 @@ interface InputPolicyConfigProps {
 const InputPolicyConfig: React.FC<InputPolicyConfigProps> = ({ policy, hasPrivateModels, onUpdate }) => {
   const { t } = useTranslation()
   const [loading, setLoading] = useState(false)
-  const { currentApplicationId } = useApplication()
   const [featureAvailability, setFeatureAvailability] = useState<FeatureAvailability | null>(null)
 
   // Load premium feature availability
@@ -159,14 +157,9 @@ const InputPolicyConfig: React.FC<InputPolicyConfigProps> = ({ policy, hasPrivat
 
   // Save policy
   const onSubmit = async (values: InputPolicyFormData) => {
-    if (!currentApplicationId) {
-      toast.error('No application selected')
-      return
-    }
-
     setLoading(true)
     try {
-      await dataLeakagePolicyApi.updatePolicy(currentApplicationId, {
+      await dataLeakagePolicyApi.updatePolicy({
         input_high_risk_action: values.input_high_risk_action,
         input_medium_risk_action: values.input_medium_risk_action,
         input_low_risk_action: values.input_low_risk_action,
@@ -412,7 +405,7 @@ const InputPolicyConfig: React.FC<InputPolicyConfigProps> = ({ policy, hasPrivat
                       </SelectContent>
                     </Select>
                     {!hasPrivateModels && (
-                      <FormDescription className="text-orange-600">
+                      <FormDescription className="text-orange-400">
                         {t('dataLeakagePolicy.pleaseMarkModelsAsDataSafe')}
                       </FormDescription>
                     )}

@@ -84,9 +84,9 @@ Total Templates Created:      66
 ✅ Response template sync completed successfully!
 ```
 
-### 2. `populate_scanner_names.py`
+### 2. `populate_guardrail_names.py`
 
-**Purpose:** Populate missing `scanner_name` fields in `knowledge_bases` and `response_templates` tables.
+**Purpose:** Populate missing `guardrail_name` fields in `knowledge_bases` and `response_templates` tables.
 
 **When to use:**
 - After upgrading from a version before migration 026
@@ -96,19 +96,19 @@ Total Templates Created:      66
 **How to run:**
 ```bash
 cd backend
-python migrations/scripts/populate_scanner_names.py
+python migrations/scripts/populate_guardrail_names.py
 ```
 
 **What it does:**
-1. Finds all knowledge bases with NULL `scanner_name`
-2. Finds all response templates with NULL `scanner_name`
+1. Finds all knowledge bases with NULL `guardrail_name`
+2. Finds all response templates with NULL `guardrail_name`
 3. Looks up the correct scanner name from related tables (scanners, blacklist, whitelist)
 4. Updates the records with the correct scanner names
 
 **Safety:**
 - ✅ Safe to run multiple times
 - ✅ Only updates NULL fields
-- ✅ Does not modify existing scanner_name values
+- ✅ Does not modify existing guardrail_name values
 - ✅ Read-only on source tables (scanners, blacklist, whitelist)
 
 **Example output:**
@@ -116,7 +116,7 @@ python migrations/scripts/populate_scanner_names.py
 === Scanner Name Population Tool ===
 
 === Populating Knowledge Base Scanner Names ===
-Found 3 knowledge base(s) with missing scanner_name
+Found 3 knowledge base(s) with missing guardrail_name
 
   ✓ KB #16: custom_scanner/S105 → 禁止讨论旅游话题
   ✓ KB #22: official_scanner/S9 → 提示词攻击
@@ -125,21 +125,21 @@ Found 3 knowledge base(s) with missing scanner_name
 ✅ Updated 3 knowledge base(s)
 
 === Populating Response Template Scanner Names ===
-✓ All response templates already have scanner_name populated
+✓ All response templates already have guardrail_name populated
 
 === Summary ===
 Knowledge Bases Updated: 3
 Response Templates Updated: 0
 Total Records Updated: 3
 
-✅ All missing scanner_name fields have been populated!
+✅ All missing guardrail_name fields have been populated!
 ```
 
 ## For New Deployments
 
 **Good news!** If you're deploying OpenGuardrails for the first time or from the latest version, you don't need to run these scripts. The application now automatically:
 - Creates response templates when scanners or blacklists are created
-- Populates `scanner_name` fields when creating new knowledge bases and response templates
+- Populates `guardrail_name` fields when creating new knowledge bases and response templates
 
 These scripts are only needed for:
 1. Existing databases that were created before these features
@@ -175,7 +175,7 @@ When adding new maintenance scripts to this directory:
 
 If you encounter issues running these scripts:
 1. Check your database connection in `backend/config.py` or `.env`
-2. Ensure migration 026 has been run (adds scanner_name columns)
+2. Ensure migration 026 has been run (adds guardrail_name columns)
 3. Check the logs for detailed error messages
 4. Contact support at thomas@openguardrails.com
 

@@ -67,8 +67,9 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
         from utils.auth_cache import auth_cache
         from utils.auth import verify_token
 
-        # Get external app ID from header for auto-discovery (don't cache with external app ID as it creates unique apps)
+        # Get external app/workspace ID from headers for auto-discovery
         external_app_id = request.headers.get('X-OG-Application-ID') if request else None
+        workspace_external_name = request.headers.get('X-OG-Workspace-ID') if request else None
 
         # Check cache (only if no external app ID - external app ID requests create new apps)
         if not external_app_id:
@@ -128,7 +129,7 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                         user = get_user_by_api_key(db, token)
                         if user:
                             # Auto-discovery mode: get or create application by external app ID
-                            app_info = get_or_create_application_by_external_id(db, str(user.id), external_app_id)
+                            app_info = get_or_create_application_by_external_id(db, str(user.id), external_app_id, workspace_external_name=workspace_external_name)
                             if app_info:
                                 auth_context = {
                                     "type": "tenant_api_key_with_consumer",

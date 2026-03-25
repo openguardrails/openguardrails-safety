@@ -10,6 +10,8 @@ push: build
 	tar czf plugin.tar.gz plugin.wasm
 	oras push $(REGISTRY)/og-connector-higress-go:$(IMAGE_TAG) \
 		plugin.tar.gz:application/vnd.oci.image.layer.v1.tar+gzip
+	oras push $(REGISTRY)/og-connector-higress-go:latest \
+		plugin.tar.gz:application/vnd.oci.image.layer.v1.tar+gzip
 	rm -f plugin.tar.gz
 
 clean:

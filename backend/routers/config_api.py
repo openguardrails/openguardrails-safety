@@ -376,7 +376,7 @@ async def get_response_templates(
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
 
-        # Query response templates (scanner_name now stored in table, no JOIN needed)
+        # Query response templates (guardrail_name now stored in table, no JOIN needed)
         query = db.query(ResponseTemplate).filter(
             ResponseTemplate.application_id == application_id,
             ResponseTemplate.is_active == True
@@ -397,7 +397,7 @@ async def get_response_templates(
             category=rt.category,
             scanner_type=rt.scanner_type,
             scanner_identifier=rt.scanner_identifier,
-            scanner_name=rt.scanner_name,  # Now directly from table
+            guardrail_name=rt.guardrail_name,  # Now directly from table
             risk_level=rt.risk_level,
             template_content=rt.template_content,
             is_default=rt.is_default,
@@ -417,8 +417,8 @@ async def create_response_template(template_request: ResponseTemplateRequest, re
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
 
-        # Auto-populate scanner_name based on scanner_type and scanner_identifier
-        scanner_name = None
+        # Auto-populate guardrail_name based on scanner_type and scanner_identifier
+        guardrail_name = None
         if template_request.scanner_type and template_request.scanner_identifier:
             if template_request.scanner_type == 'blacklist':
                 blacklist = db.query(Blacklist).filter(
@@ -426,18 +426,18 @@ async def create_response_template(template_request: ResponseTemplateRequest, re
                     Blacklist.name == template_request.scanner_identifier
                 ).first()
                 if blacklist:
-                    scanner_name = blacklist.name
+                    guardrail_name = blacklist.name
             elif template_request.scanner_type == 'whitelist':
                 whitelist = db.query(Whitelist).filter(
                     Whitelist.application_id == application_id,
                     Whitelist.name == template_request.scanner_identifier
                 ).first()
                 if whitelist:
-                    scanner_name = whitelist.name
+                    guardrail_name = whitelist.name
             elif template_request.scanner_type in ['official_scanner', 'marketplace_scanner', 'custom_scanner']:
                 scanner = db.query(Scanner).filter(Scanner.tag == template_request.scanner_identifier).first()
                 if scanner:
-                    scanner_name = scanner.name
+                    guardrail_name = scanner.name
 
         template = ResponseTemplate(
             tenant_id=current_user.id,
@@ -445,7 +445,7 @@ async def create_response_template(template_request: ResponseTemplateRequest, re
             category=template_request.category,
             scanner_type=template_request.scanner_type,
             scanner_identifier=template_request.scanner_identifier,
-            scanner_name=scanner_name,  # Auto-populate scanner name for display
+            guardrail_name=guardrail_name,  # Auto-populate scanner name for display
             risk_level=template_request.risk_level,
             template_content=template_request.template_content,
             is_default=template_request.is_default,
@@ -614,7 +614,7 @@ async def get_knowledge_bases(
             category=kb.category,
             scanner_type=kb.scanner_type,
             scanner_identifier=kb.scanner_identifier,
-            scanner_name=kb.scanner_name,  # Include scanner_name for display
+            guardrail_name=kb.guardrail_name,  # Include guardrail_name for display
             name=kb.name,
             description=kb.description,
             file_path=kb.file_path,
@@ -685,8 +685,8 @@ async def create_knowledge_base(
         if scanner_type not in valid_scanner_types:
             raise HTTPException(status_code=400, detail=f"Invalid scanner_type. Must be one of: {', '.join(valid_scanner_types)}")
 
-        # Validate scanner exists based on type and get scanner_name
-        scanner_name = None
+        # Validate scanner exists based on type and get guardrail_name
+        guardrail_name = None
         if scanner_type == 'blacklist':
             # Validate blacklist exists
             blacklist = db.query(Blacklist).filter(
@@ -695,7 +695,7 @@ async def create_knowledge_base(
             ).first()
             if not blacklist:
                 raise HTTPException(status_code=404, detail=f"Blacklist '{scanner_identifier}' not found")
-            scanner_name = blacklist.name
+            guardrail_name = blacklist.name
         elif scanner_type == 'whitelist':
             # Validate whitelist exists
             whitelist = db.query(Whitelist).filter(
@@ -704,19 +704,19 @@ async def create_knowledge_base(
             ).first()
             if not whitelist:
                 raise HTTPException(status_code=404, detail=f"Whitelist '{scanner_identifier}' not found")
-            scanner_name = whitelist.name
+            guardrail_name = whitelist.name
         elif scanner_type == 'official_scanner':
             # Validate official scanner tag (S1-S21 or S100+)
             scanner = db.query(Scanner).filter(Scanner.tag == scanner_identifier).first()
             if not scanner:
                 raise HTTPException(status_code=404, detail=f"Official scanner '{scanner_identifier}' not found")
-            scanner_name = scanner.name
+            guardrail_name = scanner.name
         elif scanner_type == 'marketplace_scanner':
             # Validate marketplace scanner exists
             scanner = db.query(Scanner).filter(Scanner.tag == scanner_identifier).first()
             if not scanner:
                 raise HTTPException(status_code=404, detail=f"Marketplace scanner '{scanner_identifier}' not found")
-            scanner_name = scanner.name
+            guardrail_name = scanner.name
         elif scanner_type == 'custom_scanner':
             # Validate custom scanner exists for this application
             custom_scanner = db.query(CustomScanner).join(Scanner).filter(
@@ -725,7 +725,7 @@ async def create_knowledge_base(
             ).first()
             if not custom_scanner:
                 raise HTTPException(status_code=404, detail=f"Custom scanner '{scanner_identifier}' not found")
-            scanner_name = custom_scanner.scanner.name
+            guardrail_name = custom_scanner.scanner.name
 
         # Check if there is already a knowledge base with the same name and scanner
         # For global KB, check globally
@@ -762,7 +762,7 @@ async def create_knowledge_base(
             category=category,  # Keep for backward compatibility
             scanner_type=scanner_type,
             scanner_identifier=scanner_identifier,
-            scanner_name=scanner_name,  # Auto-populate scanner name for display
+            guardrail_name=guardrail_name,  # Auto-populate scanner name for display
             name=name,
             description=description,
             file_path="",  # Will be set below
@@ -1324,8 +1324,8 @@ async def get_system_info():
 # Default templates used when no custom templates are configured
 DEFAULT_TEMPLATES = {
     "security_risk_template": {
-        "en": "Request blocked by OpenGuardrails due to possible violation of policy related to {scanner_name}.",
-        "zh": "请求已被OpenGuardrails拦截，原因：可能违反了与{scanner_name}有关的策略要求。"
+        "en": "Request blocked by OpenGuardrails due to possible violation of policy related to {guardrail_name}.",
+        "zh": "请求已被OpenGuardrails拦截，原因：可能违反了与{guardrail_name}有关的策略要求。"
     },
     "data_leakage_template": {
         "en": "Request blocked by OpenGuardrails due to possible sensitive data ({entity_type_names}).",

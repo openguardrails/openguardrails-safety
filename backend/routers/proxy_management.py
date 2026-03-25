@@ -190,7 +190,7 @@ async def create_upstream_api(request: Request):
                 enable_reasoning_detection=bool(request_data.get('enable_reasoning_detection', True)),
                 stream_chunk_size=int(request_data.get('stream_chunk_size', 50)),
                 description=request_data.get('description'),
-                # Private model attributes for data leakage prevention
+                # Private model attributes for Data Masking
                 is_private_model=bool(request_data.get('is_private_model', False)),
                 is_default_private_model=bool(request_data.get('is_default_private_model', False)),
                 private_model_names=request_data.get('private_model_names', []),

@@ -28,4 +28,4 @@ CREATE INDEX IF NOT EXISTS idx_application_settings_tenant_id ON application_set
 -- Add comment
 COMMENT ON TABLE application_settings IS 'Application-level settings including fixed answer templates';
 COMMENT ON COLUMN application_settings.security_risk_template IS 'Template for security risk responses, supports {scanner_name} placeholder';
-COMMENT ON COLUMN application_settings.data_leakage_template IS 'Template for data leakage responses, supports {entity_type_names} placeholder';
+COMMENT ON COLUMN application_settings.data_leakage_template IS 'Template for data masking responses, supports {entity_type_names} placeholder';

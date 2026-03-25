@@ -47,16 +47,16 @@ const TierSelector: React.FC<TierSelectorProps> = ({
                 )}
                 <div>
                   <h4 className="font-bold text-lg">{tier.tier_name}</h4>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-muted-foreground">
                     {tier.monthly_quota.toLocaleString()} {t('billing.callsPerMonth')}
                   </p>
                 </div>
                 <div className="text-2xl font-bold">
                   {paymentService.formatPrice(tier.price, currency)}
-                  <span className="text-sm font-normal text-gray-500">/{t('billing.month')}</span>
+                  <span className="text-sm font-normal text-muted-foreground">/{t('billing.month')}</span>
                 </div>
                 {isCurrent ? (
-                  <div className="flex items-center gap-1 text-blue-600 text-sm font-medium">
+                  <div className="flex items-center gap-1 text-sky-400 text-sm font-medium">
                     <Check className="h-4 w-4" />
                     {t('billing.currentTier')}
                   </div>

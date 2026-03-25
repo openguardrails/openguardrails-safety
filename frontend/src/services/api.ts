@@ -54,10 +54,19 @@ api.interceptors.request.use(
     }
 
     // Add current application ID
-    // Note: Proxy management APIs are tenant-level (global), not application-specific
+    // Note: Certain APIs are tenant-level (global), not application-specific
     const isProxyManagementRequest = config.url && config.url.includes('/proxy/upstream-apis');
+    // Protection Config APIs operate at tenant/global level, not per-application
+    const isConfigRequest = config.url && (
+      config.url.includes('/config/') ||
+      config.url.includes('/risk-config') ||
+      config.url.includes('/scanner-configs') ||
+      config.url.includes('/custom-scanners') ||
+      config.url.includes('/data-security') ||
+      config.url.includes('/data-leakage-policy')
+    );
     const applicationId = localStorage.getItem('current_application_id');
-    if (applicationId && !isProxyManagementRequest) {
+    if (applicationId && !isProxyManagementRequest && !isConfigRequest) {
       config.headers['X-Application-ID'] = applicationId;
     }
 
@@ -983,27 +992,23 @@ export const dataLeakagePolicyApi = {
   }): Promise<any> =>
     api.put('/api/v1/config/data-leakage-policy/tenant-defaults', policyData).then(res => res.data),
 
-  // Get data leakage policy for current application
-  getPolicy: (applicationId: string): Promise<any> =>
+  // Get data masking policy for current application
+  getPolicy: (applicationId?: string): Promise<any> =>
     api.get('/api/v1/config/data-leakage-policy', {
-      headers: { 'X-Application-ID': applicationId }
+      ...(applicationId ? { headers: { 'X-Application-ID': applicationId } } : {})
     }).then(res => res.data),
 
-  // Update data leakage policy
-  updatePolicy: (applicationId: string, policyData: {
-    input_high_risk_action?: string | null;
-    input_medium_risk_action?: string | null;
-    input_low_risk_action?: string | null;
-    output_high_risk_anonymize?: boolean | null;
-    output_medium_risk_anonymize?: boolean | null;
-    output_low_risk_anonymize?: boolean | null;
-    private_model_id?: string | null;
-    enable_format_detection?: boolean | null;
-    enable_smart_segmentation?: boolean | null;
-  }): Promise<any> =>
-    api.put('/api/v1/config/data-leakage-policy', policyData, {
-      headers: { 'X-Application-ID': applicationId }
-    }).then(res => res.data),
+  // Update data masking policy
+  updatePolicy: (applicationIdOrData: string | Record<string, any>, policyData?: Record<string, any>): Promise<any> => {
+    // Support both (applicationId, data) and (data) signatures
+    if (typeof applicationIdOrData === 'string') {
+      return api.put('/api/v1/config/data-leakage-policy', policyData, {
+        headers: { 'X-Application-ID': applicationIdOrData }
+      }).then(res => res.data);
+    }
+    // Global update (no application ID)
+    return api.put('/api/v1/config/data-leakage-policy', applicationIdOrData).then(res => res.data);
+  },
 
   // Get available private models
   getPrivateModels: (): Promise<any[]> =>
@@ -1054,6 +1059,16 @@ export const gatewayPolicyApi = {
     }).then(res => res.data),
 };
 
+// Gateway Connection API
+export const gatewayConnectionApi = {
+  list: (): Promise<any[]> =>
+    api.get('/api/v1/gateway-connections/').then(res => res.data),
+  get: (type: string): Promise<any> =>
+    api.get(`/api/v1/gateway-connections/${type}`).then(res => res.data),
+  update: (type: string, data: { is_enabled?: boolean; config?: Record<string, any> }): Promise<any> =>
+    api.put(`/api/v1/gateway-connections/${type}`, data).then(res => res.data),
+};
+
 // Fixed Answer Templates API
 export const fixedAnswerTemplatesApi = {
   // Get fixed answer templates for current application
@@ -1069,6 +1084,39 @@ export const fixedAnswerTemplatesApi = {
     data_leakage_template?: { en?: string; zh?: string };
   }): Promise<{ success: boolean; message: string }> =>
     api.put('/api/v1/config/fixed-answer-templates', templates).then(res => res.data),
+};
+
+// Team Management API
+export const teamApi = {
+  listMembers: (): Promise<{ user_id: string; email: string; role: string; joined_at: string | null }[]> =>
+    api.get('/api/v1/team/members').then(res => res.data),
+
+  inviteMember: (data: { email: string; role: string }): Promise<{ message: string; invitation_id: string }> =>
+    api.post('/api/v1/team/invitations', data).then(res => res.data),
+
+  listInvitations: (): Promise<{ id: string; email: string; role: string; status: string; invited_by_email: string | null; expires_at: string; created_at: string }[]> =>
+    api.get('/api/v1/team/invitations').then(res => res.data),
+
+  cancelInvitation: (id: string): Promise<{ message: string }> =>
+    api.delete(`/api/v1/team/invitations/${id}`).then(res => res.data),
+
+  changeRole: (userId: string, role: string): Promise<{ message: string }> =>
+    api.put(`/api/v1/team/members/${userId}/role`, { role }).then(res => res.data),
+
+  removeMember: (userId: string): Promise<{ message: string }> =>
+    api.delete(`/api/v1/team/members/${userId}`).then(res => res.data),
+
+  verifyInvitation: (token: string): Promise<{ email: string; role: string; org_email: string | null; has_account: boolean; is_verified: boolean }> =>
+    api.get(`/api/v1/team/invitations/verify/${token}`).then(res => res.data),
+
+  acceptInvitation: (data: { token: string; password?: string }): Promise<{ message: string }> =>
+    api.post('/api/v1/team/invitations/accept', data).then(res => res.data),
+
+  createMember: (data: { email: string; password: string; role: string }): Promise<{ message: string; user_id: string }> =>
+    api.post('/api/v1/team/members', data).then(res => res.data),
+
+  getMyRole: (): Promise<{ member_role: string; tenant_id: string; is_super_admin: boolean }> =>
+    api.get('/api/v1/team/my-role').then(res => res.data),
 };
 
 export default api;

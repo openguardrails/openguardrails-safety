@@ -53,7 +53,7 @@ class OpenGuardrailsGuardrail(CustomGuardrail):
 
     Provides enterprise AI safety through OpenGuardrails' detection pipeline:
     - 19 risk categories (S1-S19) covering security, compliance, and content safety
-    - Data Leakage Prevention with format-aware detection
+    - Data Masking with format-aware detection
     - Automatic private model switching for sensitive data
     - Real-time streaming placeholder restoration
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { copyToClipboard } from '@/utils/clipboard'
 import { Plus, Edit2, Trash2, Eye, Server, Copy, Check, X, Shield } from 'lucide-react'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { proxyModelsApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -40,6 +41,7 @@ interface LLMProviderDetail extends LLMProvider {
 
 const LLMProviders: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [providers, setProviders] = useState<LLMProvider[]>([])
   const [loading, setLoading] = useState(false)
   const [isModalVisible, setIsModalVisible] = useState(false)
@@ -49,6 +51,8 @@ const LLMProviders: React.FC = () => {
   const { onUserSwitch } = useAuth()
   const [maskedApiKey, setMaskedApiKey] = useState<string>('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [apiDomain, setApiDomain] = useState<string>('http://localhost:5002')
+  
 
   // State for switches and private model config
   const [switchStates, setSwitchStates] = useState({
@@ -344,7 +348,7 @@ const LLMProviders: React.FC = () => {
       accessorKey: 'provider',
       header: t('gateway.providerType'),
       cell: ({ row }) => (
-        <span className="text-gray-600">{row.original.provider || '-'}</span>
+        <span className="text-muted-foreground">{row.original.provider || '-'}</span>
       ),
     },
     {
@@ -354,18 +358,18 @@ const LLMProviders: React.FC = () => {
         <div className="flex items-center gap-2">
           {row.original.is_private_model ? (
             <>
-              <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+              <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
                 <Shield className="h-3 w-3 mr-1" />
                 {t('gateway.privateModelBadge')}
               </Badge>
               {row.original.is_default_private_model && (
-                <Badge variant="outline" className="text-blue-600 border-blue-300">
+                <Badge variant="outline" className="text-sky-400 border-blue-300">
                   {t('gateway.defaultBadge')}
                 </Badge>
               )}
             </>
           ) : (
-            <span className="text-gray-400">-</span>
+            <span className="text-slate-500">-</span>
           )}
         </div>
       ),
@@ -375,10 +379,10 @@ const LLMProviders: React.FC = () => {
       header: t('proxy.createTime'),
       cell: ({ row }) => new Date(row.original.created_at).toLocaleString('zh-CN'),
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('proxy.operation'),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => showViewModal(row.original)}>
             <Eye className="h-4 w-4 mr-1" />
@@ -391,7 +395,7 @@ const LLMProviders: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
             onClick={() => handleDelete(row.original.id)}
           >
             <Trash2 className="h-4 w-4 mr-1" />
@@ -399,7 +403,7 @@ const LLMProviders: React.FC = () => {
           </Button>
         </div>
       ),
-    },
+    }] : []),
   ]
 
   return (
@@ -413,10 +417,12 @@ const LLMProviders: React.FC = () => {
               <CardDescription>{t('gateway.llmProvidersDescription')}</CardDescription>
             </div>
           </div>
-          <Button onClick={() => showModal()}>
-            <Plus className="h-4 w-4 mr-1" />
-            {t('gateway.addProvider')}
-          </Button>
+          {canEdit && (
+            <Button onClick={() => showModal()}>
+              <Plus className="h-4 w-4 mr-1" />
+              {t('gateway.addProvider')}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <DataTable
@@ -438,18 +444,18 @@ const LLMProviders: React.FC = () => {
           <CardTitle>{t('proxy.accessOpenGuardrailsGateway')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-900">{t('proxy.gatewayIntegrationDesc')}</p>
+          <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+            <p className="text-sm text-sky-200">{t('proxy.gatewayIntegrationDesc')}</p>
           </div>
 
           <div>
             <p className="font-semibold mb-2">{t('proxy.pythonOpenaiExample')}</p>
-            <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm border border-gray-200">
+            <pre className="bg-secondary p-4 rounded-lg overflow-auto text-sm border border-border">
               <code>
 {`from openai import OpenAI
 
 client = OpenAI(
-    base_url="http://localhost:5002/v1/",
+    base_url="https://${apiDomain}/v1/gateway", # for private hosted: base_url="http://localhost:5002/v1/",
     api_key="sk-xxai-your-proxy-key"
 )
 
@@ -581,10 +587,10 @@ completion = client.chat.completions.create(
               </div>
 
               {/* Private Model Configuration */}
-              <div className="space-y-3 p-4 border rounded-lg bg-green-50">
+              <div className="space-y-3 p-4 border rounded-lg bg-emerald-500/10">
                 <div>
                   <p className="font-medium mb-1">{t('gateway.privateModelConfig')}</p>
-                  <p className="text-sm text-gray-600">{t('gateway.privateModelConfigDesc')}</p>
+                  <p className="text-sm text-muted-foreground">{t('gateway.privateModelConfigDesc')}</p>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -614,7 +620,7 @@ completion = client.chat.completions.create(
                     {switchStates.is_default_private_model && modelNames.length > 0 && (
                       <div className="space-y-2">
                         <Label>{t('gateway.defaultPrivateModelName')}</Label>
-                        <p className="text-sm text-gray-600">{t('gateway.defaultPrivateModelNameDesc')}</p>
+                        <p className="text-sm text-muted-foreground">{t('gateway.defaultPrivateModelNameDesc')}</p>
                         <Select
                           value={defaultPrivateModelName}
                           onValueChange={setDefaultPrivateModelName}
@@ -635,7 +641,7 @@ completion = client.chat.completions.create(
 
                     <div className="space-y-2">
                       <Label>{t('gateway.privateModelNames')}</Label>
-                      <p className="text-sm text-gray-600">{t('gateway.privateModelNamesDesc')}</p>
+                      <p className="text-sm text-muted-foreground">{t('gateway.privateModelNamesDesc')}</p>
 
                       <div className="flex gap-2">
                         <Input
@@ -657,7 +663,7 @@ completion = client.chat.completions.create(
                               <button
                                 type="button"
                                 onClick={() => removeModelName(name)}
-                                className="hover:text-red-600"
+                                className="hover:text-red-400"
                               >
                                 <X className="h-3 w-3" />
                               </button>
@@ -690,20 +696,20 @@ completion = client.chat.completions.create(
           {viewingProvider && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('gateway.providerName')}</span>
+                <span className="font-medium text-slate-300">{t('gateway.providerName')}</span>
                 <span className="col-span-2">{viewingProvider.config_name}</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('gateway.providerType')}</span>
+                <span className="font-medium text-slate-300">{t('gateway.providerType')}</span>
                 <span className="col-span-2">{viewingProvider.provider || '-'}</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.status')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.status')}</span>
                 <span className="col-span-2">
                   {viewingProvider.is_active ? (
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                    <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
                       {t('proxy.enabled')}
                     </Badge>
                   ) : (
@@ -713,23 +719,23 @@ completion = client.chat.completions.create(
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('gateway.privateModel')}</span>
+                <span className="font-medium text-slate-300">{t('gateway.privateModel')}</span>
                 <div className="col-span-2">
                   {viewingProvider.is_private_model ? (
                     <div className="space-y-2">
                       <div className="flex gap-2">
-                        <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                        <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
                           <Shield className="h-3 w-3 mr-1" />
                           {t('gateway.privateModelBadge')}
                         </Badge>
                         {viewingProvider.is_default_private_model && (
-                          <Badge variant="outline" className="text-blue-600 border-blue-300">
+                          <Badge variant="outline" className="text-sky-400 border-blue-300">
                             {t('gateway.defaultBadge')}
                           </Badge>
                         )}
                       </div>
                       {viewingProvider.is_default_private_model && viewingProvider.default_private_model_name && (
-                        <div className="text-sm text-gray-600">
+                        <div className="text-sm text-muted-foreground">
                           {t('gateway.defaultModelNameLabel')}: <span className="font-medium">{viewingProvider.default_private_model_name}</span>
                         </div>
                       )}
@@ -739,7 +745,7 @@ completion = client.chat.completions.create(
                             <Badge
                               key={name}
                               variant="outline"
-                              className={`text-xs ${name === viewingProvider.default_private_model_name ? 'bg-blue-50 border-blue-300 text-blue-700' : ''}`}
+                              className={`text-xs ${name === viewingProvider.default_private_model_name ? 'bg-sky-500/10 border-blue-300 text-sky-400' : ''}`}
                             >
                               {name}
                               {name === viewingProvider.default_private_model_name && (
@@ -751,13 +757,13 @@ completion = client.chat.completions.create(
                       )}
                     </div>
                   ) : (
-                    <span className="text-gray-400">-</span>
+                    <span className="text-slate-500">-</span>
                   )}
                 </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2">
-                <span className="font-medium text-gray-700">{t('proxy.createTime')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.createTime')}</span>
                 <span className="col-span-2">
                   {new Date(viewingProvider.created_at).toLocaleString('zh-CN')}
                 </span>

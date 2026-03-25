@@ -4,91 +4,61 @@
 
 @layer base {
   :root {
-    /* 企业级 SaaS 配色 - Stripe/Linear 风格 */
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%; /* #0f172a Slate 900 - 主要文字 */
+    /* Dark Navy Cybersecurity Theme - F5/CalypsoAI inspired */
+    --background: 225 35% 7%;       /* #0d1117 - main background */
+    --foreground: 210 40% 92%;      /* #e2e8f0 - primary text */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card: 225 30% 10%;            /* #141b27 - card background */
+    --card-foreground: 210 40% 92%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover: 225 30% 12%;         /* #181f2e - popover background */
+    --popover-foreground: 210 40% 92%;
 
-    /* 主色 - Stripe Blue #0070f3 */
-    --primary: 211 100% 48%;
+    /* Primary - Cyan/Blue accent */
+    --primary: 199 89% 48%;         /* #0ea5e9 - sky-500 accent */
     --primary-foreground: 0 0% 100%;
 
-    /* 次要背景 - Slate 50/100 */
-    --secondary: 210 40% 98%;
-    --secondary-foreground: 222 47% 11%;
+    /* Secondary - slightly lighter navy */
+    --secondary: 225 25% 14%;       /* #1a2233 */
+    --secondary-foreground: 210 40% 85%;
 
-    /* 柔和背景 - Slate 100 */
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215 16% 47%; /* #64748b Slate 500 - 次要文字 */
+    /* Muted - subtle backgrounds */
+    --muted: 225 25% 12%;           /* #171e2e */
+    --muted-foreground: 215 16% 55%; /* #7c8db5 - secondary text */
 
-    /* 强调色 - 与 primary 一致 */
-    --accent: 211 100% 48%;
+    /* Accent - purple/indigo highlight */
+    --accent: 245 58% 51%;          /* #6366f1 - indigo-500 */
     --accent-foreground: 0 0% 100%;
 
-    /* 危险色 - Red */
-    --destructive: 0 84.2% 60.2%;
+    /* Destructive - Red */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* 成功色 - Green */
-    --success: 142 71% 45%;
+    /* Success - Emerald */
+    --success: 160 84% 39%;         /* #10b981 */
     --success-foreground: 0 0% 100%;
 
-    /* 警告色 - Yellow */
+    /* Warning - Amber */
     --warning: 45 93% 47%;
     --warning-foreground: 0 0% 100%;
 
-    /* 边框 - Slate 200/300 */
-    --border: 214 32% 91%; /* #e2e8f0 Slate 200 */
-    --border-medium: 215 20% 65%; /* #94a3b8 Slate 400 */
-    --input: 214 32% 91%;
-    --ring: 211 100% 48%; /* 与 primary 一致 */
+    /* Borders - subtle navy edges */
+    --border: 225 20% 18%;          /* #232d3f */
+    --border-medium: 225 15% 28%;
+    --input: 225 20% 16%;           /* #1e2736 */
+    --ring: 199 89% 48%;
 
-    /* 圆角 - 企业级标准 6-8px */
-    --radius: 0.375rem; /* 6px */
-  }
+    /* Sidebar specific */
+    --sidebar: 225 35% 8%;          /* #0f1520 */
+    --sidebar-foreground: 215 16% 65%;
+    --sidebar-active: 199 89% 48%;
+    --sidebar-active-bg: 199 89% 48% / 0.1;
+    --sidebar-hover: 225 25% 14%;
+    --sidebar-section: 215 16% 45%;
+    --sidebar-border: 225 20% 15%;
 
-  .dark {
-    /* 深色模式 - 参考 Stripe/Linear */
-    --background: 222 47% 6%; /* #0d111a 深色背景 */
-    --foreground: 210 40% 98%; /* #f8fafc Slate 50 - 主要文字 */
-
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222 47% 8%;
-    --popover-foreground: 210 40% 98%;
-
-    /* 主色 - 深色模式下稍微提亮 */
-    --primary: 211 100% 55%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 217 33% 12%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217 33% 12%;
-    --muted-foreground: 215 16% 65%; /* #94a3b8 Slate 400 */
-
-    --accent: 211 100% 55%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 71% 55%;
-    --success-foreground: 0 0% 100%;
-
-    --warning: 45 93% 57%;
-    --warning-foreground: 0 0% 100%;
-
-    --border: 217 33% 17%; /* #202938 深色边框 */
-    --border-medium: 215 20% 35%;
-    --input: 217 33% 17%;
-    --ring: 211 100% 55%;
+    /* Radius */
+    --radius: 0.5rem;
   }
 }
 
@@ -107,5 +77,93 @@
 
   code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  }
+
+  /* Custom scrollbar for dark theme */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(225 35% 7%);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(225 20% 25%);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(225 20% 35%);
+  }
+}
+
+/* Global overrides for Ant Design / Radix components in dark theme */
+@layer components {
+  /* Table styles */
+  .og-table {
+    @apply w-full;
+  }
+
+  .og-table th {
+    @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 text-left border-b border-border;
+  }
+
+  .og-table td {
+    @apply px-4 py-3 text-sm border-b border-border;
+  }
+
+  .og-table tr:hover td {
+    background: hsl(225 25% 12%);
+  }
+
+  /* Badge variants for dark theme */
+  .og-badge-high {
+    @apply px-2 py-0.5 text-xs font-medium rounded bg-red-500/15 text-red-400 border border-red-500/20;
+  }
+
+  .og-badge-medium {
+    @apply px-2 py-0.5 text-xs font-medium rounded bg-amber-500/15 text-amber-400 border border-amber-500/20;
+  }
+
+  .og-badge-low {
+    @apply px-2 py-0.5 text-xs font-medium rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/20;
+  }
+
+  .og-badge-safe {
+    @apply px-2 py-0.5 text-xs font-medium rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20;
+  }
+
+  .og-badge-info {
+    @apply px-2 py-0.5 text-xs font-medium rounded bg-sky-500/15 text-sky-400 border border-sky-500/20;
+  }
+
+  .og-badge-purple {
+    @apply px-2 py-0.5 text-xs font-medium rounded bg-purple-500/15 text-purple-400 border border-purple-500/20;
+  }
+
+  /* Stat card hover */
+  .og-stat-card {
+    @apply bg-card border border-border rounded-lg p-5 transition-all duration-200;
+  }
+
+  .og-stat-card:hover {
+    border-color: hsl(225 20% 25%);
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.05);
+  }
+
+  /* Section headers */
+  .og-section-title {
+    @apply text-lg font-semibold text-foreground;
+  }
+
+  .og-section-subtitle {
+    @apply text-sm text-muted-foreground mt-1;
+  }
+
+  /* Page title */
+  .og-page-title {
+    @apply text-2xl font-bold text-foreground tracking-tight;
   }
 }

@@ -126,7 +126,7 @@ const PaymentButton: React.FC<PaymentButtonProps> = ({
           {loading ? (
             // Show loading state
             <div className="py-10 text-center">
-              <Loader2 className="h-12 w-12 mx-auto animate-spin text-blue-600" />
+              <Loader2 className="h-12 w-12 mx-auto animate-spin text-sky-400" />
               <div className="mt-6 text-base font-medium">
                 {provider === 'alipay'
                   ? t('payment.redirecting.alipay', '正在跳转到支付宝...')

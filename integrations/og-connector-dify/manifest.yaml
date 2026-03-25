@@ -5,7 +5,7 @@ name: openguardrails
 label:
   en_US: OpenGuardrails - Free Open-source Contextual
 description:
-  en_US: Free Open-source AI guardrails for contextually protecting against prompt attacks, content safety and sensitive data leakage. 
+  en_US: Free Open-source AI guardrails for contextually protecting against prompt attacks, content safety and sensitive data masking. 
 icon: icon.png
 icon_dark: icon-dark.png
 resource:

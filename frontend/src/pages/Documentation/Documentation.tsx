@@ -146,7 +146,7 @@ const Documentation: React.FC = () => {
                 <button
                   onClick={() => scrollToSection(section.key)}
                   className={`w-full text-left px-2 py-1.5 text-sm font-medium rounded transition-colors ${
-                    activeSection === section.key ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'
+                    activeSection === section.key ? 'bg-sky-500/10 text-sky-400' : 'text-slate-300 hover:bg-card/5'
                   }`}
                 >
                   {section.title}
@@ -157,7 +157,7 @@ const Documentation: React.FC = () => {
                       <button
                         key={child.key}
                         onClick={() => scrollToSection(child.key)}
-                        className="w-full text-left px-2 py-1 text-xs text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded transition-colors"
+                        className="w-full text-left px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-card/5 rounded transition-colors"
                       >
                         {child.title}
                       </button>
@@ -180,7 +180,7 @@ const Documentation: React.FC = () => {
         <CardContent className="p-8 space-y-8">
           {/* Header */}
           <div className="flex items-center gap-3">
-            <Book className="h-8 w-8 text-blue-600" />
+            <Book className="h-8 w-8 text-sky-400" />
             <h1 className="text-3xl font-bold">{t('docs.title')}</h1>
           </div>
 
@@ -189,18 +189,18 @@ const Documentation: React.FC = () => {
           {/* Quick Start Section */}
           <section id="quick-start">
             <div className="flex items-center gap-2 mb-4">
-              <Rocket className="h-6 w-6 text-green-600" />
+              <Rocket className="h-6 w-6 text-emerald-400" />
               <h2 className="text-2xl font-bold">{t('docs.quickStart')}</h2>
             </div>
 
             {/* Application Management */}
             <div id="application-management" className="mt-6">
               <h3 className="text-xl font-semibold mb-3">{t('docs.applicationManagement')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.applicationManagementDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.applicationManagementDesc')}</p>
 
               <div className="mb-4">
                 <p className="font-semibold text-sm mb-2">{t('docs.applicationUseCases')}:</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
                   <li>{t('docs.applicationUseCase1')}</li>
                   <li>{t('docs.applicationUseCase2')}</li>
                   <li>{t('docs.applicationUseCase3')}</li>
@@ -210,7 +210,7 @@ const Documentation: React.FC = () => {
 
               <div className="mb-4">
                 <p className="font-semibold text-sm mb-2">{t('docs.applicationIsolation')}:</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
                   <li>{t('docs.applicationIsolation1')}</li>
                   <li>{t('docs.applicationIsolation2')}</li>
                   <li>{t('docs.applicationIsolation3')}</li>
@@ -220,14 +220,14 @@ const Documentation: React.FC = () => {
                 </ul>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">i</div>
+                    <div className="h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs">i</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-blue-900">{t('docs.applicationManagementTip')}</p>
-                    <p className="text-sm text-blue-700 mt-1">{t('docs.applicationManagementTipDesc')}</p>
+                    <p className="text-sm font-medium text-sky-200">{t('docs.applicationManagementTip')}</p>
+                    <p className="text-sm text-sky-400 mt-1">{t('docs.applicationManagementTipDesc')}</p>
                   </div>
                 </div>
               </div>
@@ -236,13 +236,13 @@ const Documentation: React.FC = () => {
             {/* Quick Test */}
             <div id="quick-test" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.quickTest')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.quickTestDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.quickTestDesc')}</p>
 
               <div className="mb-6">
-                <p className="font-semibold text-sm mb-1 text-blue-600">{t('docs.quickTestInputDetection')}:</p>
-                <p className="text-xs text-slate-500 mb-2">{t('docs.quickTestInputDetectionDesc')}</p>
+                <p className="font-semibold text-sm mb-1 text-sky-400">{t('docs.quickTestInputDetection')}:</p>
+                <p className="text-xs text-muted-foreground mb-2">{t('docs.quickTestInputDetectionDesc')}</p>
                 <p className="font-semibold text-sm mb-2">{t('docs.quickTestMacLinux')}:</p>
-                <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+                <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                   {`curl -X POST "${apiDomain}/v1/guardrails" \\
   -H "Authorization: Bearer ${user?.api_key || 'your-api-key'}" \\
   -H "Content-Type: application/json" \\
@@ -255,10 +255,10 @@ const Documentation: React.FC = () => {
                 </pre>
               </div>
               <div className="mb-4">
-                <p className="font-semibold text-sm mb-1 text-green-600">{t('docs.quickTestOutputDetection')}:</p>
-                <p className="text-xs text-slate-500 mb-2">{t('docs.quickTestOutputDetectionDesc')}</p>
+                <p className="font-semibold text-sm mb-1 text-emerald-400">{t('docs.quickTestOutputDetection')}:</p>
+                <p className="text-xs text-muted-foreground mb-2">{t('docs.quickTestOutputDetectionDesc')}</p>
                 <p className="font-semibold text-sm mb-2">{t('docs.quickTestMacLinux')}:</p>
-                <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+                <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                   {`curl -X POST "${apiDomain}/v1/guardrails" \\
   -H "Authorization: Bearer ${user?.api_key || 'your-api-key'}" \\
   -H "Content-Type: application/json" \\
@@ -273,7 +273,7 @@ const Documentation: React.FC = () => {
               </div>
               <div>
                 <p className="font-semibold text-sm mb-2">{t('docs.quickTestWindows')}:</p>
-                <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+                <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                   {`curl.exe -X POST "${apiDomain}/v1/guardrails" \`
   -H "Authorization: Bearer ${user?.api_key || 'your-api-key'}" \`
   -H "Content-Type: application/json" \`
@@ -285,14 +285,14 @@ const Documentation: React.FC = () => {
             {/* API Usage */}
             <div id="api-usage" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.apiUsage')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.apiUsageDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.apiUsageDesc')}</p>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
-                <p className="text-sm text-blue-800">{t('docs.getApiKeyTip')}</p>
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md mb-4">
+                <p className="text-sm text-sky-300">{t('docs.getApiKeyTip')}</p>
               </div>
 
               <p className="font-semibold text-sm mb-2">{t('docs.pythonExample')}:</p>
-              <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+              <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                 {`# 1. Install client library
 pip install openguardrails
 
@@ -314,34 +314,34 @@ else:
             {/* Direct Model Access */}
             <div id="model-direct-access" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.directModelAccess')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.directModelAccessDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.directModelAccessDesc')}</p>
 
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-md mb-4">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+                    <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs">✓</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-green-900">{t('docs.privacyGuarantee')}</p>
-                    <p className="text-sm text-green-700 mt-1">{t('docs.privacyGuaranteeDesc')}</p>
+                    <p className="text-sm font-medium text-emerald-200">{t('docs.privacyGuarantee')}</p>
+                    <p className="text-sm text-emerald-400 mt-1">{t('docs.privacyGuaranteeDesc')}</p>
                   </div>
                 </div>
               </div>
 
               {/* Subscription Check */}
               {isSaasMode() && !user?.is_super_admin && subscription?.subscription_type !== 'subscribed' && (
-                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md mb-4">
+                <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-md mb-4">
                   <div className="flex items-start gap-2">
                     <div className="flex-shrink-0 mt-0.5">
                       <div className="h-5 w-5 rounded-full bg-yellow-500 flex items-center justify-center text-white text-xs">!</div>
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-yellow-900">{t('docs.subscriptionRequired') || 'Active subscription required to use direct model access'}</p>
+                      <p className="text-sm font-medium text-yellow-200">{t('docs.subscriptionRequired') || 'Active subscription required to use direct model access'}</p>
                       <div className="mt-2 space-y-2">
-                        <p className="text-sm text-yellow-700">{t('billing.upgradeDescription') || 'Upgrade to unlock unlimited access to direct model APIs, custom scanners, and premium features.'}</p>
+                        <p className="text-sm text-yellow-400">{t('billing.upgradeDescription') || 'Upgrade to unlock unlimited access to direct model APIs, custom scanners, and premium features.'}</p>
                         {paymentConfig && (
                           <>
-                            <p className="text-sm font-semibold text-yellow-900">
+                            <p className="text-sm font-semibold text-yellow-200">
                               {t('billing.price')}: {paymentService.formatPrice(paymentConfig.subscription_price, paymentConfig.currency)}/{t('billing.month')}
                             </p>
                             <div className="mt-2">
@@ -369,11 +369,11 @@ else:
                 return (
                   <div className="mb-4">
                     <p className="font-semibold text-sm mb-2">{t('docs.yourModelApiKey')}:</p>
-                    <div className={`p-3 border rounded-md font-mono text-sm ${hasAccess ? 'bg-slate-50 border-slate-200' : 'bg-slate-100 border-slate-300'}`}>
+                    <div className={`p-3 border rounded-md font-mono text-sm ${hasAccess ? 'bg-secondary border-border' : 'bg-muted border-border'}`}>
                       {hasAccess ? (
                         <code className="text-xs">{user?.model_api_key}</code>
                       ) : (
-                        <span className="text-slate-500 flex items-center gap-2">
+                        <span className="text-muted-foreground flex items-center gap-2">
                           <Lock className="h-4 w-4" /> {t('account.subscriptionRequiredToViewKey') || '••••••••••••••••••••••••••••••••••• (Subscription Required)'}
                         </span>
                       )}
@@ -384,12 +384,12 @@ else:
 
               <div className="mb-4">
                 <p className="font-semibold text-sm mb-2">{t('docs.supportedModels')}:</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
                   <li>
-                    <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">OpenGuardrails-Text</code> - {t('docs.guardrailsTextModel')}
+                    <code className="text-xs bg-muted px-1 py-0.5 rounded">OpenGuardrails-Text</code> - {t('docs.guardrailsTextModel')}
                   </li>
                   <li>
-                    <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">bge-m3</code> - {t('docs.bgeM3Model')}
+                    <code className="text-xs bg-muted px-1 py-0.5 rounded">bge-m3</code> - {t('docs.bgeM3Model')}
                   </li>
                   <li>{t('docs.futureModels')}</li>
                 </ul>
@@ -398,7 +398,7 @@ else:
               <div>
                 <p className="font-semibold text-sm mb-2">{t('docs.pythonExample')}:</p>
                 <pre
-                  className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200"
+                  className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border"
                   style={{ opacity: user?.model_api_key && (!isSaasMode() || user?.is_super_admin || subscription?.subscription_type === 'subscribed') ? 1 : 0.5 }}
                 >
                   {`from openai import OpenAI
@@ -425,7 +425,7 @@ print(response.choices[0].message.content)
 
               <div className="mt-4">
                 <p className="font-semibold text-sm mb-2">{t('docs.useCases')}:</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
                   <li>{t('docs.useCase1')}</li>
                   <li>{t('docs.useCase2')}</li>
                   <li>{t('docs.useCase3')}</li>
@@ -433,14 +433,14 @@ print(response.choices[0].message.content)
                 </ul>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mt-4">
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md mt-4">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">i</div>
+                    <div className="h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs">i</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-blue-900">{t('docs.defaultConfiguration')}</p>
-                    <p className="text-sm text-blue-700 mt-1">{t('docs.defaultConfigurationDesc')}</p>
+                    <p className="text-sm font-medium text-sky-200">{t('docs.defaultConfiguration')}</p>
+                    <p className="text-sm text-sky-400 mt-1">{t('docs.defaultConfigurationDesc')}</p>
                   </div>
                 </div>
               </div>
@@ -449,24 +449,24 @@ print(response.choices[0].message.content)
             {/* Content Scanning */}
             <div id="content-scanning" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.contentScanning')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.contentScanningDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.contentScanningDesc')}</p>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mb-4">
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md mb-4">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">i</div>
+                    <div className="h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs">i</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-blue-900">{t('docs.contentScanningRiskTypes')}</p>
-                    <p className="text-sm text-blue-700 mt-1">{t('docs.contentScanningRiskTypesDesc')}</p>
+                    <p className="text-sm font-medium text-sky-200">{t('docs.contentScanningRiskTypes')}</p>
+                    <p className="text-sm text-sky-400 mt-1">{t('docs.contentScanningRiskTypesDesc')}</p>
                   </div>
                 </div>
               </div>
 
               <div className="mb-6">
                 <p className="font-semibold text-sm mb-2">{t('docs.emailScanTitle')}</p>
-                <p className="text-slate-600 text-sm mb-3">{t('docs.emailScanDesc')}</p>
-                <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+                <p className="text-muted-foreground text-sm mb-3">{t('docs.emailScanDesc')}</p>
+                <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                   {`curl -X POST "${apiDomain}/v1/scan/email" \\
   -H "Authorization: Bearer ${user?.api_key || 'your-api-key'}" \\
   -H "Content-Type: application/json" \\
@@ -478,8 +478,8 @@ print(response.choices[0].message.content)
 
               <div className="mb-6">
                 <p className="font-semibold text-sm mb-2">{t('docs.webpageScanTitle')}</p>
-                <p className="text-slate-600 text-sm mb-3">{t('docs.webpageScanDesc')}</p>
-                <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+                <p className="text-muted-foreground text-sm mb-3">{t('docs.webpageScanDesc')}</p>
+                <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                   {`curl -X POST "${apiDomain}/v1/scan/webpage" \\
   -H "Authorization: Bearer ${user?.api_key || 'your-api-key'}" \\
   -H "Content-Type: application/json" \\
@@ -492,7 +492,7 @@ print(response.choices[0].message.content)
 
               <div>
                 <p className="font-semibold text-sm mb-2">{t('docs.contentScanResponseTitle')}</p>
-                <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+                <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                   {`{
   "id": "scan-email-abc123def456",
   "risk_level": "high",
@@ -506,42 +506,42 @@ print(response.choices[0].message.content)
 
               <div className="mt-4">
                 <p className="font-semibold text-sm mb-2">{t('docs.contentScanRiskLevels')}</p>
-                <table className="w-full border-collapse border border-slate-200 text-sm">
+                <table className="w-full border-collapse border border-border text-sm">
                   <thead>
-                    <tr className="bg-slate-50">
-                      <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.contentScanRiskType')}</th>
-                      <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.riskLevel')}</th>
-                      <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.contentScanDescription')}</th>
+                    <tr className="bg-secondary">
+                      <th className="border border-border p-3 text-left font-semibold">{t('docs.contentScanRiskType')}</th>
+                      <th className="border border-border p-3 text-left font-semibold">{t('docs.riskLevel')}</th>
+                      <th className="border border-border p-3 text-left font-semibold">{t('docs.contentScanDescription')}</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr>
-                      <td className="border border-slate-200 p-3"><code className="text-xs bg-slate-100 px-1 py-0.5 rounded">prompt_injection</code></td>
-                      <td className="border border-slate-200 p-3">
-                        <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">{t('docs.highRisk')}</span>
+                      <td className="border border-border p-3"><code className="text-xs bg-muted px-1 py-0.5 rounded">prompt_injection</code></td>
+                      <td className="border border-border p-3">
+                        <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">{t('docs.highRisk')}</span>
                       </td>
-                      <td className="border border-slate-200 p-3">{t('docs.riskPromptInjection')}</td>
+                      <td className="border border-border p-3">{t('docs.riskPromptInjection')}</td>
                     </tr>
-                    <tr className="bg-slate-50">
-                      <td className="border border-slate-200 p-3"><code className="text-xs bg-slate-100 px-1 py-0.5 rounded">jailbreak</code></td>
-                      <td className="border border-slate-200 p-3">
-                        <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">{t('docs.highRisk')}</span>
+                    <tr className="bg-secondary">
+                      <td className="border border-border p-3"><code className="text-xs bg-muted px-1 py-0.5 rounded">jailbreak</code></td>
+                      <td className="border border-border p-3">
+                        <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">{t('docs.highRisk')}</span>
                       </td>
-                      <td className="border border-slate-200 p-3">{t('docs.riskJailbreak')}</td>
+                      <td className="border border-border p-3">{t('docs.riskJailbreak')}</td>
                     </tr>
                     <tr>
-                      <td className="border border-slate-200 p-3"><code className="text-xs bg-slate-100 px-1 py-0.5 rounded">phishing</code></td>
-                      <td className="border border-slate-200 p-3">
-                        <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">{t('docs.highRisk')}</span>
+                      <td className="border border-border p-3"><code className="text-xs bg-muted px-1 py-0.5 rounded">phishing</code></td>
+                      <td className="border border-border p-3">
+                        <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">{t('docs.highRisk')}</span>
                       </td>
-                      <td className="border border-slate-200 p-3">{t('docs.riskPhishing')}</td>
+                      <td className="border border-border p-3">{t('docs.riskPhishing')}</td>
                     </tr>
-                    <tr className="bg-slate-50">
-                      <td className="border border-slate-200 p-3"><code className="text-xs bg-slate-100 px-1 py-0.5 rounded">malware</code></td>
-                      <td className="border border-slate-200 p-3">
-                        <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">{t('docs.highRisk')}</span>
+                    <tr className="bg-secondary">
+                      <td className="border border-border p-3"><code className="text-xs bg-muted px-1 py-0.5 rounded">malware</code></td>
+                      <td className="border border-border p-3">
+                        <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">{t('docs.highRisk')}</span>
                       </td>
-                      <td className="border border-slate-200 p-3">{t('docs.riskMalware')}</td>
+                      <td className="border border-border p-3">{t('docs.riskMalware')}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -551,14 +551,14 @@ print(response.choices[0].message.content)
             {/* Gateway Usage */}
             <div id="gateway-usage" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.gatewayUsage')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.gatewayUsageDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.gatewayUsageDesc')}</p>
 
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
-                <p className="text-sm text-green-800">{t('docs.gatewayBenefit')}</p>
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-md mb-4">
+                <p className="text-sm text-emerald-300">{t('docs.gatewayBenefit')}</p>
               </div>
 
               <p className="font-semibold text-sm mb-2">{t('docs.gatewayExample')}:</p>
-              <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200 mb-4">
+              <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border mb-4">
                 {`from openai import OpenAI
 
 # Just change base_url and api_key
@@ -578,20 +578,20 @@ response = client.chat.completions.create(
 `}
               </pre>
 
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md mb-4">
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-md mb-4">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
                     <div className="h-5 w-5 rounded-full bg-yellow-500 flex items-center justify-center text-white text-xs">!</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-yellow-900">{t('docs.gatewayResponseHandling')}</p>
-                    <p className="text-sm text-yellow-700 mt-1">{t('docs.gatewayResponseHandlingDesc')}</p>
+                    <p className="text-sm font-medium text-yellow-200">{t('docs.gatewayResponseHandling')}</p>
+                    <p className="text-sm text-yellow-400 mt-1">{t('docs.gatewayResponseHandlingDesc')}</p>
                   </div>
                 </div>
               </div>
 
               <p className="font-semibold text-sm mb-2">{t('docs.gatewayResponseExample')}:</p>
-              <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+              <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                 {`from openai import OpenAI
 
 client = OpenAI(
@@ -634,15 +634,15 @@ print("Result:", result)
             {/* Dify Integration */}
             <div id="dify-integration" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.difyIntegration')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.difyIntegrationDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.difyIntegrationDesc')}</p>
 
               <div className="text-center my-4">
-                <img src={`${BASE_URL}dify-moderation.png`} alt="Dify Moderation" className="max-w-[60%] mx-auto rounded-md border border-slate-200 shadow-sm" />
+                <img src={`${BASE_URL}dify-moderation.png`} alt="Dify Moderation" className="max-w-[60%] mx-auto rounded-md border border-border shadow-sm" />
               </div>
 
-              <p className="text-slate-600 mb-2">{t('docs.difyModerationOptions')}</p>
+              <p className="text-muted-foreground mb-2">{t('docs.difyModerationOptions')}</p>
 
-              <ol className="list-decimal pl-5 space-y-2 text-sm text-slate-600 mb-4">
+              <ol className="list-decimal pl-5 space-y-2 text-sm text-muted-foreground mb-4">
                 <li>
                   <span className="font-semibold">{t('docs.difyOpenAIModeration')}</span> — {t('docs.difyOpenAIModerationDesc')}
                 </li>
@@ -655,12 +655,12 @@ print("Result:", result)
               </ol>
 
               <div className="text-center my-4">
-                <img src={`${BASE_URL}dify-moderation-extension.png`} alt="Dify Moderation API Extension" className="max-w-[60%] mx-auto rounded-md border border-slate-200 shadow-sm" />
+                <img src={`${BASE_URL}dify-moderation-extension.png`} alt="Dify Moderation API Extension" className="max-w-[60%] mx-auto rounded-md border border-border shadow-sm" />
               </div>
 
               <div className="mt-6">
                 <p className="font-semibold mb-3">{t('docs.difyAddExtension')}</p>
-                <ol className="list-decimal pl-5 space-y-3 text-sm text-slate-600">
+                <ol className="list-decimal pl-5 space-y-3 text-sm text-muted-foreground">
                   <li>
                     <span className="font-semibold">{t('docs.difyStep1Title')}</span>
                     <br />
@@ -670,33 +670,33 @@ print("Result:", result)
                     <span className="font-semibold">{t('docs.difyStep2Title')}</span>
                     <br />
                     <span>{t('docs.difyStep2NewDesc')}</span>
-                    <pre className="bg-slate-50 p-3 rounded-md mt-2 text-xs border border-slate-200">{`${apiDomain}/v1/dify/moderation`}</pre>
+                    <pre className="bg-secondary p-3 rounded-md mt-2 text-xs border border-border">{`${apiDomain}/v1/dify/moderation`}</pre>
                   </li>
                   <li>
                     <span className="font-semibold">{t('docs.difyStep3NewTitle')}</span>
                     <br />
                     <span>{t('docs.difyStep3NewDesc1')} </span>
-                    <a href="https://openguardrails.com/platform/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                    <a href="https://openguardrails.com/platform/" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
                       openguardrails.com
                     </a>
                     <span>{t('docs.difyStep3NewDesc2')}</span>
                     {user?.api_key && (
                       <div className="mt-2">
                         <span>{t('docs.yourApiKey')}: </span>
-                        <code className="text-xs bg-slate-100 px-2 py-1 rounded">{user.api_key}</code>
+                        <code className="text-xs bg-muted px-2 py-1 rounded">{user.api_key}</code>
                       </div>
                     )}
                   </li>
                 </ol>
               </div>
 
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md mt-6 mb-4">
-                <p className="text-sm text-green-800">{t('docs.difyIntegrationBenefit')}</p>
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-md mt-6 mb-4">
+                <p className="text-sm text-emerald-300">{t('docs.difyIntegrationBenefit')}</p>
               </div>
 
-              <div className="p-4 bg-slate-50 rounded-md border border-slate-200">
+              <div className="p-4 bg-secondary rounded-md border border-border">
                 <p className="font-semibold text-sm mb-2">{t('docs.difyAdvantages')}:</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
                   <li>{t('docs.difyAdvantage1')}</li>
                   <li>{t('docs.difyAdvantage2')}</li>
                   <li>{t('docs.difyAdvantage3')}</li>
@@ -709,13 +709,13 @@ print("Result:", result)
             {/* n8n Integration - Continuing with the rest of the content... */}
             <div id="n8n-integration" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.n8nIntegration')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.n8nIntegrationDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.n8nIntegrationDesc')}</p>
 
               <div className="mt-6">
                 <p className="font-semibold mb-3">{t('docs.n8nCreateCredential')}</p>
-                <p className="text-sm text-slate-600 mb-4">{t('docs.n8nCreateCredentialDesc')}</p>
+                <p className="text-sm text-muted-foreground mb-4">{t('docs.n8nCreateCredentialDesc')}</p>
 
-                <ol className="space-y-4 text-sm text-slate-600">
+                <ol className="space-y-4 text-sm text-muted-foreground">
                   {[1, 2, 3, 4, 5, 6].map((step) => (
                     <li key={step} className="space-y-2">
                       <span className="font-semibold">{t(`docs.n8nCredentialStep${step}`)}</span>
@@ -725,7 +725,7 @@ print("Result:", result)
                         <img
                           src={`${BASE_URL}n8n-${step}.png`}
                           alt={`n8n Step ${step}`}
-                          className={`${step === 1 || step === 2 ? 'max-w-[60%]' : 'max-w-[80%]'} mx-auto rounded-md border border-slate-200 shadow-sm`}
+                          className={`${step === 1 || step === 2 ? 'max-w-[60%]' : 'max-w-[80%]'} mx-auto rounded-md border border-border shadow-sm`}
                         />
                       </div>
                     </li>
@@ -733,14 +733,14 @@ print("Result:", result)
                 </ol>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mt-6 mb-4">
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md mt-6 mb-4">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">i</div>
+                    <div className="h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs">i</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-blue-900">{t('docs.n8nTwoMethods')}</p>
-                    <p className="text-sm text-blue-700 mt-1">{t('docs.n8nTwoMethodsDesc')}</p>
+                    <p className="text-sm font-medium text-sky-200">{t('docs.n8nTwoMethods')}</p>
+                    <p className="text-sm text-sky-400 mt-1">{t('docs.n8nTwoMethodsDesc')}</p>
                   </div>
                 </div>
               </div>
@@ -750,7 +750,7 @@ print("Result:", result)
 
                 <div className="mb-4">
                   <p className="font-semibold text-sm mb-2">{t('docs.n8nMethod1Installation')}:</p>
-                  <ol className="list-decimal pl-5 space-y-1 text-sm text-slate-600">
+                  <ol className="list-decimal pl-5 space-y-1 text-sm text-muted-foreground">
                     <li>{t('docs.n8nMethod1InstallStep1')}</li>
                     <li>{t('docs.n8nMethod1InstallStep2')}</li>
                     <li>{t('docs.n8nMethod1InstallStep3')}</li>
@@ -759,7 +759,7 @@ print("Result:", result)
 
                 <div className="mb-4">
                   <p className="font-semibold text-sm mb-2">{t('docs.n8nMethod1Features')}:</p>
-                  <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
                     <li>{t('docs.n8nMethod1Feature1')}</li>
                     <li>{t('docs.n8nMethod1Feature2')}</li>
                     <li>{t('docs.n8nMethod1Feature3')}</li>
@@ -767,7 +767,7 @@ print("Result:", result)
                   </ul>
                 </div>
 
-                <div className="p-4 bg-slate-50 rounded-md border border-slate-200 mb-4">
+                <div className="p-4 bg-secondary rounded-md border border-border mb-4">
                   <p className="font-semibold text-sm mb-2">{t('docs.n8nExampleWorkflow')}:</p>
                   <pre className="text-xs whitespace-pre-wrap">
                     {`${t('docs.n8nExampleStep1')}
@@ -785,7 +785,7 @@ ${t('docs.n8nExampleStep6No')}`}
 
                 <div>
                   <p className="font-semibold text-sm mb-2">{t('docs.n8nDetectionOptions')}:</p>
-                  <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600">
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground">
                     <li>{t('docs.n8nDetectionOption1')}</li>
                     <li>{t('docs.n8nDetectionOption2')}</li>
                     <li>{t('docs.n8nDetectionOption3')}</li>
@@ -796,10 +796,10 @@ ${t('docs.n8nExampleStep6No')}`}
 
               <div className="mt-6">
                 <p className="font-semibold mb-3">{t('docs.n8nMethod2')}</p>
-                <p className="text-sm text-slate-600 mb-4">{t('docs.n8nMethod2Desc')}</p>
+                <p className="text-sm text-muted-foreground mb-4">{t('docs.n8nMethod2Desc')}</p>
 
                 <p className="font-semibold text-sm mb-2">{t('docs.n8nMethod2SetupSteps')}:</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm text-slate-600 mb-4">
+                <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground mb-4">
                   <li>{t('docs.n8nMethod2Step1')}</li>
                   <li>{t('docs.n8nMethod2Step2Method')}</li>
                   <li>{t('docs.n8nMethod2Step2Url')}</li>
@@ -808,7 +808,7 @@ ${t('docs.n8nExampleStep6No')}`}
 
                 <div>
                   <p className="font-semibold text-sm mb-2">{t('docs.n8nMethod2RequestBody')}:</p>
-                  <pre className="bg-slate-50 p-3 rounded-md text-xs border border-slate-200">
+                  <pre className="bg-secondary p-3 rounded-md text-xs border border-border">
                     {`{
   "model": "OpenGuardrails-Text",
   "messages": [
@@ -821,14 +821,14 @@ ${t('docs.n8nExampleStep6No')}`}
                   </pre>
                 </div>
 
-                <div className="p-4 bg-green-50 border border-green-200 rounded-md mt-4">
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-md mt-4">
                   <div className="flex items-start gap-2">
                     <div className="flex-shrink-0 mt-0.5">
-                      <div className="h-5 w-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+                      <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs">✓</div>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-green-900">{t('docs.n8nImportWorkflows')}</p>
-                      <p className="text-sm text-green-700 mt-1">{t('docs.n8nImportWorkflowsDesc')}</p>
+                      <p className="text-sm font-medium text-emerald-200">{t('docs.n8nImportWorkflows')}</p>
+                      <p className="text-sm text-emerald-400 mt-1">{t('docs.n8nImportWorkflowsDesc')}</p>
                     </div>
                   </div>
                 </div>
@@ -838,9 +838,9 @@ ${t('docs.n8nExampleStep6No')}`}
             {/* Protection Configuration */}
             <div id="protection-config" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.protectionConfig')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.protectionConfigDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.protectionConfigDesc')}</p>
 
-              <ul className="list-disc pl-5 space-y-2 text-sm text-slate-600">
+              <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground">
                 <li>
                   <span className="font-semibold">{t('docs.riskTypeConfig')}:</span> {t('docs.riskTypeConfigDesc')}
                 </li>
@@ -869,43 +869,43 @@ ${t('docs.n8nExampleStep6No')}`}
             {/* API Overview */}
             <div id="api-overview" className="mt-6">
               <h3 className="text-xl font-semibold mb-3">{t('docs.apiOverview')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.apiOverviewDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.apiOverviewDesc')}</p>
 
-              <table className="w-full border-collapse border border-slate-200 text-sm">
+              <table className="w-full border-collapse border border-border text-sm">
                 <thead>
-                  <tr className="bg-slate-50">
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.service')}</th>
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.port')}</th>
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.purpose')}</th>
+                  <tr className="bg-secondary">
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.service')}</th>
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.port')}</th>
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.purpose')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">{t('docs.adminService')}</span>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-sky-500/15 text-sky-300">{t('docs.adminService')}</span>
                     </td>
-                    <td className="border border-slate-200 p-3">
-                      <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">5000</code>
+                    <td className="border border-border p-3">
+                      <code className="text-xs bg-muted px-1 py-0.5 rounded">5000</code>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.adminServiceDesc')}</td>
+                    <td className="border border-border p-3">{t('docs.adminServiceDesc')}</td>
                   </tr>
-                  <tr className="bg-slate-50">
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">{t('docs.detectionService')}</span>
+                  <tr className="bg-secondary">
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-emerald-500/15 text-emerald-300">{t('docs.detectionService')}</span>
                     </td>
-                    <td className="border border-slate-200 p-3">
-                      <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">5001</code>
+                    <td className="border border-border p-3">
+                      <code className="text-xs bg-muted px-1 py-0.5 rounded">5001</code>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.detectionServiceDesc')}</td>
+                    <td className="border border-border p-3">{t('docs.detectionServiceDesc')}</td>
                   </tr>
                   <tr>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-purple-100 text-purple-800">{t('docs.proxyService')}</span>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-purple-500/15 text-purple-300">{t('docs.proxyService')}</span>
                     </td>
-                    <td className="border border-slate-200 p-3">
-                      <code className="text-xs bg-slate-100 px-1 py-0.5 rounded">5002</code>
+                    <td className="border border-border p-3">
+                      <code className="text-xs bg-muted px-1 py-0.5 rounded">5002</code>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.proxyServiceDesc')}</td>
+                    <td className="border border-border p-3">{t('docs.proxyServiceDesc')}</td>
                   </tr>
                 </tbody>
               </table>
@@ -916,22 +916,22 @@ ${t('docs.n8nExampleStep6No')}`}
 
             <div id="api-authentication" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.apiAuthentication')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.apiAuthenticationDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.apiAuthenticationDesc')}</p>
 
-              <div className="p-4 bg-green-50 border border-green-200 rounded-md mb-4">
+              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-md mb-4">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
+                    <div className="h-5 w-5 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs">✓</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-green-900">{t('docs.apiKeyLocation')}</p>
-                    <p className="text-sm text-green-700 mt-1">{t('docs.apiKeyLocationDesc')}</p>
+                    <p className="text-sm font-medium text-emerald-200">{t('docs.apiKeyLocation')}</p>
+                    <p className="text-sm text-emerald-400 mt-1">{t('docs.apiKeyLocationDesc')}</p>
                   </div>
                 </div>
               </div>
 
               <p className="font-semibold text-sm mb-2">{t('docs.authenticationExample')}:</p>
-              <pre className="bg-slate-50 p-4 rounded-md overflow-auto text-xs border border-slate-200">
+              <pre className="bg-secondary p-4 rounded-md overflow-auto text-xs border border-border">
                 {`# Using cURL
 curl -X POST "${apiDomain}/v1/guardrails" \\
   -H "Authorization: Bearer ${user?.api_key || 'your-api-key'}" \\
@@ -968,24 +968,24 @@ response = requests.post(
             {/* API Endpoints */}
             <div id="api-endpoints" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.apiEndpoints')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.apiEndpointsDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.apiEndpointsDesc')}</p>
 
               <div className="space-y-2">
                 <Collapsible>
                   <CollapsibleTrigger className="w-full">
-                    <div className="p-3 bg-slate-50 hover:bg-slate-100 rounded-md border border-slate-200 transition-colors">
+                    <div className="p-3 bg-secondary hover:bg-card/5 rounded-md border border-border transition-colors">
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">POST</span>
+                        <span className="px-2 py-1 text-xs rounded bg-emerald-500/15 text-emerald-300">POST</span>
                         <code className="text-sm font-semibold">/v1/guardrails</code>
-                        <span className="text-sm text-slate-500">- {t('docs.guardrailsEndpointDesc')}</span>
+                        <span className="text-sm text-muted-foreground">- {t('docs.guardrailsEndpointDesc')}</span>
                       </div>
                     </div>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 p-4 bg-white border border-slate-200 rounded-md">
+                  <CollapsibleContent className="mt-2 p-4 bg-card border border-border rounded-md">
                     <div className="space-y-4">
                       <div>
                         <p className="font-semibold text-sm mb-2">{t('docs.requestBody')}:</p>
-                        <pre className="bg-slate-50 p-3 rounded text-xs border border-slate-200 overflow-auto">
+                        <pre className="bg-secondary p-3 rounded text-xs border border-border overflow-auto">
                           {`{
   "model": "optional-model-name",
   "messages": [
@@ -1003,7 +1003,7 @@ response = requests.post(
                       </div>
                       <div>
                         <p className="font-semibold text-sm mb-2">{t('docs.responseExample')}:</p>
-                        <pre className="bg-slate-50 p-3 rounded text-xs border border-slate-200 overflow-auto">
+                        <pre className="bg-secondary p-3 rounded text-xs border border-border overflow-auto">
                           {`{
   "id": "det_xxxxxxxx",
   "result": {
@@ -1037,19 +1037,19 @@ response = requests.post(
 
                 <Collapsible>
                   <CollapsibleTrigger className="w-full">
-                    <div className="p-3 bg-slate-50 hover:bg-slate-100 rounded-md border border-slate-200 transition-colors">
+                    <div className="p-3 bg-secondary hover:bg-card/5 rounded-md border border-border transition-colors">
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">POST</span>
+                        <span className="px-2 py-1 text-xs rounded bg-emerald-500/15 text-emerald-300">POST</span>
                         <code className="text-sm font-semibold">/v1/scan/email</code>
-                        <span className="text-sm text-slate-500">- {t('docs.emailScanEndpointDesc')}</span>
+                        <span className="text-sm text-muted-foreground">- {t('docs.emailScanEndpointDesc')}</span>
                       </div>
                     </div>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 p-4 bg-white border border-slate-200 rounded-md">
+                  <CollapsibleContent className="mt-2 p-4 bg-card border border-border rounded-md">
                     <div className="space-y-4">
                       <div>
                         <p className="font-semibold text-sm mb-2">{t('docs.requestBody')}:</p>
-                        <pre className="bg-slate-50 p-3 rounded text-xs border border-slate-200 overflow-auto">
+                        <pre className="bg-secondary p-3 rounded text-xs border border-border overflow-auto">
                           {`{
   "content": "From: sender@example.com\\nSubject: Important\\n\\nEmail body content here..."
 }`}
@@ -1057,7 +1057,7 @@ response = requests.post(
                       </div>
                       <div>
                         <p className="font-semibold text-sm mb-2">{t('docs.responseExample')}:</p>
-                        <pre className="bg-slate-50 p-3 rounded text-xs border border-slate-200 overflow-auto">
+                        <pre className="bg-secondary p-3 rounded text-xs border border-border overflow-auto">
                           {`{
   "id": "scan-email-abc123def456",
   "risk_level": "high",
@@ -1074,19 +1074,19 @@ response = requests.post(
 
                 <Collapsible>
                   <CollapsibleTrigger className="w-full">
-                    <div className="p-3 bg-slate-50 hover:bg-slate-100 rounded-md border border-slate-200 transition-colors">
+                    <div className="p-3 bg-secondary hover:bg-card/5 rounded-md border border-border transition-colors">
                       <div className="flex items-center gap-2">
-                        <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">POST</span>
+                        <span className="px-2 py-1 text-xs rounded bg-emerald-500/15 text-emerald-300">POST</span>
                         <code className="text-sm font-semibold">/v1/scan/webpage</code>
-                        <span className="text-sm text-slate-500">- {t('docs.webpageScanEndpointDesc')}</span>
+                        <span className="text-sm text-muted-foreground">- {t('docs.webpageScanEndpointDesc')}</span>
                       </div>
                     </div>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 p-4 bg-white border border-slate-200 rounded-md">
+                  <CollapsibleContent className="mt-2 p-4 bg-card border border-border rounded-md">
                     <div className="space-y-4">
                       <div>
                         <p className="font-semibold text-sm mb-2">{t('docs.requestBody')}:</p>
-                        <pre className="bg-slate-50 p-3 rounded text-xs border border-slate-200 overflow-auto">
+                        <pre className="bg-secondary p-3 rounded text-xs border border-border overflow-auto">
                           {`{
   "content": "<html><body>Webpage content here...</body></html>",
   "url": "https://example.com"
@@ -1095,7 +1095,7 @@ response = requests.post(
                       </div>
                       <div>
                         <p className="font-semibold text-sm mb-2">{t('docs.responseExample')}:</p>
-                        <pre className="bg-slate-50 p-3 rounded text-xs border border-slate-200 overflow-auto">
+                        <pre className="bg-secondary p-3 rounded text-xs border border-border overflow-auto">
                           {`{
   "id": "scan-webpage-def456abc789",
   "risk_level": "high",
@@ -1115,65 +1115,65 @@ response = requests.post(
             {/* API Errors */}
             <div id="api-errors" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.apiErrors')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.apiErrorsDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.apiErrorsDesc')}</p>
 
-              <table className="w-full border-collapse border border-slate-200 text-sm mb-4">
+              <table className="w-full border-collapse border border-border text-sm mb-4">
                 <thead>
-                  <tr className="bg-slate-50">
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.statusCode')}</th>
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.meaning')}</th>
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.commonCauses')}</th>
+                  <tr className="bg-secondary">
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.statusCode')}</th>
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.meaning')}</th>
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.commonCauses')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-green-100 text-green-800">200</span>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-emerald-500/15 text-emerald-300">200</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.status200')}</td>
-                    <td className="border border-slate-200 p-3">{t('docs.status200Cause')}</td>
+                    <td className="border border-border p-3">{t('docs.status200')}</td>
+                    <td className="border border-border p-3">{t('docs.status200Cause')}</td>
                   </tr>
-                  <tr className="bg-slate-50">
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-orange-100 text-orange-800">400</span>
+                  <tr className="bg-secondary">
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-orange-500/15 text-orange-300">400</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.status400')}</td>
-                    <td className="border border-slate-200 p-3">{t('docs.status400Cause')}</td>
-                  </tr>
-                  <tr>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">401</span>
-                    </td>
-                    <td className="border border-slate-200 p-3">{t('docs.status401')}</td>
-                    <td className="border border-slate-200 p-3">{t('docs.status401Cause')}</td>
-                  </tr>
-                  <tr className="bg-slate-50">
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">403</span>
-                    </td>
-                    <td className="border border-slate-200 p-3">{t('docs.status403')}</td>
-                    <td className="border border-slate-200 p-3">{t('docs.status403Cause')}</td>
+                    <td className="border border-border p-3">{t('docs.status400')}</td>
+                    <td className="border border-border p-3">{t('docs.status400Cause')}</td>
                   </tr>
                   <tr>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-orange-100 text-orange-800">429</span>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">401</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.status429')}</td>
-                    <td className="border border-slate-200 p-3">{t('docs.status429Cause')}</td>
+                    <td className="border border-border p-3">{t('docs.status401')}</td>
+                    <td className="border border-border p-3">{t('docs.status401Cause')}</td>
                   </tr>
-                  <tr className="bg-slate-50">
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">500</span>
+                  <tr className="bg-secondary">
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">403</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.status500')}</td>
-                    <td className="border border-slate-200 p-3">{t('docs.status500Cause')}</td>
+                    <td className="border border-border p-3">{t('docs.status403')}</td>
+                    <td className="border border-border p-3">{t('docs.status403Cause')}</td>
+                  </tr>
+                  <tr>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-orange-500/15 text-orange-300">429</span>
+                    </td>
+                    <td className="border border-border p-3">{t('docs.status429')}</td>
+                    <td className="border border-border p-3">{t('docs.status429Cause')}</td>
+                  </tr>
+                  <tr className="bg-secondary">
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">500</span>
+                    </td>
+                    <td className="border border-border p-3">{t('docs.status500')}</td>
+                    <td className="border border-border p-3">{t('docs.status500Cause')}</td>
                   </tr>
                 </tbody>
               </table>
 
               <div>
                 <p className="font-semibold text-sm mb-2">{t('docs.errorResponseFormat')}:</p>
-                <pre className="bg-slate-50 p-3 rounded text-xs border border-slate-200 overflow-auto">
+                <pre className="bg-secondary p-3 rounded text-xs border border-border overflow-auto">
                   {`{
   "detail": "Error message description",
   "error_code": "ERROR_CODE",
@@ -1189,7 +1189,7 @@ response = requests.post(
           {/* Detailed Guide Section - I'll continue with key sections */}
           <section id="detailed-guide">
             <div className="flex items-center gap-2 mb-4">
-              <Book className="h-6 w-6 text-blue-600" />
+              <Book className="h-6 w-6 text-sky-400" />
               <h2 className="text-2xl font-bold">{t('docs.detailedGuide')}</h2>
             </div>
 
@@ -1198,44 +1198,44 @@ response = requests.post(
 
             <div id="detection-capabilities" className="mt-6">
               <h3 className="text-xl font-semibold mb-3">{t('docs.detectionCapabilities')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.detectionCapabilitiesDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.detectionCapabilitiesDesc')}</p>
 
-              <table className="w-full border-collapse border border-slate-200 text-sm">
+              <table className="w-full border-collapse border border-border text-sm">
                 <thead>
-                  <tr className="bg-slate-50">
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.category')}</th>
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.riskLevel')}</th>
-                    <th className="border border-slate-200 p-3 text-left font-semibold">{t('docs.examples')}</th>
+                  <tr className="bg-secondary">
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.category')}</th>
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.riskLevel')}</th>
+                    <th className="border border-border p-3 text-left font-semibold">{t('docs.examples')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="border border-slate-200 p-3">{t('docs.violenceCrime')}</td>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">{t('docs.highRisk')}</span>
+                    <td className="border border-border p-3">{t('docs.violenceCrime')}</td>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">{t('docs.highRisk')}</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.violenceCrimeExample')}</td>
+                    <td className="border border-border p-3">{t('docs.violenceCrimeExample')}</td>
                   </tr>
-                  <tr className="bg-slate-50">
-                    <td className="border border-slate-200 p-3">{t('docs.promptAttack')}</td>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-red-100 text-red-800">{t('docs.highRisk')}</span>
+                  <tr className="bg-secondary">
+                    <td className="border border-border p-3">{t('docs.promptAttack')}</td>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-red-500/15 text-red-300">{t('docs.highRisk')}</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.promptAttackExample')}</td>
+                    <td className="border border-border p-3">{t('docs.promptAttackExample')}</td>
                   </tr>
                   <tr>
-                    <td className="border border-slate-200 p-3">{t('docs.illegalActivities')}</td>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-orange-100 text-orange-800">{t('docs.mediumRisk')}</span>
+                    <td className="border border-border p-3">{t('docs.illegalActivities')}</td>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-orange-500/15 text-orange-300">{t('docs.mediumRisk')}</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.illegalActivitiesExample')}</td>
+                    <td className="border border-border p-3">{t('docs.illegalActivitiesExample')}</td>
                   </tr>
-                  <tr className="bg-slate-50">
-                    <td className="border border-slate-200 p-3">{t('docs.discrimination')}</td>
-                    <td className="border border-slate-200 p-3">
-                      <span className="px-2 py-1 text-xs rounded bg-yellow-100 text-yellow-800">{t('docs.lowRisk')}</span>
+                  <tr className="bg-secondary">
+                    <td className="border border-border p-3">{t('docs.discrimination')}</td>
+                    <td className="border border-border p-3">
+                      <span className="px-2 py-1 text-xs rounded bg-yellow-500/15 text-yellow-300">{t('docs.lowRisk')}</span>
                     </td>
-                    <td className="border border-slate-200 p-3">{t('docs.discriminationExample')}</td>
+                    <td className="border border-border p-3">{t('docs.discriminationExample')}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1247,20 +1247,20 @@ response = requests.post(
             {/* Auto-Discovery How It Works */}
             <div id="auto-discovery-how-it-works" className="mt-8">
               <h3 className="text-xl font-semibold mb-3">{t('docs.autoDiscoveryHowItWorks')}</h3>
-              <p className="text-slate-600 mb-4">{t('docs.autoDiscoveryHowItWorksDesc')}</p>
+              <p className="text-muted-foreground mb-4">{t('docs.autoDiscoveryHowItWorksDesc')}</p>
 
               <div className="space-y-6">
                 {/* Step 1 */}
                 <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500/15 flex items-center justify-center text-sky-400 font-semibold">
                     1
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-medium text-slate-900">
+                    <h4 className="font-medium text-foreground">
                       {t('applicationManagement.discovery.step1Title')}
                     </h4>
-                    <p className="text-slate-600 text-sm mt-1">{t('applicationManagement.discovery.step1')}</p>
-                    <pre className="mt-2 bg-slate-50 p-3 rounded-md text-xs border border-slate-200 overflow-auto">
+                    <p className="text-muted-foreground text-sm mt-1">{t('applicationManagement.discovery.step1')}</p>
+                    <pre className="mt-2 bg-secondary p-3 rounded-md text-xs border border-border overflow-auto">
 {`# og-connector plugin configuration
 og_api_key: "sk-xxai-your-tenant-api-key"
 og_api_base_url: "https://your-og-server.com"`}
@@ -1270,15 +1270,15 @@ og_api_base_url: "https://your-og-server.com"`}
 
                 {/* Step 2 */}
                 <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500/15 flex items-center justify-center text-sky-400 font-semibold">
                     2
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-medium text-slate-900">
+                    <h4 className="font-medium text-foreground">
                       {t('applicationManagement.discovery.step2Title')}
                     </h4>
-                    <p className="text-slate-600 text-sm mt-1">{t('applicationManagement.discovery.step2')}</p>
-                    <pre className="mt-2 bg-slate-50 p-3 rounded-md text-xs border border-slate-200 overflow-auto">
+                    <p className="text-muted-foreground text-sm mt-1">{t('applicationManagement.discovery.step2')}</p>
+                    <pre className="mt-2 bg-secondary p-3 rounded-md text-xs border border-border overflow-auto">
 {`# Higress gateway adds consumer header
 x-mse-consumer: "your-app-name"
 
@@ -1290,17 +1290,17 @@ X-OG-Application-ID: "your-app-name"`}
 
                 {/* Step 3 */}
                 <div className="flex gap-4">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-500/15 flex items-center justify-center text-sky-400 font-semibold">
                     3
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-medium text-slate-900">
+                    <h4 className="font-medium text-foreground">
                       {t('applicationManagement.discovery.step3Title')}
                     </h4>
-                    <p className="text-slate-600 text-sm mt-1">{t('applicationManagement.discovery.step3')}</p>
+                    <p className="text-muted-foreground text-sm mt-1">{t('applicationManagement.discovery.step3')}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <div className="h-4 w-4 rounded-full bg-green-500 flex items-center justify-center text-white text-xs">✓</div>
-                      <span className="text-sm text-slate-600">
+                      <div className="h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center text-white text-xs">✓</div>
+                      <span className="text-sm text-muted-foreground">
                         {t('applicationManagement.discovery.step3Result')}
                       </span>
                     </div>
@@ -1308,14 +1308,14 @@ X-OG-Application-ID: "your-app-name"`}
                 </div>
               </div>
 
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md mt-6">
+              <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md mt-6">
                 <div className="flex items-start gap-2">
                   <div className="flex-shrink-0 mt-0.5">
-                    <div className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs">i</div>
+                    <div className="h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs">i</div>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-blue-900">{t('docs.autoDiscoveryTip')}</p>
-                    <p className="text-sm text-blue-700 mt-1">{t('docs.autoDiscoveryTipDesc')}</p>
+                    <p className="text-sm font-medium text-sky-200">{t('docs.autoDiscoveryTip')}</p>
+                    <p className="text-sm text-sky-400 mt-1">{t('docs.autoDiscoveryTipDesc')}</p>
                   </div>
                 </div>
               </div>
@@ -1325,8 +1325,8 @@ X-OG-Application-ID: "your-app-name"`}
           <Separator />
 
           {/* Footer */}
-          <div className="text-center text-sm text-slate-500">
-            {t('docs.needHelp')} <a href="mailto:thomas@openguardrails.com" className="text-blue-600 hover:underline">thomas@openguardrails.com</a>
+          <div className="text-center text-sm text-muted-foreground">
+            {t('docs.needHelp')} <a href="mailto:thomas@openguardrails.com" className="text-sky-400 hover:underline">thomas@openguardrails.com</a>
           </div>
         </CardContent>
       </Card>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Edit2, Trash2, Eye, Server } from 'lucide-react'
+import { useCanEdit } from '../../hooks/useCanEdit'
 import { proxyModelsApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,6 +39,7 @@ interface ProxyModelDetail extends ProxyModel {
 
 const ProxyModelManagement: React.FC = () => {
   const { t } = useTranslation()
+  const canEdit = useCanEdit()
   const [models, setModels] = useState<ProxyModel[]>([])
   const [loading, setLoading] = useState(false)
   const [isModalVisible, setIsModalVisible] = useState(false)
@@ -57,6 +59,7 @@ const ProxyModelManagement: React.FC = () => {
   })
 
   // Get model list
+  const [apiDomain, setApiDomain] = useState<string>('http://localhost:5001')
   const fetchModels = async () => {
     setLoading(true)
     try {
@@ -342,7 +345,7 @@ const ProxyModelManagement: React.FC = () => {
       cell: ({ row }) => (
         <div className="flex items-center gap-2 flex-wrap">
           {row.original.enable_reasoning_detection && (
-            <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+            <Badge variant="secondary" className="bg-purple-500/15 text-purple-300 border-purple-500/20">
               {t('proxy.inferenceDetection')}
             </Badge>
           )}
@@ -354,10 +357,10 @@ const ProxyModelManagement: React.FC = () => {
       header: t('proxy.createTime'),
       cell: ({ row }) => new Date(row.original.created_at).toLocaleString('zh-CN'),
     },
-    {
+    ...(canEdit ? [{
       id: 'actions',
       header: t('proxy.operation'),
-      cell: ({ row }) => (
+      cell: ({ row }: { row: any }) => (
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -378,7 +381,7 @@ const ProxyModelManagement: React.FC = () => {
           <Button
             variant="ghost"
             size="sm"
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
             onClick={() => handleDelete(row.original.id)}
           >
             <Trash2 className="h-4 w-4 mr-1" />
@@ -386,14 +389,14 @@ const ProxyModelManagement: React.FC = () => {
           </Button>
         </div>
       ),
-    },
+    }] : []),
   ]
 
   return (
     <div className="space-y-4">
-      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="font-semibold text-blue-900">{t('proxy.securityGatewayInfo')}</p>
-        <p className="text-sm text-blue-800 mt-1">{t('proxy.securityGatewayInfoDesc')}</p>
+      <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+        <p className="font-semibold text-sky-200">{t('proxy.securityGatewayInfo')}</p>
+        <p className="text-sm text-sky-300 mt-1">{t('proxy.securityGatewayInfoDesc')}</p>
       </div>
 
       <Card>
@@ -402,10 +405,12 @@ const ProxyModelManagement: React.FC = () => {
             <Server className="h-5 w-5" />
             <CardTitle>{t('proxy.securityGatewayConfig')}</CardTitle>
           </div>
-          <Button onClick={() => showModal()}>
-            <Plus className="h-4 w-4 mr-1" />
-            {t('proxy.addModel')}
-          </Button>
+          {canEdit && (
+            <Button onClick={() => showModal()}>
+              <Plus className="h-4 w-4 mr-1" />
+              {t('proxy.addModel')}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           <DataTable
@@ -427,16 +432,16 @@ const ProxyModelManagement: React.FC = () => {
           <CardTitle>{t('proxy.accessOpenGuardrailsGateway')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-900">{t('proxy.gatewayIntegrationDesc')}</p>
+          <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+            <p className="text-sm text-sky-200">{t('proxy.gatewayIntegrationDesc')}</p>
           </div>
 
           <div>
             <p className="font-semibold mb-2">{t('proxy.pythonOpenaiExample')}</p>
-            <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm border border-gray-200">
+            <pre className="bg-secondary p-4 rounded-lg overflow-auto text-sm border border-border">
               <code>
 {`client = OpenAI(
-    base_url="https://api.openguardrails.com/v1/gateway",  # Change to OpenGuardrails Official gateway url or use your local deployment url http://your-server:5002/v1
+    base_url="https://${apiDomain}/v1/gateway",  # Change to OpenGuardrails Official gateway url or use your local deployment url http://your-server:5002/v1
     api_key="sk-xxai-your-proxy-key" # ${t('account.codeComments.changeToApiKey')}
 )
 completion = openai_client.chat.completions.create(
@@ -451,9 +456,9 @@ completion = openai_client.chat.completions.create(
 
           <div>
             <p className="font-semibold mb-2">{t('proxy.privateDeploymentConfig')}</p>
-            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-              <li><code className="px-2 py-1 bg-gray-100 rounded text-xs">{t('proxy.dockerDeployment')}</code></li>
-              <li><code className="px-2 py-1 bg-gray-100 rounded text-xs">{t('proxy.customDeployment')}</code></li>
+            <ul className="list-disc list-inside space-y-1 text-sm text-slate-300">
+              <li><code className="px-2 py-1 bg-muted rounded text-xs">{t('proxy.dockerDeployment')}</code></li>
+              <li><code className="px-2 py-1 bg-muted rounded text-xs">{t('proxy.customDeployment')}</code></li>
             </ul>
           </div>
         </CardContent>
@@ -569,7 +574,7 @@ completion = openai_client.chat.completions.create(
               <div className="space-y-3 p-4 border rounded-lg">
                 <div>
                   <p className="font-medium mb-1">{t('proxy.securityConfigLabel')}</p>
-                  <p className="text-sm text-gray-600">{t('proxy.securityConfigDesc')}</p>
+                  <p className="text-sm text-muted-foreground">{t('proxy.securityConfigDesc')}</p>
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -583,16 +588,16 @@ completion = openai_client.chat.completions.create(
 
               </div>
 
-              <div className="space-y-3 p-4 border rounded-lg bg-green-50">
+              <div className="space-y-3 p-4 border rounded-lg bg-emerald-500/10">
                 <div>
                   <p className="font-medium mb-1">{t('proxy.dataSafetyLabel')}</p>
-                  <p className="text-sm text-gray-600">{t('proxy.dataSafetyDesc')}</p>
+                  <p className="text-sm text-muted-foreground">{t('proxy.dataSafetyDesc')}</p>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div>
                     <Label htmlFor="is_private_model">{t('proxy.isPrivateModel')}</Label>
-                    <p className="text-sm text-gray-600">{t('proxy.isPrivateModelDesc')}</p>
+                    <p className="text-sm text-muted-foreground">{t('proxy.isPrivateModelDesc')}</p>
                   </div>
                   <Switch
                     id="is_private_model"
@@ -604,7 +609,7 @@ completion = openai_client.chat.completions.create(
                 <div className="flex items-center justify-between">
                   <div>
                     <Label htmlFor="is_default_private_model">{t('proxy.isDefaultPrivateModel')}</Label>
-                    <p className="text-sm text-gray-600">{t('proxy.isDefaultPrivateModelDesc')}</p>
+                    <p className="text-sm text-muted-foreground">{t('proxy.isDefaultPrivateModelDesc')}</p>
                   </div>
                   <Switch
                     id="is_default_private_model"
@@ -626,7 +631,7 @@ completion = openai_client.chat.completions.create(
                   placeholder={t('proxy.streamDetectionIntervalPlaceholder')}
                   className="mt-2"
                 />
-                <p className="text-sm text-gray-600 mt-1">{t('proxy.streamDetectionIntervalTooltip')}</p>
+                <p className="text-sm text-muted-foreground mt-1">{t('proxy.streamDetectionIntervalTooltip')}</p>
               </div>
 
               <DialogFooter>
@@ -649,20 +654,20 @@ completion = openai_client.chat.completions.create(
           {viewingModel && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.proxyModelName')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.proxyModelName')}</span>
                 <span className="col-span-2">{viewingModel.config_name}</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.upstreamApiModelName')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.upstreamApiModelName')}</span>
                 <span className="col-span-2">{viewingModel.model_name}</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.status')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.status')}</span>
                 <span className="col-span-2">
                   {viewingModel.enabled ? (
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-200">
+                    <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">
                       {t('proxy.enabled')}
                     </Badge>
                   ) : (
@@ -672,10 +677,10 @@ completion = openai_client.chat.completions.create(
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2 border-b">
-                <span className="font-medium text-gray-700">{t('proxy.securityConfig')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.securityConfig')}</span>
                 <div className="col-span-2 space-y-2">
                   {viewingModel.enable_reasoning_detection && (
-                    <Badge variant="secondary" className="bg-purple-100 text-purple-800 border-purple-200">
+                    <Badge variant="secondary" className="bg-purple-500/15 text-purple-300 border-purple-500/20">
                       {t('proxy.inferenceDetection')}
                     </Badge>
                   )}
@@ -683,7 +688,7 @@ completion = openai_client.chat.completions.create(
               </div>
 
               <div className="grid grid-cols-3 gap-2 py-2">
-                <span className="font-medium text-gray-700">{t('proxy.createTime')}</span>
+                <span className="font-medium text-slate-300">{t('proxy.createTime')}</span>
                 <span className="col-span-2">
                   {new Date(viewingModel.created_at).toLocaleString('zh-CN')}
                 </span>

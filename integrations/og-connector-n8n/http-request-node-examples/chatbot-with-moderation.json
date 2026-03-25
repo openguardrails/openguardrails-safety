@@ -141,7 +141,7 @@
           "name": "OpenAI Account"
         }
       },
-      "notes": "Replace this with your actual LLM provider (OpenAI, Claude, local model, etc.)"
+      "notes": "Replace this with your actual model providers (OpenAI, Claude, local model, etc.)"
     },
     {
       "parameters": {
