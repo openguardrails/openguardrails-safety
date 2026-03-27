@@ -8,6 +8,9 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'response_templates' AND column_name = 'scanner_name'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'response_templates' AND column_name = 'guardrail_name'
     ) THEN
         ALTER TABLE response_templates RENAME COLUMN scanner_name TO guardrail_name;
         RAISE NOTICE 'Renamed response_templates.scanner_name to guardrail_name';
@@ -20,6 +23,9 @@ BEGIN
     IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'knowledge_bases' AND column_name = 'scanner_name'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'knowledge_bases' AND column_name = 'guardrail_name'
     ) THEN
         ALTER TABLE knowledge_bases RENAME COLUMN scanner_name TO guardrail_name;
         RAISE NOTICE 'Renamed knowledge_bases.scanner_name to guardrail_name';
