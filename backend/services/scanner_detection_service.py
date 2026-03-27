@@ -7,11 +7,12 @@ supporting three scanner types:
 - Regex: Python regex pattern matching
 - Keyword: Case-insensitive keyword matching
 
-Sliding Window Support:
-- For long content that exceeds MAX_DETECTION_CONTEXT_LENGTH, the service
-  uses a sliding window approach to ensure complete coverage.
-- User-only messages: Sliding window on user content
-- User+Assistant messages: Cross-detection between user windows and assistant windows
+Detection Modes:
+1. Context-aware (default): Messages within MAX_DETECTION_CONTEXT_LENGTH are detected together
+2. Independent message detection: Each message detected separately with 512-char sliding window
+   - Triggered automatically for agent scenarios (tool messages present)
+   - Triggered when total content exceeds MAX_DETECTION_CONTEXT_LENGTH
+   - System messages are never detected in either mode
 """
 
 import asyncio
@@ -84,13 +85,15 @@ class SlidingWindowProcessor:
         messages: List[Dict]
     ) -> List[List[Dict]]:
         """
-        Generate message window combinations for detection.
+        Generate message window combinations for context-aware detection.
+
+        Only used when content fits in MAX_DETECTION_CONTEXT_LENGTH and no tool messages.
+        System messages should be filtered out by the caller.
 
         Logic:
-        - System/tool messages are preserved as prefix in every window
-        - If only user messages (input): Create windows from user+system+tool content
+        - Tool messages are preserved as prefix in every window
+        - If only user messages (input): Create windows from user content
         - If user+assistant: Create cross-product of user windows × assistant windows
-          with system/tool prefix prepended to each window
 
         Args:
             messages: Original message list
@@ -101,8 +104,8 @@ class SlidingWindowProcessor:
         if not messages:
             return [[]]
 
-        # Separate messages by role
-        prefix_messages = [m for m in messages if m.get("role") in ("system", "tool")]
+        # Separate messages by role (system messages already filtered out by caller)
+        prefix_messages = [m for m in messages if m.get("role") == "tool"]
         user_messages = [m for m in messages if m.get("role") == "user"]
         assistant_messages = [m for m in messages if m.get("role") == "assistant"]
 
@@ -177,6 +180,72 @@ class SlidingWindowProcessor:
 
         logger.info(f"Created {len(result)} cross-product windows ({len(user_windows)} user × {len(assistant_windows)} assistant, with {len(prefix_messages)} prefix messages)")
         return result
+
+
+def get_text_content(msg: Dict) -> str:
+    """Extract text content from a message dict (handles string and multimodal)."""
+    content = msg.get("content", "")
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                text_parts.append(part.get("text", ""))
+        return " ".join(text_parts)
+    return str(content)
+
+
+# Window size for independent message detection (512 chars per window)
+INDEPENDENT_WINDOW_SIZE = 512
+
+
+def get_independent_message_windows(messages: List[Dict]) -> List[List[Dict]]:
+    """
+    Generate independent detection windows - one per message, no cross-context.
+
+    Each user/assistant/tool message is detected independently.
+    System messages are skipped entirely.
+    Messages longer than INDEPENDENT_WINDOW_SIZE get 512-char sliding windows.
+
+    Returns:
+        List of message lists, each containing a single message (or window chunk)
+    """
+    if not messages:
+        return [[]]
+
+    overlap_ratio = 0.2
+    step_size = int(INDEPENDENT_WINDOW_SIZE * (1 - overlap_ratio))  # 410 chars
+    result = []
+
+    for msg in messages:
+        role = msg.get("role", "")
+        if role == "system":
+            continue
+
+        text = get_text_content(msg)
+        if not text:
+            continue
+
+        if len(text) <= INDEPENDENT_WINDOW_SIZE:
+            result.append([{"role": role, "content": text}])
+        else:
+            # Sliding window for long messages
+            start = 0
+            while start < len(text):
+                end = min(start + INDEPENDENT_WINDOW_SIZE, len(text))
+                result.append([{"role": role, "content": text[start:end]}])
+                if end >= len(text):
+                    break
+                start += step_size
+
+    if not result:
+        return [[]]
+
+    logger.info(f"Independent detection: {len(result)} windows from {len(messages)} messages (window_size={INDEPENDENT_WINDOW_SIZE})")
+    return result
 
 
 # Global sliding window processor instance
@@ -339,8 +408,22 @@ class ScannerDetectionService:
             # Check if messages contain images
             has_image = self._check_has_image(messages)
 
-            # Apply sliding window if content exceeds max context length
-            message_windows = sliding_window_processor.get_message_windows(messages)
+            # Filter out system messages - never detect them
+            non_system_messages = [m for m in messages if m.get("role") != "system"]
+
+            # Determine detection mode:
+            # - Agent scenario (has tool messages): independent detection per message
+            # - Non-agent with content exceeding limit: independent detection per message
+            # - Non-agent within limit: context-aware detection (existing behavior)
+            has_tool_messages = any(m.get("role") == "tool" for m in non_system_messages)
+            total_content_length = sum(len(get_text_content(m)) for m in non_system_messages)
+            use_independent = has_tool_messages or total_content_length > settings.max_detection_context_length
+
+            if use_independent:
+                logger.info(f"Using independent message detection (agent={has_tool_messages}, total_len={total_content_length})")
+                message_windows = get_independent_message_windows(non_system_messages)
+            else:
+                message_windows = sliding_window_processor.get_message_windows(non_system_messages)
 
             if len(message_windows) == 1:
                 # No sliding window needed - single detection

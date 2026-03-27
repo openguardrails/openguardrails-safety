@@ -7,6 +7,36 @@ All notable changes to OpenGuardrails platform are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.0] - 2026-03-27
+
+### 🤖 Agent Guardrail Protection
+
+This release adds guardrail protection for AI agent frameworks such as **OpenClaw**, **LangChain**, **CrewAI**, and other tool-calling agent systems. Agent conversations contain complex multi-turn interactions with tool calls and tool results, which require a fundamentally different detection strategy compared to standard chat.
+
+#### Added
+
+##### 🔍 **Independent Message Detection Mode**
+
+- **Agent-aware detection**: Automatically detects agent scenarios (conversations containing tool messages) and switches to independent message detection mode
+- **Per-message detection**: Each user/assistant/tool message is evaluated independently with its own 512-character sliding window, preventing tool call context from diluting prompt attack detection
+- **Automatic mode selection**: Non-agent conversations within context limits continue to use context-aware detection (existing behavior); agent scenarios and long conversations automatically switch to independent detection
+- **System message exclusion**: System messages (system prompts) are now consistently excluded from all detection paths — they are trusted infrastructure, not user content
+
+##### 🛡️ **Improved Detection Accuracy**
+
+- **No more system prompt false positives**: System messages are filtered out before detection in all services (`DetectionGuardrailService`, `GuardrailService`, `ScannerDetectionService`, `MessageTruncator`), eliminating false positives from system prompts that contain guardrail-triggering keywords
+- **Tool message handling**: Tool call results are properly handled — included in data leak detection but isolated during content safety detection
+- **Original message preservation**: Scanner detection service now receives original messages (not pre-truncated), allowing it to apply its own optimal windowing strategy
+
+#### Changed
+
+- **Detection service**: Passes original messages (excluding system) to scanner service instead of pre-truncated messages
+- **Message truncator**: Filters out system messages at the start; only preserves leading tool messages as prefix
+- **Data detection scope**: Input data leak detection now covers `user` and `tool` roles (previously included `system`)
+- **Sliding window processor**: Tool messages preserved as prefix in context-aware mode; system messages no longer included
+
+---
+
 ## [5.3.0] - 2026-03-25
 
 ### 🏢 Workspaces & Enterprise Team Management

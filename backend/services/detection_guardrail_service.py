@@ -231,15 +231,18 @@ class DetectionGuardrailService:
             content_for_data_detection = self._extract_content_for_data_detection(truncated_messages, detection_direction)
             data_result, data_anonymized_text = await self._check_data_security(content_for_data_detection, tenant_id, direction=detection_direction, application_id=application_id)
 
-            # 3. Model detection (using truncated messages, get sensitivity)
-            # Convert messages to dictionary format, support multi-modal
+            # 3. Model detection
+            # Convert ORIGINAL messages (minus system) to dict format for scanner service.
+            # The scanner service handles its own windowing/truncation strategy.
             from utils.image_utils import image_utils
 
             messages_dict = []
             has_image = False
             saved_image_paths = []  # Record saved image paths
 
-            for msg in truncated_messages:
+            for msg in request.messages:
+                if msg.role == 'system':
+                    continue  # Never detect system messages
                 content = msg.content
                 if content is None:
                     # Skip messages with no content (e.g., assistant tool_calls messages)
@@ -464,8 +467,8 @@ class DetectionGuardrailService:
             # For output detection, check assistant messages
             target_roles = {"assistant"}
         else:
-            # For input detection, check all non-assistant roles (system, user, tool, etc.)
-            target_roles = {"system", "user", "tool"}
+            # For input detection, check user and tool messages (skip system)
+            target_roles = {"user", "tool"}
 
         parts = []
         for msg in messages:

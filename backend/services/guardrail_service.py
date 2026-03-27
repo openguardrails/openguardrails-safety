@@ -180,7 +180,11 @@ class GuardrailService:
             saved_image_paths = []
 
             for msg in request.messages:
+                if msg.role == 'system':
+                    continue  # Never detect system messages
                 content = msg.content
+                if content is None:
+                    continue
                 if isinstance(content, str):
                     messages_dict.append({"role": msg.role, "content": content})
                 elif isinstance(content, list):

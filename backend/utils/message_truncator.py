@@ -37,11 +37,16 @@ class MessageTruncator:
         if not messages:
             return messages
 
-        # Separate leading system/tool messages from conversation messages
+        # Filter out system messages - never detect them
+        messages = [msg for msg in messages if msg.role != 'system']
+        if not messages:
+            return []
+
+        # Separate leading tool messages from conversation messages
         prefix_messages = []
         conversation_start = 0
         for i, msg in enumerate(messages):
-            if msg.role in ('system', 'tool'):
+            if msg.role == 'tool':
                 prefix_messages.append(msg)
                 conversation_start = i + 1
             else:
