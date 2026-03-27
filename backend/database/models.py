@@ -33,7 +33,8 @@ class Tenant(Base):
     risk_config = relationship("RiskTypeConfig", back_populates="tenant", uselist=False)
 
 class Workspace(Base):
-    """Workspace table - Configuration templates that group applications"""
+    """Workspace table - Configuration containers that group applications.
+    All config lives at workspace level. Global config = a workspace with is_global=True."""
     __tablename__ = "workspaces"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
@@ -41,6 +42,7 @@ class Workspace(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     owner = Column(String(255), nullable=True)
+    is_global = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -166,6 +168,8 @@ class DetectionResult(Base):
     image_paths = Column(JSON, default=list)  # Saved image file path list
     # Direct model access flag
     is_direct_model_access = Column(Boolean, default=False, index=True)  # Whether this is a direct model access call (not a guardrail check)
+    # Detection source: guardrail_api, proxy, gateway, direct_model, content_scan
+    source = Column(String(20), nullable=True, index=True)
 
     # Association relationships
     tenant = relationship("Tenant", back_populates="detection_results")
@@ -525,12 +529,13 @@ class OnlineTestModelSelection(Base):
     )
 
 class DataSecurityEntityType(Base):
-    """Data security entity type config table"""
+    """Data security entity type config table - workspace-level"""
     __tablename__ = "data_security_entity_types"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)  # Kept for backward compatibility
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)  # Associated application
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Deprecated: kept for backward compatibility
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Config lives at workspace level
     entity_type = Column(String(100), nullable=False, index=True)  # Entity type code, such as ID_CARD_NUMBER
     entity_type_name = Column(String(200), nullable=False)  # Entity type name, such as "ID Card Number"
     category = Column(String(50), nullable=False, index=True)  # Risk level: low, medium, high
@@ -555,14 +560,16 @@ class DataSecurityEntityType(Base):
     # Association relationships
     tenant = relationship("Tenant")
     application = relationship("Application", back_populates="data_security_entity_types")
+    workspace = relationship("Workspace")
 
 class TenantEntityTypeDisable(Base):
-    """Tenant entity type disable table - supports application-level entity type disabling"""
+    """Entity type disable table - workspace-level"""
     __tablename__ = "tenant_entity_type_disables"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id"), nullable=True, index=True)  # Optional: for application-level disable
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id"), nullable=True, index=True)  # Deprecated
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Config lives at workspace level
     entity_type = Column(String(100), nullable=False, index=True)  # Entity type code, such as ID_CARD_NUMBER_SYS
     disabled_at = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -571,8 +578,9 @@ class TenantEntityTypeDisable(Base):
     # Association relationships
     tenant = relationship("Tenant")
     application = relationship("Application")
+    workspace = relationship("Workspace")
 
-    # Unique constraint - includes application_id for application-level disabling
+    # Unique constraint - workspace-level disabling
     __table_args__ = (
         UniqueConstraint('tenant_id', 'application_id', 'entity_type', name='_tenant_app_entity_type_disable_uc'),
     )
@@ -1020,11 +1028,12 @@ class PackagePurchase(Base):
 
 
 class CustomScanner(Base):
-    """User-defined custom scanners (S100+)"""
+    """User-defined custom scanners (S100+) - workspace-level"""
     __tablename__ = "custom_scanners"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)  # Deprecated
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)  # Config lives at workspace level
     scanner_id = Column(UUID(as_uuid=True), ForeignKey("scanners.id", ondelete="CASCADE"), nullable=False, index=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
 
@@ -1037,6 +1046,7 @@ class CustomScanner(Base):
 
     # Relationships
     application = relationship("Application")
+    workspace = relationship("Workspace")
     scanner = relationship("Scanner", back_populates="custom_scanners")
     creator = relationship("Tenant")
 

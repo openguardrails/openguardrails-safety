@@ -15,6 +15,7 @@ from datetime import datetime
 from database.models import DataSecurityEntityType, TenantEntityTypeDisable
 from utils.logger import setup_logger
 from services.model_service import ModelService
+from services.workspace_resolver import get_workspace_id_for_app, get_global_workspace_id
 from services.format_detection_service import format_detection_service
 from services.segmentation_service import segmentation_service, ContentSegment
 
@@ -170,39 +171,48 @@ class DataSecurityService:
         }
 
     def _get_user_entity_types(self, tenant_id: str, direction: str, application_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Get tenant's sensitive data type configuration
+        """Get workspace-level sensitive data type configuration.
 
-        Note: For backward compatibility, keep function name _get_user_entity_types, parameter name tenant_id, but actually process tenant_id
-        When application_id is provided, filter by application to respect application-level is_active settings.
+        Resolves application_id → workspace_id and queries entity types at workspace level.
+        Falls back to global workspace when no application_id is provided.
         """
         try:
-            # If application_id is provided, use application-level filtering
+            # Resolve workspace_id from application_id
+            workspace_id = None
             if application_id:
-                # Ensure application has copies of all system templates
-                self.ensure_application_has_system_copies(tenant_id, application_id)
+                workspace_id = get_workspace_id_for_app(self.db, application_id)
+                if not workspace_id:
+                    logger.warning(f"Could not resolve workspace for app {application_id}, falling back to global workspace")
 
-                # Get disabled entity types for this application
+            # Fall back to global workspace if no workspace resolved
+            if not workspace_id:
+                workspace_id = get_global_workspace_id(self.db, tenant_id)
+
+            if workspace_id:
+                # Ensure workspace has copies of all system templates
+                self.ensure_workspace_has_system_copies(tenant_id, workspace_id)
+
+                # Get disabled entity types for this workspace
                 disabled_entity_types = set()
                 disabled_query = self.db.query(TenantEntityTypeDisable).filter(
                     and_(
                         TenantEntityTypeDisable.tenant_id == tenant_id,
-                        TenantEntityTypeDisable.application_id == application_id
+                        TenantEntityTypeDisable.workspace_id == workspace_id
                     )
                 )
                 for disabled in disabled_query.all():
                     disabled_entity_types.add(disabled.entity_type)
 
-                # Get only application's own entity types (both system_copy and custom)
-                # Filter by application_id to respect application-level is_active settings
+                # Get workspace's entity types (both system_copy and custom)
                 query = self.db.query(DataSecurityEntityType).filter(
                     and_(
                         DataSecurityEntityType.is_active == True,
-                        DataSecurityEntityType.application_id == application_id
+                        DataSecurityEntityType.workspace_id == workspace_id
                     )
                 )
             else:
-                # Fallback: use tenant-level filtering (for backward compatibility)
-                # Ensure tenant has copies of all system templates
+                # Fallback: use tenant-level filtering (no workspace resolved)
+                logger.warning(f"No workspace resolved for tenant {tenant_id}, using tenant-level filtering")
                 self.ensure_tenant_has_system_copies(tenant_id)
 
                 # Get disabled entity types for this tenant
@@ -214,7 +224,6 @@ class DataSecurityService:
                     disabled_entity_types.add(disabled.entity_type)
 
                 # Get only tenant's own entity types (both system_copy and custom)
-                # No longer include global templates directly
                 query = self.db.query(DataSecurityEntityType).filter(
                     and_(
                         DataSecurityEntityType.is_active == True,
@@ -223,8 +232,8 @@ class DataSecurityService:
                 )
 
             entity_types_orm = query.all()
-            if application_id:
-                logger.info(f"Found {len(entity_types_orm)} entity types for application {application_id}")
+            if workspace_id:
+                logger.info(f"Found {len(entity_types_orm)} entity types for workspace {workspace_id}")
             else:
                 logger.info(f"Found {len(entity_types_orm)} entity types for tenant {tenant_id}")
             entity_types = []
@@ -1484,6 +1493,7 @@ Return JSON only, no markdown:
         self,
         tenant_id: str,
         application_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
         entity_type: str = None,
         entity_type_name: str = None,
         risk_level: str = None,
@@ -1503,7 +1513,8 @@ Return JSON only, no markdown:
 
         Args:
             tenant_id: Tenant ID
-            application_id: Application ID (optional, None for global templates)
+            application_id: Application ID (deprecated, kept for backward compatibility)
+            workspace_id: Workspace ID (preferred, config lives at workspace level)
             recognition_method: 'regex' or 'genai'
             pattern: Regex pattern (for regex method)
             entity_definition: Entity description (for genai method)
@@ -1525,12 +1536,17 @@ Return JSON only, no markdown:
         if is_global and source_type == 'custom':
             source_type = 'system_template'
 
+        # Resolve workspace_id from application_id if not provided
+        if not workspace_id and application_id and not is_global:
+            workspace_id = get_workspace_id_for_app(self.db, application_id)
+
         # GenAI recognition can now use any anonymization method
         # No longer force genai anonymization for genai recognition
 
         entity_type_obj = DataSecurityEntityType(
             tenant_id=tenant_id,
-            application_id=application_id if not is_global else None,  # Global templates don't have application_id
+            application_id=application_id if not is_global else None,  # Deprecated: kept for backward compatibility
+            workspace_id=workspace_id if not is_global else None,  # Config lives at workspace level
             entity_type=entity_type,
             entity_type_name=entity_type_name,
             category=risk_level,  # Use category field to store risk level
@@ -1555,6 +1571,7 @@ Return JSON only, no markdown:
         entity_type_id: str,
         tenant_id: str,
         application_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
         **kwargs
     ) -> Optional[DataSecurityEntityType]:
         """Update sensitive data type configuration
@@ -1562,13 +1579,19 @@ Return JSON only, no markdown:
         Args:
             entity_type_id: Entity type ID to update
             tenant_id: Tenant ID
-            application_id: Application ID (optional)
+            application_id: Application ID (deprecated, kept for backward compatibility)
+            workspace_id: Workspace ID (preferred, config lives at workspace level)
         """
         # Build query conditions
         conditions = [DataSecurityEntityType.id == entity_type_id]
 
-        # Allow access if global template or belongs to the application
-        if application_id:
+        # Allow access if global template or belongs to the workspace
+        if workspace_id:
+            conditions.append(
+                (DataSecurityEntityType.workspace_id == workspace_id) |
+                (DataSecurityEntityType.is_global == True)
+            )
+        elif application_id:
             conditions.append(
                 (DataSecurityEntityType.application_id == application_id) |
                 (DataSecurityEntityType.is_global == True)
@@ -1636,18 +1659,21 @@ Return JSON only, no markdown:
 
         return entity_type
 
-    def delete_entity_type(self, entity_type_id: str, tenant_id: str, application_id: Optional[str] = None) -> bool:
+    def delete_entity_type(self, entity_type_id: str, tenant_id: str, application_id: Optional[str] = None, workspace_id: Optional[str] = None) -> bool:
         """Delete sensitive data type configuration
 
         Args:
             entity_type_id: Entity type ID to delete
             tenant_id: Tenant ID
-            application_id: Application ID (optional)
+            application_id: Application ID (deprecated, kept for backward compatibility)
+            workspace_id: Workspace ID (preferred, config lives at workspace level)
         """
         conditions = [DataSecurityEntityType.id == entity_type_id]
 
-        # Only allow deletion if it belongs to the application
-        if application_id:
+        # Only allow deletion if it belongs to the workspace
+        if workspace_id:
+            conditions.append(DataSecurityEntityType.workspace_id == workspace_id)
+        elif application_id:
             conditions.append(DataSecurityEntityType.application_id == application_id)
         else:
             conditions.append(DataSecurityEntityType.tenant_id == tenant_id)
@@ -1666,24 +1692,36 @@ Return JSON only, no markdown:
         self,
         tenant_id: str,
         application_id: Optional[str] = None,
+        workspace_id: Optional[str] = None,
         risk_level: Optional[str] = None,
         is_active: Optional[bool] = None
     ) -> List[DataSecurityEntityType]:
         """Get sensitive data type configuration list
 
-        This method now automatically ensures application has copies of all system templates.
+        This method now automatically ensures workspace has copies of all system templates.
 
         Args:
             tenant_id: Tenant ID
-            application_id: Application ID (optional)
+            application_id: Application ID (deprecated, kept for backward compatibility)
+            workspace_id: Workspace ID (preferred, config lives at workspace level)
             risk_level: Filter by risk level (optional)
             is_active: Filter by active status (optional)
         """
-        # Ensure application has copies of all system templates
-        if application_id:
-            self.ensure_application_has_system_copies(tenant_id, application_id)
+        # Resolve workspace_id from application_id if not provided
+        if not workspace_id and application_id:
+            workspace_id = get_workspace_id_for_app(self.db, application_id)
 
-            # Get application's own entity types (both system_copy and custom)
+        # Ensure workspace has copies of all system templates
+        if workspace_id:
+            self.ensure_workspace_has_system_copies(tenant_id, workspace_id)
+
+            # Get workspace's entity types (both system_copy and custom)
+            query = self.db.query(DataSecurityEntityType).filter(
+                DataSecurityEntityType.workspace_id == workspace_id
+            )
+        elif application_id:
+            # Fallback: query by application_id for backward compatibility
+            self.ensure_application_has_system_copies(tenant_id, application_id)
             query = self.db.query(DataSecurityEntityType).filter(
                 DataSecurityEntityType.application_id == application_id
             )
@@ -1821,12 +1859,12 @@ Return JSON only, no markdown:
             logger.error(f"Error getting disabled entity types for tenant {tenant_id}: {e}")
             return []
     
-    def ensure_application_has_system_copies(self, tenant_id: str, application_id: str) -> int:
-        """Ensure application has copies of all system templates
+    def ensure_workspace_has_system_copies(self, tenant_id: str, workspace_id: str) -> int:
+        """Ensure workspace has copies of all system templates.
 
         This method:
         1. Finds all system templates (source_type='system_template')
-        2. For each template, checks if application has a copy
+        2. For each template, checks if workspace has a copy
         3. Creates missing copies with source_type='system_copy' and template_id set
 
         Returns:
@@ -1841,31 +1879,31 @@ Return JSON only, no markdown:
             if not system_templates:
                 return 0
 
-            # Get application's existing entity types
-            application_entity_types = self.db.query(DataSecurityEntityType).filter(
-                DataSecurityEntityType.application_id == application_id
+            # Get workspace's existing entity types
+            workspace_entity_types = self.db.query(DataSecurityEntityType).filter(
+                DataSecurityEntityType.workspace_id == workspace_id
             ).all()
 
-            # Create a set of template IDs that application already has copies of
-            application_template_ids = set()
-            for et in application_entity_types:
+            # Create a set of template IDs that workspace already has copies of
+            workspace_template_ids = set()
+            for et in workspace_entity_types:
                 if et.template_id:
-                    application_template_ids.add(str(et.template_id))
+                    workspace_template_ids.add(str(et.template_id))
 
             # Create copies for missing templates
             copies_created = 0
             for template in system_templates:
                 template_id_str = str(template.id)
 
-                # Skip if application already has a copy of this template
-                if template_id_str in application_template_ids:
+                # Skip if workspace already has a copy of this template
+                if template_id_str in workspace_template_ids:
                     continue
 
-                # Create a copy for this application
+                # Create a copy for this workspace
                 recognition_config = template.recognition_config or {}
                 copy = DataSecurityEntityType(
                     tenant_id=tenant_id,
-                    application_id=application_id,
+                    workspace_id=workspace_id,
                     entity_type=template.entity_type,
                     entity_type_name=template.entity_type_name,
                     category=template.category,
@@ -1881,90 +1919,40 @@ Return JSON only, no markdown:
 
                 self.db.add(copy)
                 copies_created += 1
-                logger.info(f"Created system copy of '{template.entity_type}' for application {application_id}")
+                logger.info(f"Created system copy of '{template.entity_type}' for workspace {workspace_id}")
 
             if copies_created > 0:
                 self.db.commit()
-                logger.info(f"Created {copies_created} system entity type copies for application {application_id}")
+                logger.info(f"Created {copies_created} system entity type copies for workspace {workspace_id}")
 
             return copies_created
 
         except Exception as e:
-            logger.error(f"Error ensuring application {application_id} has system copies: {e}")
+            logger.error(f"Error ensuring workspace {workspace_id} has system copies: {e}")
             self.db.rollback()
             return 0
+
+    def ensure_application_has_system_copies(self, tenant_id: str, application_id: str) -> int:
+        """Backward-compatible wrapper: resolves app → workspace, then delegates to ensure_workspace_has_system_copies."""
+        workspace_id = get_workspace_id_for_app(self.db, application_id)
+        if not workspace_id:
+            logger.warning(f"Cannot ensure system copies: no workspace for app {application_id}")
+            return 0
+        return self.ensure_workspace_has_system_copies(tenant_id, workspace_id)
 
     def ensure_tenant_has_system_copies(self, tenant_id: str) -> int:
-        """Ensure tenant has copies of all system templates (deprecated, use ensure_application_has_system_copies)
+        """Ensure tenant's global workspace has copies of all system templates.
 
-        This method:
-        1. Finds all system templates (source_type='system_template')
-        2. For each template, checks if tenant has a copy
-        3. Creates missing copies with source_type='system_copy' and template_id set
+        Resolves tenant → global workspace, then delegates to ensure_workspace_has_system_copies.
 
         Returns:
             Number of copies created
         """
-        try:
-            # Get all system templates
-            system_templates = self.db.query(DataSecurityEntityType).filter(
-                DataSecurityEntityType.source_type == 'system_template'
-            ).all()
-
-            if not system_templates:
-                return 0
-
-            # Get tenant's existing entity types
-            tenant_entity_types = self.db.query(DataSecurityEntityType).filter(
-                DataSecurityEntityType.tenant_id == tenant_id
-            ).all()
-
-            # Create a set of template IDs that tenant already has copies of
-            tenant_template_ids = set()
-            for et in tenant_entity_types:
-                if et.template_id:
-                    tenant_template_ids.add(str(et.template_id))
-
-            # Create copies for missing templates
-            copies_created = 0
-            for template in system_templates:
-                template_id_str = str(template.id)
-
-                # Skip if tenant already has a copy of this template
-                if template_id_str in tenant_template_ids:
-                    continue
-
-                # Create a copy for this tenant
-                recognition_config = template.recognition_config or {}
-                copy = DataSecurityEntityType(
-                    tenant_id=tenant_id,
-                    entity_type=template.entity_type,
-                    entity_type_name=template.entity_type_name,
-                    category=template.category,
-                    recognition_method=template.recognition_method,
-                    recognition_config=recognition_config.copy(),
-                    anonymization_method=template.anonymization_method,
-                    anonymization_config=(template.anonymization_config or {}).copy(),
-                    is_active=template.is_active,
-                    is_global=False,  # Copies are not global
-                    source_type='system_copy',
-                    template_id=template.id
-                )
-
-                self.db.add(copy)
-                copies_created += 1
-                logger.info(f"Created system copy of '{template.entity_type}' for tenant {tenant_id}")
-
-            if copies_created > 0:
-                self.db.commit()
-                logger.info(f"Created {copies_created} system entity type copies for tenant {tenant_id}")
-
-            return copies_created
-
-        except Exception as e:
-            logger.error(f"Error ensuring tenant {tenant_id} has system copies: {e}")
-            self.db.rollback()
+        global_ws_id = get_global_workspace_id(self.db, tenant_id)
+        if not global_ws_id:
+            logger.warning(f"Cannot ensure system copies: no global workspace for tenant {tenant_id}")
             return 0
+        return self.ensure_workspace_has_system_copies(tenant_id, global_ws_id)
 
 
 def get_default_entity_types_config() -> List[Dict[str, Any]]:

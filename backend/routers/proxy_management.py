@@ -47,11 +47,17 @@ def get_current_user_from_request(request: Request, db: Session) -> Tenant:
     return tenant
 
 def _get_or_create_encryption_key() -> bytes:
-    """Get or create encryption key"""
+    """Get or create encryption key. Prefers ENCRYPTION_KEY env var for Docker persistence."""
     from config import settings
+
+    # Priority 1: Environment variable (survives Docker rebuilds)
+    if settings.encryption_key:
+        return settings.encryption_key.encode()
+
+    # Priority 2: File-based key (legacy fallback)
     key_file = f"{settings.data_dir}/proxy_encryption.key"
     os.makedirs(os.path.dirname(key_file), exist_ok=True)
-    
+
     if os.path.exists(key_file):
         with open(key_file, 'rb') as f:
             return f.read()

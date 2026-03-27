@@ -233,50 +233,51 @@ async def list_applications(
         # Get protection configuration summary
         protection_summary = None
         if include_summary:
-            # Get risk type config
+            ws_id = getattr(app, 'workspace_id', None)
+
+            # Get risk type config from workspace
             risk_config = db.query(RiskTypeConfig).filter(
-                RiskTypeConfig.application_id == app.id
-            ).first()
+                RiskTypeConfig.workspace_id == ws_id
+            ).first() if ws_id else None
 
-            # Get ban policy
+            # Get ban policy from workspace
             ban_policy = db.query(BanPolicy).filter(
-                BanPolicy.application_id == app.id
-            ).first()
+                BanPolicy.workspace_id == ws_id
+            ).first() if ws_id else None
 
-            # Count active data security entity types
+            # Count active data security entity types from workspace
             data_security_count = db.query(DataSecurityEntityType).filter(
-                DataSecurityEntityType.application_id == app.id,
+                DataSecurityEntityType.workspace_id == ws_id,
                 DataSecurityEntityType.is_active == True
-            ).count()
+            ).count() if ws_id else 0
 
-            # Count active blacklists
+            # Count active blacklists from workspace
             blacklist_count = db.query(Blacklist).filter(
-                Blacklist.application_id == app.id,
+                Blacklist.workspace_id == ws_id,
                 Blacklist.is_active == True
-            ).count()
+            ).count() if ws_id else 0
 
-            # Count active whitelists
+            # Count active whitelists from workspace
             whitelist_count = db.query(Whitelist).filter(
-                Whitelist.application_id == app.id,
+                Whitelist.workspace_id == ws_id,
                 Whitelist.is_active == True
-            ).count()
+            ).count() if ws_id else 0
 
-            # Count active knowledge bases
+            # Count active knowledge bases (stays at application level)
             knowledge_base_count = db.query(KnowledgeBase).filter(
                 KnowledgeBase.application_id == app.id,
                 KnowledgeBase.is_active == True
             ).count()
 
-            # Calculate enabled scanners count (new scanner system)
-            # Count all scanners that are enabled for this application
+            # Calculate enabled scanners count from workspace
             enabled_scanners_count = db.query(ApplicationScannerConfig).filter(
-                ApplicationScannerConfig.application_id == app.id,
+                ApplicationScannerConfig.workspace_id == ws_id,
                 ApplicationScannerConfig.is_enabled == True
-            ).count()
+            ).count() if ws_id else 0
 
-            # Count total available scanners for this application
+            # Count total available scanners for this workspace
             total_scanners_count = db.query(ApplicationScannerConfig).filter(
-                ApplicationScannerConfig.application_id == app.id
+                ApplicationScannerConfig.workspace_id == ws_id
             ).count()
 
             protection_summary = {
@@ -334,31 +335,25 @@ async def create_application(
     if existing:
         raise HTTPException(status_code=400, detail="Application name already exists")
 
+    # Auto-assign to workspace: use specified workspace or global workspace
+    workspace_id = getattr(data, 'workspace_id', None)
+    if not workspace_id:
+        from services.workspace_resolver import ensure_global_workspace
+        workspace_id = ensure_global_workspace(db, tenant_id)
+
     # Create application (source='manual' for UI-created apps)
     app = Application(
         tenant_id=tenant_id,
         name=data.name,
         description=data.description,
         is_active=True,
-        source='manual'
+        source='manual',
+        workspace_id=workspace_id,
     )
     db.add(app)
     db.commit()
     db.refresh(app)
-
-    # Initialize default configurations
-    try:
-        initialize_application_configs(db, str(app.id), tenant_id)
-        logger.info(f"Created application {app.name} ({app.id}) with default configurations")
-    except Exception as e:
-        # If config initialization fails, rollback the application creation
-        logger.error(f"Failed to initialize configs for application {app.id}: {e}")
-        db.delete(app)
-        db.commit()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to initialize application configurations: {str(e)}"
-        )
+    logger.info(f"Created application {app.name} ({app.id}) in workspace {workspace_id}")
 
     return ApplicationResponse(
         id=str(app.id),
@@ -400,7 +395,10 @@ async def update_application(
         app.is_active = data.is_active
     if data.workspace_id is not None:
         if data.workspace_id == "":
-            app.workspace_id = None
+            # Move to global workspace (apps must always be in a workspace)
+            from services.workspace_resolver import ensure_global_workspace
+            global_ws_id = ensure_global_workspace(db, tenant_id)
+            app.workspace_id = global_ws_id
         else:
             ws = db.query(Workspace).filter(
                 Workspace.id == data.workspace_id,

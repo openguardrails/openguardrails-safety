@@ -13,9 +13,9 @@ from database.models import (
     TenantDataLeakagePolicy,
     ApplicationDataLeakagePolicy,
     UpstreamApiConfig,
-    Application
 )
 from utils.logger import setup_logger
+from services.workspace_resolver import get_workspace_id_for_app
 
 logger = setup_logger()
 
@@ -82,56 +82,36 @@ class DataLeakageDisposalService:
 
     def get_disposal_policy(self, application_id: str) -> Optional[ApplicationDataLeakagePolicy]:
         """
-        Get application's data masking disposal policy (with workspace fallback)
+        Get workspace-level data masking disposal policy for an application.
 
-        Inheritance: application → workspace → tenant default (auto-created)
+        Resolves application_id → workspace_id, then queries policy by workspace_id.
+        Returns None if no policy exists (does not auto-create at app level).
 
         Args:
             application_id: Application ID
 
         Returns:
-            ApplicationDataLeakagePolicy or None if application not found
+            ApplicationDataLeakagePolicy or None
         """
         try:
-            # 1. Check app-level policy
-            policy = self.db.query(ApplicationDataLeakagePolicy).filter(
-                ApplicationDataLeakagePolicy.application_id == application_id
-            ).first()
+            # Resolve application → workspace
+            workspace_id = get_workspace_id_for_app(self.db, application_id)
 
-            if policy:
-                return policy
-
-            # 2. Check workspace-level policy
-            application = self.db.query(Application).filter(
-                Application.id == application_id
-            ).first()
-
-            if not application:
-                logger.error(f"Application {application_id} not found")
+            if not workspace_id:
+                logger.warning(f"Could not resolve workspace for app {application_id}")
                 return None
 
-            if application.workspace_id:
-                ws_policy = self.db.query(ApplicationDataLeakagePolicy).filter(
-                    ApplicationDataLeakagePolicy.workspace_id == application.workspace_id,
-                    ApplicationDataLeakagePolicy.application_id.is_(None)
-                ).first()
-                if ws_policy:
-                    return ws_policy
+            # Query workspace-level policy
+            ws_policy = self.db.query(ApplicationDataLeakagePolicy).filter(
+                ApplicationDataLeakagePolicy.workspace_id == workspace_id
+            ).first()
 
-            # 3. No app or workspace policy - create default with NULL overrides (inherits from tenant)
-            logger.info(f"Creating default disposal policy for application {application_id}")
+            if ws_policy:
+                return ws_policy
 
-            default_policy = ApplicationDataLeakagePolicy(
-                tenant_id=application.tenant_id,
-                application_id=application_id,
-            )
-
-            self.db.add(default_policy)
-            self.db.commit()
-            self.db.refresh(default_policy)
-
-            logger.info(f"Created default disposal policy for application {application_id}")
-            return default_policy
+            # No workspace policy found
+            logger.debug(f"No disposal policy found for workspace {workspace_id} (app {application_id})")
+            return None
 
         except Exception as e:
             logger.error(f"Error getting disposal policy: {e}", exc_info=True)

@@ -6,7 +6,8 @@ from database.connection import get_admin_db
 from database.models import (
     Workspace, Application, Tenant, RiskTypeConfig,
     Blacklist, Whitelist, BanPolicy, ApplicationDataLeakagePolicy,
-    ApplicationScannerConfig, Scanner, ScannerPackage, ApplicationSettings
+    ApplicationScannerConfig, Scanner, ScannerPackage, ApplicationSettings,
+    DataSecurityEntityType, CustomScanner, UpstreamApiConfig
 )
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
@@ -16,6 +17,146 @@ from utils.logger import setup_logger
 from services.keyword_cache import keyword_cache
 
 logger = setup_logger()
+
+
+def copy_workspace_config(db: Session, source_ws_id: str, target_ws_id: str, tenant_id: str):
+    """Copy all configuration from source workspace to target workspace.
+    Used when creating a new workspace to snapshot the global config."""
+    source_uuid = uuid.UUID(str(source_ws_id))
+    target_uuid = uuid.UUID(str(target_ws_id))
+    tenant_uuid = uuid.UUID(str(tenant_id))
+
+    # 1. RiskTypeConfig
+    src_risk = db.query(RiskTypeConfig).filter(
+        RiskTypeConfig.workspace_id == source_uuid
+    ).first()
+    if src_risk:
+        new_risk = RiskTypeConfig(
+            tenant_id=tenant_uuid,
+            workspace_id=target_uuid,
+            **{col: getattr(src_risk, col) for col in [
+                's1_enabled', 's2_enabled', 's3_enabled', 's4_enabled', 's5_enabled',
+                's6_enabled', 's7_enabled', 's8_enabled', 's9_enabled', 's10_enabled',
+                's11_enabled', 's12_enabled', 's13_enabled', 's14_enabled', 's15_enabled',
+                's16_enabled', 's17_enabled', 's18_enabled', 's19_enabled', 's20_enabled',
+                's21_enabled', 'high_sensitivity_threshold', 'medium_sensitivity_threshold',
+                'low_sensitivity_threshold', 'sensitivity_trigger_level',
+            ]}
+        )
+        db.add(new_risk)
+
+    # 2. BanPolicy
+    src_ban = db.query(BanPolicy).filter(
+        BanPolicy.workspace_id == source_uuid
+    ).first()
+    if src_ban:
+        new_ban = BanPolicy(
+            tenant_id=tenant_uuid,
+            workspace_id=target_uuid,
+            enabled=src_ban.enabled,
+            risk_level=src_ban.risk_level,
+            trigger_count=src_ban.trigger_count,
+            time_window_minutes=src_ban.time_window_minutes,
+            ban_duration_minutes=src_ban.ban_duration_minutes,
+        )
+        db.add(new_ban)
+
+    # 3. Blacklists
+    src_blacklists = db.query(Blacklist).filter(
+        Blacklist.workspace_id == source_uuid
+    ).all()
+    for bl in src_blacklists:
+        db.add(Blacklist(
+            tenant_id=tenant_uuid, workspace_id=target_uuid,
+            name=bl.name, keywords=bl.keywords, is_active=bl.is_active,
+        ))
+
+    # 4. Whitelists
+    src_whitelists = db.query(Whitelist).filter(
+        Whitelist.workspace_id == source_uuid
+    ).all()
+    for wl in src_whitelists:
+        db.add(Whitelist(
+            tenant_id=tenant_uuid, workspace_id=target_uuid,
+            name=wl.name, keywords=wl.keywords, is_active=wl.is_active,
+        ))
+
+    # 5. ApplicationDataLeakagePolicy
+    src_dlp = db.query(ApplicationDataLeakagePolicy).filter(
+        ApplicationDataLeakagePolicy.workspace_id == source_uuid
+    ).first()
+    if src_dlp:
+        new_dlp = ApplicationDataLeakagePolicy(
+            tenant_id=tenant_uuid,
+            workspace_id=target_uuid,
+            **{col: getattr(src_dlp, col) for col in [
+                'input_high_risk_action', 'input_medium_risk_action', 'input_low_risk_action',
+                'output_high_risk_anonymize', 'output_medium_risk_anonymize', 'output_low_risk_anonymize',
+                'output_high_risk_action', 'output_medium_risk_action', 'output_low_risk_action',
+                'general_high_risk_action', 'general_medium_risk_action', 'general_low_risk_action',
+                'general_input_high_risk_action', 'general_input_medium_risk_action', 'general_input_low_risk_action',
+                'general_output_high_risk_action', 'general_output_medium_risk_action', 'general_output_low_risk_action',
+                'private_model_id', 'enable_format_detection', 'enable_smart_segmentation',
+            ]}
+        )
+        db.add(new_dlp)
+
+    # 6. ApplicationScannerConfig (one per scanner)
+    src_scanner_configs = db.query(ApplicationScannerConfig).filter(
+        ApplicationScannerConfig.workspace_id == source_uuid
+    ).all()
+    for sc in src_scanner_configs:
+        db.add(ApplicationScannerConfig(
+            workspace_id=target_uuid,
+            scanner_id=sc.scanner_id,
+            is_enabled=sc.is_enabled,
+            risk_level_override=sc.risk_level_override,
+            scan_prompt_override=sc.scan_prompt_override,
+            scan_response_override=sc.scan_response_override,
+        ))
+
+    # 7. ApplicationSettings
+    src_settings = db.query(ApplicationSettings).filter(
+        ApplicationSettings.workspace_id == source_uuid
+    ).first()
+    if src_settings:
+        db.add(ApplicationSettings(
+            tenant_id=tenant_uuid, workspace_id=target_uuid,
+            security_risk_template=src_settings.security_risk_template,
+            data_leakage_template=src_settings.data_leakage_template,
+        ))
+
+    # 8. DataSecurityEntityType (copy workspace's entity types)
+    src_entities = db.query(DataSecurityEntityType).filter(
+        DataSecurityEntityType.workspace_id == source_uuid
+    ).all()
+    for et in src_entities:
+        db.add(DataSecurityEntityType(
+            tenant_id=tenant_uuid, workspace_id=target_uuid,
+            entity_type=et.entity_type, entity_type_name=et.entity_type_name,
+            category=et.category, recognition_method=et.recognition_method,
+            recognition_config=(et.recognition_config or {}).copy() if isinstance(et.recognition_config, dict) else {},
+            anonymization_method=et.anonymization_method,
+            anonymization_config=(et.anonymization_config or {}).copy() if isinstance(et.anonymization_config, dict) else {},
+            is_active=et.is_active, is_global=et.is_global,
+            source_type=et.source_type, template_id=et.template_id,
+            restore_code=et.restore_code, restore_code_hash=et.restore_code_hash,
+            restore_natural_desc=et.restore_natural_desc,
+        ))
+
+    # 9. CustomScanner
+    src_custom = db.query(CustomScanner).filter(
+        CustomScanner.workspace_id == source_uuid
+    ).all()
+    for cs in src_custom:
+        db.add(CustomScanner(
+            workspace_id=target_uuid,
+            scanner_id=cs.scanner_id,
+            created_by=cs.created_by,
+            notes=cs.notes,
+        ))
+
+    logger.info(f"Copied config from workspace {source_ws_id} to {target_ws_id}")
 
 router = APIRouter(prefix="/api/v1/workspaces", tags=["Workspaces"])
 
@@ -50,6 +191,7 @@ class WorkspaceResponse(BaseModel):
     name: str
     description: Optional[str]
     owner: Optional[str] = None
+    is_global: bool = False
     created_at: datetime
     updated_at: datetime
     application_count: int = 0
@@ -84,6 +226,7 @@ async def list_workspaces(
             name=ws.name,
             description=ws.description,
             owner=ws.owner,
+            is_global=getattr(ws, 'is_global', False),
             created_at=ws.created_at,
             updated_at=ws.updated_at,
             application_count=app_count,
@@ -98,7 +241,7 @@ async def create_workspace(
     body: WorkspaceCreate,
     db: Session = Depends(get_admin_db),
 ):
-    """Create a new workspace"""
+    """Create a new workspace. Copies config from the global workspace as initial config."""
     tenant_id = get_current_tenant_id(request)
 
     # Check name uniqueness
@@ -116,6 +259,20 @@ async def create_workspace(
         owner=body.owner,
     )
     db.add(workspace)
+    db.flush()  # Get workspace.id before copying config
+
+    # Copy config from global workspace
+    global_ws = db.query(Workspace).filter(
+        Workspace.tenant_id == tenant_id,
+        Workspace.is_global == True
+    ).first()
+    if global_ws:
+        try:
+            copy_workspace_config(db, str(global_ws.id), str(workspace.id), tenant_id)
+        except Exception as e:
+            logger.error(f"Failed to copy global config to new workspace: {e}")
+            # Continue anyway - workspace is created, config can be set up manually
+
     db.commit()
     db.refresh(workspace)
 
@@ -125,6 +282,7 @@ async def create_workspace(
         name=workspace.name,
         description=workspace.description,
         owner=workspace.owner,
+        is_global=False,
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
         application_count=0,
@@ -149,6 +307,9 @@ async def update_workspace(
         raise HTTPException(status_code=404, detail="Workspace not found")
 
     if body.name is not None:
+        # Protect Global workspace name
+        if getattr(workspace, 'is_global', False) and body.name != workspace.name:
+            raise HTTPException(status_code=400, detail="Cannot rename the Global workspace")
         # Check name uniqueness
         existing = db.query(Workspace).filter(
             Workspace.tenant_id == tenant_id,
@@ -178,6 +339,7 @@ async def update_workspace(
         name=workspace.name,
         description=workspace.description,
         owner=workspace.owner,
+        is_global=getattr(workspace, 'is_global', False),
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
         application_count=app_count,
@@ -200,10 +362,22 @@ async def delete_workspace(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    # Unassign applications (SET NULL via FK, but explicit for clarity)
-    db.query(Application).filter(
-        Application.workspace_id == workspace.id
-    ).update({Application.workspace_id: None})
+    if getattr(workspace, 'is_global', False):
+        raise HTTPException(status_code=400, detail="Cannot delete the Global workspace")
+
+    # Move applications to global workspace
+    global_ws = db.query(Workspace).filter(
+        Workspace.tenant_id == tenant_id,
+        Workspace.is_global == True,
+    ).first()
+    if global_ws:
+        db.query(Application).filter(
+            Application.workspace_id == workspace.id
+        ).update({Application.workspace_id: global_ws.id})
+    else:
+        db.query(Application).filter(
+            Application.workspace_id == workspace.id
+        ).update({Application.workspace_id: None})
 
     db.delete(workspace)
     db.commit()
@@ -250,6 +424,7 @@ async def assign_applications(
         name=workspace.name,
         description=workspace.description,
         owner=workspace.owner,
+        is_global=getattr(workspace, 'is_global', False),
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
         application_count=app_count,
@@ -263,7 +438,7 @@ async def unassign_applications(
     body: WorkspaceAssignRequest,
     db: Session = Depends(get_admin_db),
 ):
-    """Remove applications from a workspace"""
+    """Remove applications from a workspace (moves them to Global workspace)"""
     tenant_id = get_current_tenant_id(request)
 
     workspace = db.query(Workspace).filter(
@@ -273,6 +448,10 @@ async def unassign_applications(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
+    # Move unassigned apps to Global workspace (apps must always belong to a workspace)
+    from services.workspace_resolver import ensure_global_workspace
+    global_ws_id = ensure_global_workspace(db, tenant_id)
+
     for app_id in body.application_ids:
         app = db.query(Application).filter(
             Application.id == app_id,
@@ -280,11 +459,11 @@ async def unassign_applications(
             Application.workspace_id == workspace.id,
         ).first()
         if app:
-            app.workspace_id = None
+            app.workspace_id = uuid.UUID(global_ws_id)
 
     db.commit()
 
-    return {"message": "Applications unassigned successfully"}
+    return {"message": "Applications moved to Global workspace"}
 
 
 @router.get("/{workspace_id}/applications")
@@ -801,8 +980,29 @@ async def get_workspace_data_leakage_policy(
         ApplicationDataLeakagePolicy.application_id.is_(None),
     ).first()
 
+    # Fetch available private models for this tenant
+    private_models = db.query(UpstreamApiConfig).filter(
+        UpstreamApiConfig.tenant_id == tenant_id,
+        UpstreamApiConfig.is_private_model == True,
+        UpstreamApiConfig.is_active == True,
+    ).order_by(
+        UpstreamApiConfig.is_default_private_model.desc(),
+        UpstreamApiConfig.created_at.asc(),
+    ).all()
+
+    available_private_models = [
+        {
+            "id": str(m.id),
+            "config_name": m.config_name,
+            "provider": m.provider,
+            "is_default_private_model": m.is_default_private_model,
+            "private_model_names": m.private_model_names or [],
+        }
+        for m in private_models
+    ]
+
     if not policy:
-        return {"exists": False}
+        return {"exists": False, "available_private_models": available_private_models}
 
     return {
         "exists": True,
@@ -821,6 +1021,7 @@ async def get_workspace_data_leakage_policy(
         "private_model_id": str(policy.private_model_id) if policy.private_model_id else None,
         "enable_format_detection": policy.enable_format_detection,
         "enable_smart_segmentation": policy.enable_smart_segmentation,
+        "available_private_models": available_private_models,
     }
 
 

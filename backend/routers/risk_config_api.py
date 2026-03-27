@@ -7,12 +7,22 @@ from database.models import Tenant, Application
 from services.risk_config_service import RiskConfigService
 from services.risk_config_cache import risk_config_cache
 from services.admin_service import admin_service
+from services.workspace_resolver import get_workspace_id_for_app
 from utils.logger import setup_logger
 from utils.auth import verify_token
 from pydantic import BaseModel, Field
 
 logger = setup_logger()
 router = APIRouter(prefix="/api/v1/config", tags=["Risk type configuration"])
+
+
+def _resolve_workspace_id(db: Session, application_id) -> str:
+    """Resolve workspace_id from application_id. Config now lives at workspace level."""
+    ws_id = get_workspace_id_for_app(db, str(application_id))
+    if not ws_id:
+        raise HTTPException(status_code=404, detail="No workspace found for application")
+    return ws_id
+
 
 def get_current_user_and_application_from_request(request: Request, db: Session) -> Tuple[Tenant, uuid.UUID]:
     """
@@ -192,12 +202,15 @@ async def get_risk_config(
     request: Request,
     db: Session = Depends(get_admin_db)
 ):
-    """Get application risk type configuration"""
+    """Get workspace risk type configuration"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         risk_service = RiskConfigService(db)
-        config_dict = risk_service.get_risk_config_dict(application_id=str(application_id))
+        config_dict = risk_service.get_risk_config_dict(workspace_id=workspace_id)
         return RiskConfigResponse(**config_dict)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get risk config: {e}")
         raise HTTPException(status_code=500, detail="Failed to get risk config")
@@ -208,22 +221,23 @@ async def update_risk_config(
     request: Request,
     db: Session = Depends(get_admin_db)
 ):
-    """Update application risk type configuration"""
+    """Update workspace risk type configuration"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         risk_service = RiskConfigService(db)
         config_data = config_request.dict()
 
-        updated_config = risk_service.update_risk_config(application_id=str(application_id), config_data=config_data)
+        updated_config = risk_service.update_risk_config(workspace_id=workspace_id, config_data=config_data)
         if not updated_config:
             raise HTTPException(status_code=500, detail="Failed to update risk config")
 
-        # Clear the application's cache, force reload
-        await risk_config_cache.invalidate_user_cache(application_id=str(application_id))
+        # Clear the workspace's cache, force reload
+        await risk_config_cache.invalidate_user_cache(workspace_id=workspace_id)
 
         # Return updated configuration
-        config_dict = risk_service.get_risk_config_dict(application_id=str(application_id))
-        logger.info(f"Updated risk config for application {application_id}")
+        config_dict = risk_service.get_risk_config_dict(workspace_id=workspace_id)
+        logger.info(f"Updated risk config for workspace {workspace_id} (application {application_id})")
 
         return RiskConfigResponse(**config_dict)
     except HTTPException:
@@ -237,12 +251,15 @@ async def get_enabled_risk_types(
     request: Request,
     db: Session = Depends(get_admin_db)
 ):
-    """Get application enabled risk type mapping"""
+    """Get workspace enabled risk type mapping"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         risk_service = RiskConfigService(db)
-        enabled_types = risk_service.get_enabled_risk_types(application_id=str(application_id))
+        enabled_types = risk_service.get_enabled_risk_types(workspace_id=workspace_id)
         return enabled_types
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get enabled risk types: {e}")
         raise HTTPException(status_code=500, detail="Failed to get enabled risk types")
@@ -255,6 +272,7 @@ async def reset_risk_config(
     """Reset risk type configuration to default (all enabled)"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         risk_service = RiskConfigService(db)
         default_config = {
             's1_enabled': True, 's2_enabled': True, 's3_enabled': True, 's4_enabled': True,
@@ -265,14 +283,14 @@ async def reset_risk_config(
             's21_enabled': True
         }
 
-        updated_config = risk_service.update_risk_config(application_id=str(application_id), config_data=default_config)
+        updated_config = risk_service.update_risk_config(workspace_id=workspace_id, config_data=default_config)
         if not updated_config:
             raise HTTPException(status_code=500, detail="Failed to reset risk config")
 
-        # Clear the application's cache
-        await risk_config_cache.invalidate_user_cache(application_id=str(application_id))
+        # Clear the workspace's cache
+        await risk_config_cache.invalidate_user_cache(workspace_id=workspace_id)
 
-        logger.info(f"Reset risk config to default for application {application_id}")
+        logger.info(f"Reset risk config to default for workspace {workspace_id} (application {application_id})")
         return {"message": "Risk config has been reset to default"}
     except HTTPException:
         raise
@@ -285,12 +303,15 @@ async def get_sensitivity_thresholds(
     request: Request,
     db: Session = Depends(get_admin_db)
 ):
-    """Get application sensitivity threshold configuration"""
+    """Get workspace sensitivity threshold configuration"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         risk_service = RiskConfigService(db)
-        config_dict = risk_service.get_sensitivity_threshold_dict(application_id=str(application_id))
+        config_dict = risk_service.get_sensitivity_threshold_dict(workspace_id=workspace_id)
         return SensitivityThresholdResponse(**config_dict)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to get sensitivity thresholds: {e}")
         raise HTTPException(status_code=500, detail="Failed to get sensitivity thresholds")
@@ -301,22 +322,23 @@ async def update_sensitivity_thresholds(
     request: Request,
     db: Session = Depends(get_admin_db)
 ):
-    """Update application sensitivity threshold configuration"""
+    """Update workspace sensitivity threshold configuration"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         risk_service = RiskConfigService(db)
         threshold_data = threshold_request.dict()
 
-        updated_config = risk_service.update_sensitivity_thresholds(application_id=str(application_id), threshold_data=threshold_data)
+        updated_config = risk_service.update_sensitivity_thresholds(workspace_id=workspace_id, threshold_data=threshold_data)
         if not updated_config:
             raise HTTPException(status_code=500, detail="Failed to update sensitivity thresholds")
 
-        # Clear the application's sensitivity cache, force reload
-        await risk_config_cache.invalidate_sensitivity_cache(application_id=str(application_id))
+        # Clear the workspace's sensitivity cache, force reload
+        await risk_config_cache.invalidate_sensitivity_cache(workspace_id=workspace_id)
 
         # Return updated configuration
-        config_dict = risk_service.get_sensitivity_threshold_dict(application_id=str(application_id))
-        logger.info(f"Updated sensitivity thresholds for application {application_id}")
+        config_dict = risk_service.get_sensitivity_threshold_dict(workspace_id=workspace_id)
+        logger.info(f"Updated sensitivity thresholds for workspace {workspace_id} (application {application_id})")
 
         return SensitivityThresholdResponse(**config_dict)
     except HTTPException:
@@ -333,6 +355,7 @@ async def reset_sensitivity_thresholds(
     """Reset sensitivity threshold configuration to default"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         risk_service = RiskConfigService(db)
         default_config = {
             'high_sensitivity_threshold': 0.40,
@@ -341,14 +364,14 @@ async def reset_sensitivity_thresholds(
             'sensitivity_trigger_level': 'medium'
         }
 
-        updated_config = risk_service.update_sensitivity_thresholds(application_id=str(application_id), threshold_data=default_config)
+        updated_config = risk_service.update_sensitivity_thresholds(workspace_id=workspace_id, threshold_data=default_config)
         if not updated_config:
             raise HTTPException(status_code=500, detail="Failed to reset sensitivity thresholds")
 
-        # Clear the application's sensitivity cache
-        await risk_config_cache.invalidate_sensitivity_cache(application_id=str(application_id))
+        # Clear the workspace's sensitivity cache
+        await risk_config_cache.invalidate_sensitivity_cache(workspace_id=workspace_id)
 
-        logger.info(f"Reset sensitivity thresholds to default for application {application_id}")
+        logger.info(f"Reset sensitivity thresholds to default for workspace {workspace_id} (application {application_id})")
         return {"message": "Sensitivity thresholds have been reset to default"}
     except HTTPException:
         raise

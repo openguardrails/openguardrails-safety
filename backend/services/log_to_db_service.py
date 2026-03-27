@@ -304,6 +304,7 @@ class LogToDbService:
                 has_image=log_data.get('has_image', False),
                 image_count=log_data.get('image_count', 0),
                 image_paths=log_data.get('image_paths', []),
+                source=log_data.get('source'),
                 created_at=created_at
             )
             

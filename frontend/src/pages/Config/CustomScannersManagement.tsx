@@ -82,7 +82,7 @@ const CustomScannersManagement: React.FC<CustomScannersManagementProps> = ({ wor
     }
 
     loadData()
-  }, [])
+  }, [workspaceId])
 
   const checkSubscription = async () => {
     try {
@@ -100,7 +100,7 @@ const CustomScannersManagement: React.FC<CustomScannersManagementProps> = ({ wor
   const loadData = async () => {
     try {
       setLoading(true)
-      const scannersData = await customScannersApi.getAll()
+      const scannersData = await customScannersApi.getAll(workspaceId)
       setScanners(scannersData)
     } catch (error: any) {
       // Handle 403 subscription error gracefully
@@ -122,7 +122,16 @@ const CustomScannersManagement: React.FC<CustomScannersManagementProps> = ({ wor
       return
     }
     setEditingScanner(null)
-    form.reset()
+    form.reset({
+      scanner_type: '',
+      name: '',
+      definition: '',
+      risk_level: '',
+      scan_prompt: true,
+      scan_response: true,
+      notes: '',
+      is_enabled: true,
+    })
     setModalVisible(true)
   }
 
@@ -166,7 +175,7 @@ const CustomScannersManagement: React.FC<CustomScannersManagementProps> = ({ wor
 
   const handleToggleEnable = async (scanner: CustomScanner, enabled: boolean) => {
     try {
-      await customScannersApi.update(scanner.id, { is_enabled: enabled })
+      await customScannersApi.update(scanner.id, { is_enabled: enabled }, workspaceId)
       toast.success(enabled ? t('customScanners.enableSuccess') : t('customScanners.disableSuccess'))
       await loadData()
     } catch (error) {
@@ -189,7 +198,7 @@ const CustomScannersManagement: React.FC<CustomScannersManagementProps> = ({ wor
     if (!confirmed) return
 
     try {
-      await customScannersApi.delete(scanner.id)
+      await customScannersApi.delete(scanner.id, workspaceId)
       toast.success(t('customScanners.deleteSuccess'))
       await loadData()
       // Emit event to notify other components
@@ -237,12 +246,12 @@ const CustomScannersManagement: React.FC<CustomScannersManagementProps> = ({ wor
       setSaving(true)
 
       if (editingScanner) {
-        await customScannersApi.update(editingScanner.id, values)
+        await customScannersApi.update(editingScanner.id, values, workspaceId)
         toast.success(t('customScanners.updateSuccess'))
         // Emit event to notify other components
         eventBus.emit(EVENTS.SCANNER_UPDATED, { scannerId: editingScanner.id })
       } else {
-        await customScannersApi.create(values)
+        await customScannersApi.create(values, workspaceId)
         toast.success(t('customScanners.createSuccess'))
         // Emit event to notify other components
         eventBus.emit(EVENTS.SCANNER_CREATED)

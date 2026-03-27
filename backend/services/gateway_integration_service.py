@@ -39,20 +39,26 @@ logger = setup_logger()
 _cipher_suite = None
 
 def _get_cipher_suite() -> Fernet:
-    """Get or create the shared cipher suite"""
+    """Get or create the shared cipher suite. Prefers ENCRYPTION_KEY env var for Docker persistence."""
     global _cipher_suite
     if _cipher_suite is None:
         from config import settings
-        key_file = f"{settings.data_dir}/proxy_encryption.key"
-        os.makedirs(os.path.dirname(key_file), exist_ok=True)
 
-        if os.path.exists(key_file):
-            with open(key_file, "rb") as f:
-                encryption_key = f.read()
+        # Priority 1: Environment variable (survives Docker rebuilds)
+        if settings.encryption_key:
+            encryption_key = settings.encryption_key.encode()
         else:
-            encryption_key = Fernet.generate_key()
-            with open(key_file, "wb") as f:
-                f.write(encryption_key)
+            # Priority 2: File-based key (legacy fallback)
+            key_file = f"{settings.data_dir}/proxy_encryption.key"
+            os.makedirs(os.path.dirname(key_file), exist_ok=True)
+
+            if os.path.exists(key_file):
+                with open(key_file, "rb") as f:
+                    encryption_key = f.read()
+            else:
+                encryption_key = Fernet.generate_key()
+                with open(key_file, "wb") as f:
+                    f.write(encryption_key)
 
         _cipher_suite = Fernet(encryption_key)
     return _cipher_suite
@@ -99,7 +105,8 @@ class GatewayIntegrationService:
         messages: List[Dict[str, Any]],
         stream: bool = False,
         client_ip: Optional[str] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        source: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process incoming messages through full detection pipeline.
@@ -142,13 +149,29 @@ class GatewayIntegrationService:
                 messages=messages,
                 tenant_id=tenant_id,
                 request_id=request_id,
-                application_id=application_id
+                application_id=application_id,
+                source=source
             )
+
+            # 2b. Apply ban policy if risk detected
+            detection_id = detection_result.get('request_id', request_id)
+            overall_risk = detection_result.get("overall_risk_level", "no_risk")
+            if user_id and overall_risk in ('medium_risk', 'high_risk'):
+                try:
+                    await BanPolicyService.check_and_apply_ban_policy(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        risk_level=overall_risk,
+                        detection_result_id=detection_id,
+                        language=language,
+                        application_id=application_id
+                    )
+                except Exception as e:
+                    logger.warning(f"[{request_id}] Failed to apply ban policy: {e}")
 
             # 3. Parse detection results
             suggest_action = detection_result.get("suggest_action", "pass")
             suggest_answer = detection_result.get("suggest_answer")
-            overall_risk = detection_result.get("overall_risk_level", "no_risk")
 
             compliance_result = detection_result.get("compliance_result") or {}
             security_result = detection_result.get("security_result") or {}
@@ -156,9 +179,11 @@ class GatewayIntegrationService:
 
             # Build detection result for response
             result_info = {
+                "detection_id": detection_id,
                 "blacklist_hit": suggest_action == "reject" and not data_result.get("risk_level"),
                 "blacklist_keywords": [],
                 "whitelist_hit": suggest_action == "pass" and overall_risk == "no_risk",
+                "suggest_answer": suggest_answer,
                 "data_risk": {
                     "risk_level": data_result.get("risk_level", "no_risk"),
                     "categories": data_result.get("categories", []),
@@ -283,6 +308,7 @@ class GatewayIntegrationService:
                     return {
                         "action": "anonymize",
                         "request_id": request_id,
+                        "detection_id": detection_id,
                         "detection_result": result_info,
                         "anonymized_messages": anonymized_messages,
                         "session_id": session_id,
@@ -293,6 +319,7 @@ class GatewayIntegrationService:
             return {
                 "action": "pass",
                 "request_id": request_id,
+                "detection_id": detection_id,
                 "detection_result": result_info
             }
 
@@ -317,7 +344,8 @@ class GatewayIntegrationService:
         restore_mapping: Optional[Dict[str, str]] = None,
         is_streaming: bool = False,
         chunk_index: int = 0,
-        input_messages: Optional[List[Dict[str, Any]]] = None
+        input_messages: Optional[List[Dict[str, Any]]] = None,
+        source: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Process LLM output through detection and optionally restore anonymized data.
@@ -375,9 +403,11 @@ class GatewayIntegrationService:
                 messages=messages,
                 tenant_id=tenant_id,
                 request_id=request_id,
-                application_id=application_id
+                application_id=application_id,
+                source=source
             )
 
+            detection_id = detection_result.get('request_id', request_id)
             suggest_action = detection_result.get("suggest_action", "pass")
             suggest_answer = detection_result.get("suggest_answer")
             overall_risk = detection_result.get("overall_risk_level", "no_risk")
@@ -387,6 +417,7 @@ class GatewayIntegrationService:
             security_result = detection_result.get("security_result") or {}
 
             result_info = {
+                "detection_id": detection_id,
                 "data_risk": {
                     "risk_level": data_result.get("risk_level", "no_risk"),
                     "categories": data_result.get("categories", [])
@@ -858,6 +889,7 @@ class GatewayIntegrationService:
                 "provider": private_model.provider,
                 "higress_cluster": private_model.higress_cluster  # Higress cluster for routing
             },
+            "modified_model_config": private_model,  # Raw ORM object for self-hosted proxy
             "bypass_token": bypass_token,
             "bypass_header": BYPASS_TOKEN_HEADER
         }

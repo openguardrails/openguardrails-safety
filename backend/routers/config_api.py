@@ -32,6 +32,15 @@ security = HTTPBearer()
 # Public router for endpoints that don't require authentication
 public_router = APIRouter(tags=["Configuration - Public"])
 
+
+def _resolve_workspace_id(db: Session, application_id) -> uuid.UUID:
+    """Resolve workspace_id from application_id. Config now lives at workspace level."""
+    from services.workspace_resolver import get_workspace_id_for_app
+    ws_id = get_workspace_id_for_app(db, str(application_id))
+    if not ws_id:
+        raise HTTPException(status_code=404, detail="No workspace found for application")
+    return uuid.UUID(ws_id)
+
 def get_current_user_and_application_from_request(request: Request, db: Session) -> Tuple[Tenant, uuid.UUID]:
     """
     Get current tenant and application_id from request
@@ -147,7 +156,8 @@ async def get_blacklist(request: Request, db: Session = Depends(get_admin_db)):
     """Get blacklist configuration"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        blacklists = db.query(Blacklist).filter(Blacklist.application_id == application_id).order_by(Blacklist.created_at.desc()).all()
+        workspace_id = _resolve_workspace_id(db, application_id)
+        blacklists = db.query(Blacklist).filter(Blacklist.workspace_id == workspace_id).order_by(Blacklist.created_at.desc()).all()
         return [BlacklistResponse(
             id=bl.id,
             name=bl.name,
@@ -168,9 +178,10 @@ async def create_blacklist(blacklist_request: BlacklistRequest, request: Request
     """Create blacklist"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         blacklist = Blacklist(
             tenant_id=current_user.id,
-            application_id=application_id,
+            workspace_id=workspace_id,
             name=blacklist_request.name,
             keywords=blacklist_request.keywords,
             description=blacklist_request.description,
@@ -207,7 +218,8 @@ async def update_blacklist(blacklist_id: int, blacklist_request: BlacklistReques
     """Update blacklist"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        blacklist = db.query(Blacklist).filter_by(id=blacklist_id, application_id=application_id).first()
+        workspace_id = _resolve_workspace_id(db, application_id)
+        blacklist = db.query(Blacklist).filter_by(id=blacklist_id, workspace_id=workspace_id).first()
         if not blacklist:
             raise HTTPException(status_code=404, detail="Blacklist not found")
 
@@ -234,7 +246,8 @@ async def delete_blacklist(blacklist_id: int, request: Request, db: Session = De
     """Delete blacklist"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        blacklist = db.query(Blacklist).filter_by(id=blacklist_id, application_id=application_id).first()
+        workspace_id = _resolve_workspace_id(db, application_id)
+        blacklist = db.query(Blacklist).filter_by(id=blacklist_id, workspace_id=workspace_id).first()
         if not blacklist:
             raise HTTPException(status_code=404, detail="Blacklist not found")
 
@@ -271,7 +284,8 @@ async def get_whitelist(request: Request, db: Session = Depends(get_admin_db)):
     """Get whitelist configuration"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        whitelists = db.query(Whitelist).filter(Whitelist.application_id == application_id).order_by(Whitelist.created_at.desc()).all()
+        workspace_id = _resolve_workspace_id(db, application_id)
+        whitelists = db.query(Whitelist).filter(Whitelist.workspace_id == workspace_id).order_by(Whitelist.created_at.desc()).all()
         return [WhitelistResponse(
             id=wl.id,
             name=wl.name,
@@ -292,9 +306,10 @@ async def create_whitelist(whitelist_request: WhitelistRequest, request: Request
     """Create whitelist"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
         whitelist = Whitelist(
             tenant_id=current_user.id,
-            application_id=application_id,
+            workspace_id=workspace_id,
             name=whitelist_request.name,
             keywords=whitelist_request.keywords,
             description=whitelist_request.description,
@@ -319,7 +334,8 @@ async def update_whitelist(whitelist_id: int, whitelist_request: WhitelistReques
     """Update whitelist"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        whitelist = db.query(Whitelist).filter_by(id=whitelist_id, application_id=application_id).first()
+        workspace_id = _resolve_workspace_id(db, application_id)
+        whitelist = db.query(Whitelist).filter_by(id=whitelist_id, workspace_id=workspace_id).first()
         if not whitelist:
             raise HTTPException(status_code=404, detail="Whitelist not found")
 
@@ -346,7 +362,8 @@ async def delete_whitelist(whitelist_id: int, request: Request, db: Session = De
     """Delete whitelist"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        whitelist = db.query(Whitelist).filter_by(id=whitelist_id, application_id=application_id).first()
+        workspace_id = _resolve_workspace_id(db, application_id)
+        whitelist = db.query(Whitelist).filter_by(id=whitelist_id, workspace_id=workspace_id).first()
         if not whitelist:
             raise HTTPException(status_code=404, detail="Whitelist not found")
 
@@ -417,19 +434,21 @@ async def create_response_template(template_request: ResponseTemplateRequest, re
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
 
+        workspace_id = _resolve_workspace_id(db, application_id)
+
         # Auto-populate guardrail_name based on scanner_type and scanner_identifier
         guardrail_name = None
         if template_request.scanner_type and template_request.scanner_identifier:
             if template_request.scanner_type == 'blacklist':
                 blacklist = db.query(Blacklist).filter(
-                    Blacklist.application_id == application_id,
+                    Blacklist.workspace_id == workspace_id,
                     Blacklist.name == template_request.scanner_identifier
                 ).first()
                 if blacklist:
                     guardrail_name = blacklist.name
             elif template_request.scanner_type == 'whitelist':
                 whitelist = db.query(Whitelist).filter(
-                    Whitelist.application_id == application_id,
+                    Whitelist.workspace_id == workspace_id,
                     Whitelist.name == template_request.scanner_identifier
                 ).first()
                 if whitelist:
@@ -651,6 +670,7 @@ async def create_knowledge_base(
     """Create knowledge base - supports all scanner types (official, blacklist, custom, marketplace)"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
 
         # Debug info
         logger.info(f"Create knowledge base - category: {category}, scanner_type: {scanner_type}, scanner_identifier: {scanner_identifier}, name: {name}, description: {description}, similarity_threshold: {similarity_threshold}, is_active: {is_active}, is_global: {is_global}")
@@ -690,7 +710,7 @@ async def create_knowledge_base(
         if scanner_type == 'blacklist':
             # Validate blacklist exists
             blacklist = db.query(Blacklist).filter(
-                Blacklist.application_id == application_id,
+                Blacklist.workspace_id == workspace_id,
                 Blacklist.name == scanner_identifier
             ).first()
             if not blacklist:
@@ -699,7 +719,7 @@ async def create_knowledge_base(
         elif scanner_type == 'whitelist':
             # Validate whitelist exists
             whitelist = db.query(Whitelist).filter(
-                Whitelist.application_id == application_id,
+                Whitelist.workspace_id == workspace_id,
                 Whitelist.name == scanner_identifier
             ).first()
             if not whitelist:
@@ -718,9 +738,9 @@ async def create_knowledge_base(
                 raise HTTPException(status_code=404, detail=f"Marketplace scanner '{scanner_identifier}' not found")
             guardrail_name = scanner.name
         elif scanner_type == 'custom_scanner':
-            # Validate custom scanner exists for this application
+            # Validate custom scanner exists for this workspace
             custom_scanner = db.query(CustomScanner).join(Scanner).filter(
-                CustomScanner.application_id == application_id,
+                CustomScanner.workspace_id == workspace_id,
                 Scanner.tag == scanner_identifier
             ).first()
             if not custom_scanner:
@@ -806,6 +826,7 @@ async def get_available_scanners_for_knowledge_base(
     """Get all available scanners for knowledge base creation (blacklists, official, custom, marketplace)"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
 
         result = {
             "blacklists": [],
@@ -817,7 +838,7 @@ async def get_available_scanners_for_knowledge_base(
 
         # Get blacklists
         blacklists = db.query(Blacklist).filter(
-            Blacklist.application_id == application_id,
+            Blacklist.workspace_id == workspace_id,
             Blacklist.is_active == True
         ).all()
         result["blacklists"] = [
@@ -827,7 +848,7 @@ async def get_available_scanners_for_knowledge_base(
 
         # Get whitelists
         whitelists = db.query(Whitelist).filter(
-            Whitelist.application_id == application_id,
+            Whitelist.workspace_id == workspace_id,
             Whitelist.is_active == True
         ).all()
         result["whitelists"] = [
@@ -889,11 +910,11 @@ async def get_available_scanners_for_knowledge_base(
             for s in marketplace_scanners
         ]
 
-        # Get custom scanners for this application (only active scanners)
+        # Get custom scanners for this workspace (only active scanners)
         custom_scanners = db.query(Scanner).join(
             CustomScanner, CustomScanner.scanner_id == Scanner.id
         ).filter(
-            CustomScanner.application_id == application_id,
+            CustomScanner.workspace_id == workspace_id,
             Scanner.is_active == True
         ).order_by(Scanner.tag).all()
         result["custom_scanners"] = [
@@ -1342,10 +1363,11 @@ async def get_fixed_answer_templates(
     """Get fixed answer templates for the current application"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
 
-        # Find or create settings for this application
+        # Find or create settings for this workspace
         app_settings = db.query(ApplicationSettings).filter(
-            ApplicationSettings.application_id == application_id
+            ApplicationSettings.workspace_id == workspace_id
         ).first()
 
         if app_settings:
@@ -1372,20 +1394,21 @@ async def update_fixed_answer_templates(
     """Update fixed answer templates for the current application"""
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        workspace_id = _resolve_workspace_id(db, application_id)
 
         # Parse request body
         body = await request.json()
 
-        # Find or create settings for this application
+        # Find or create settings for this workspace
         app_settings = db.query(ApplicationSettings).filter(
-            ApplicationSettings.application_id == application_id
+            ApplicationSettings.workspace_id == workspace_id
         ).first()
 
         if not app_settings:
             # Create new settings record
             app_settings = ApplicationSettings(
                 tenant_id=current_user.id,
-                application_id=application_id,
+                workspace_id=workspace_id,
                 security_risk_template=DEFAULT_TEMPLATES["security_risk_template"],
                 data_leakage_template=DEFAULT_TEMPLATES["data_leakage_template"]
             )

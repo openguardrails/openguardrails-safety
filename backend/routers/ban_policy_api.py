@@ -3,16 +3,28 @@ Ban policy API routes
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from services.ban_policy_service import BanPolicyService
+from services.workspace_resolver import get_workspace_id_for_app
 from database.connection import get_admin_db
 from database.models import Application
 from sqlalchemy.orm import Session
 import uuid
 import logging
 
-def get_current_application_id(request: Request, db: Session = Depends(get_admin_db)) -> str:
-    """Get current application ID from request context"""
+def get_current_application_and_workspace(request: Request, db: Session = Depends(get_admin_db)) -> Tuple[str, str]:
+    """Get current application ID and workspace ID from request context.
+    Returns: (application_id, workspace_id)
+    """
+    application_id = _resolve_application_id(request, db)
+    workspace_id = get_workspace_id_for_app(db, application_id)
+    if not workspace_id:
+        raise HTTPException(status_code=404, detail="No workspace found for application")
+    return application_id, workspace_id
+
+
+def _resolve_application_id(request: Request, db: Session) -> str:
+    """Resolve application_id from request context"""
     # 0) Check for X-Application-ID header (highest priority - from frontend selector)
     header_app_id = request.headers.get('x-application-id') or request.headers.get('X-Application-ID')
     if header_app_id:
@@ -76,10 +88,11 @@ class UnbanUserRequest(BaseModel):
 
 
 @router.get("")
-async def get_ban_policy(application_id: str = Depends(get_current_application_id)):
-    """Get current application's ban policy configuration"""
+async def get_ban_policy(ids: Tuple[str, str] = Depends(get_current_application_and_workspace)):
+    """Get current workspace's ban policy configuration"""
     try:
-        policy = await BanPolicyService.get_ban_policy(application_id)
+        application_id, workspace_id = ids
+        policy = await BanPolicyService.get_ban_policy(application_id, workspace_id=workspace_id)
 
         if not policy:
             # If no policy, return default values
@@ -101,13 +114,15 @@ async def get_ban_policy(application_id: str = Depends(get_current_application_i
 @router.put("")
 async def update_ban_policy(
     policy_data: BanPolicyUpdate,
-    application_id: str = Depends(get_current_application_id)
+    ids: Tuple[str, str] = Depends(get_current_application_and_workspace)
 ):
-    """Update ban policy configuration"""
+    """Update workspace ban policy configuration"""
     try:
+        application_id, workspace_id = ids
         policy = await BanPolicyService.update_ban_policy(
             application_id,
-            policy_data.dict()
+            policy_data.dict(),
+            workspace_id=workspace_id
         )
 
         return {
@@ -170,10 +185,11 @@ async def get_ban_policy_templates():
 async def get_banned_users(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
-    application_id: str = Depends(get_current_application_id)
+    ids: Tuple[str, str] = Depends(get_current_application_and_workspace)
 ):
     """Get list of banned users"""
     try:
+        application_id, workspace_id = ids
         users = await BanPolicyService.get_banned_users(
             application_id,
             skip=skip,
@@ -190,10 +206,11 @@ async def get_banned_users(
 @router.post("/unban")
 async def unban_user(
     request: UnbanUserRequest,
-    application_id: str = Depends(get_current_application_id)
+    ids: Tuple[str, str] = Depends(get_current_application_and_workspace)
 ):
     """Manually unban user"""
     try:
+        application_id, workspace_id = ids
         success = await BanPolicyService.unban_user(application_id, request.user_id)
 
         if success:
@@ -216,10 +233,11 @@ async def unban_user(
 async def get_user_risk_history(
     user_id: str,
     days: int = Query(7, ge=1, le=30, description="Number of days to query"),
-    application_id: str = Depends(get_current_application_id)
+    ids: Tuple[str, str] = Depends(get_current_application_and_workspace)
 ):
     """Get user risk trigger history"""
     try:
+        application_id, workspace_id = ids
         history = await BanPolicyService.get_user_risk_history(
             application_id,
             user_id,
@@ -241,10 +259,11 @@ async def get_user_risk_history(
 @router.get("/check-status/{user_id}")
 async def check_user_ban_status(
     user_id: str,
-    application_id: str = Depends(get_current_application_id)
+    ids: Tuple[str, str] = Depends(get_current_application_and_workspace)
 ):
     """Check user ban status"""
     try:
+        application_id, workspace_id = ids
         ban_record = await BanPolicyService.check_user_banned(application_id, user_id)
 
         if ban_record:

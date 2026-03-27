@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/form'
 import { Switch } from '@/components/ui/switch'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { dataLeakagePolicyApi } from '../../services/api'
+import api, { dataLeakagePolicyApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 
 const smartProcessingSchema = z.object({
@@ -45,7 +45,11 @@ interface ApplicationPolicy {
   output_low_risk_anonymize_override: boolean | null
 }
 
-const SmartProcessingTab: React.FC = () => {
+interface SmartProcessingTabProps {
+  workspaceId?: string
+}
+
+const SmartProcessingTab: React.FC<SmartProcessingTabProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
   const canEdit = useCanEdit()
   const [loading, setLoading] = useState(false)
@@ -60,16 +64,35 @@ const SmartProcessingTab: React.FC = () => {
     },
   })
 
+  const wsPrefix = workspaceId ? `/api/v1/workspaces/${workspaceId}/config` : null
+
   // Fetch policy data
   const fetchPolicy = async () => {
     setLoading(true)
     try {
-      const data = await dataLeakagePolicyApi.getPolicy()
-      setPolicy(data)
-      form.reset({
-        enable_format_detection: data.enable_format_detection_override ?? data.enable_format_detection ?? true,
-        enable_smart_segmentation: data.enable_smart_segmentation_override ?? data.enable_smart_segmentation ?? true,
-      })
+      if (wsPrefix) {
+        // Workspace-specific endpoint
+        const data = await api.get(`${wsPrefix}/data-leakage-policy`).then(res => res.data)
+        setPolicy(data)
+        if (data.exists) {
+          form.reset({
+            enable_format_detection: data.enable_format_detection ?? true,
+            enable_smart_segmentation: data.enable_smart_segmentation ?? true,
+          })
+        } else {
+          form.reset({
+            enable_format_detection: true,
+            enable_smart_segmentation: true,
+          })
+        }
+      } else {
+        const data = await dataLeakagePolicyApi.getPolicy()
+        setPolicy(data)
+        form.reset({
+          enable_format_detection: data.enable_format_detection_override ?? data.enable_format_detection ?? true,
+          enable_smart_segmentation: data.enable_smart_segmentation_override ?? data.enable_smart_segmentation ?? true,
+        })
+      }
     } catch (error: any) {
       console.error('Failed to fetch policy:', error)
       toast.error(t('dataLeakagePolicy.fetchPolicyFailed'))
@@ -80,7 +103,7 @@ const SmartProcessingTab: React.FC = () => {
 
   useEffect(() => {
     fetchPolicy()
-  }, [])
+  }, [workspaceId])
 
   // Listen to user switch event
   useEffect(() => {
@@ -94,18 +117,26 @@ const SmartProcessingTab: React.FC = () => {
   const onSubmit = async (values: SmartProcessingFormData) => {
     setLoading(true)
     try {
-      await dataLeakagePolicyApi.updatePolicy({
-        enable_format_detection: values.enable_format_detection,
-        enable_smart_segmentation: values.enable_smart_segmentation,
-        // Keep existing values for other fields
-        input_high_risk_action: policy?.input_high_risk_action_override,
-        input_medium_risk_action: policy?.input_medium_risk_action_override,
-        input_low_risk_action: policy?.input_low_risk_action_override,
-        private_model_id: policy?.private_model_override,
-        output_high_risk_anonymize: policy?.output_high_risk_anonymize_override,
-        output_medium_risk_anonymize: policy?.output_medium_risk_anonymize_override,
-        output_low_risk_anonymize: policy?.output_low_risk_anonymize_override,
-      })
+      if (wsPrefix) {
+        // Workspace-specific update
+        await api.put(`${wsPrefix}/data-leakage-policy`, {
+          enable_format_detection: values.enable_format_detection,
+          enable_smart_segmentation: values.enable_smart_segmentation,
+        })
+      } else {
+        await dataLeakagePolicyApi.updatePolicy({
+          enable_format_detection: values.enable_format_detection,
+          enable_smart_segmentation: values.enable_smart_segmentation,
+          // Keep existing values for other fields
+          input_high_risk_action: policy?.input_high_risk_action_override,
+          input_medium_risk_action: policy?.input_medium_risk_action_override,
+          input_low_risk_action: policy?.input_low_risk_action_override,
+          private_model_id: policy?.private_model_override,
+          output_high_risk_anonymize: policy?.output_high_risk_anonymize_override,
+          output_medium_risk_anonymize: policy?.output_medium_risk_anonymize_override,
+          output_low_risk_anonymize: policy?.output_low_risk_anonymize_override,
+        })
+      }
       toast.success(t('dataLeakagePolicy.savePolicySuccess'))
       fetchPolicy()
     } catch (error: any) {

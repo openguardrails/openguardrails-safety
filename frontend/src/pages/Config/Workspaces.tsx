@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { Plus, Edit, Trash2, ArrowRightLeft, Settings, ChevronLeft } from 'lucide-react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { Plus, Edit, Trash2, ArrowRightLeft, Settings, ChevronLeft, Search, X } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useCanEdit } from '../../hooks/useCanEdit'
 import { useForm } from 'react-hook-form'
@@ -27,6 +28,13 @@ import {
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTable } from '@/components/data-table/DataTable'
@@ -56,6 +64,7 @@ interface Workspace {
   name: string
   description: string | null
   owner: string | null
+  is_global: boolean
   created_at: string
   updated_at: string
   application_count: number
@@ -86,6 +95,15 @@ const WorkspaceAppsTab: React.FC<{
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingApp, setEditingApp] = useState<Application | null>(null)
+  // Search & filter
+  const [searchText, setSearchText] = useState('')
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'manual' | 'auto_discovery'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  // Batch operations
+  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set())
+  const [batchMoveDialogOpen, setBatchMoveDialogOpen] = useState(false)
+  const [batchMoveTargetWs, setBatchMoveTargetWs] = useState<string>('')
+  const [allWorkspaces, setAllWorkspaces] = useState<{ id: string; name: string; is_global: boolean }[]>([])
 
   const appSchema = z.object({
     name: z.string().min(1, 'Name is required'),
@@ -109,7 +127,79 @@ const WorkspaceAppsTab: React.FC<{
     }
   }, [workspace.id])
 
-  useEffect(() => { fetchApps() }, [fetchApps])
+  const fetchWorkspaces = useCallback(async () => {
+    try {
+      const res = await api.get('/api/v1/workspaces')
+      setAllWorkspaces(res.data.map((w: any) => ({ id: w.id, name: w.name, is_global: w.is_global })))
+    } catch {
+      // silent
+    }
+  }, [])
+
+  useEffect(() => { fetchApps(); fetchWorkspaces() }, [fetchApps, fetchWorkspaces])
+
+  // Filter apps
+  const filteredApps = useMemo(() => {
+    let result = apps
+    if (sourceFilter !== 'all') {
+      result = result.filter(app => (app.source || 'manual') === sourceFilter)
+    }
+    if (statusFilter !== 'all') {
+      result = result.filter(app => statusFilter === 'active' ? app.is_active : !app.is_active)
+    }
+    if (searchText.trim()) {
+      const search = searchText.toLowerCase().trim()
+      result = result.filter(app =>
+        app.name.toLowerCase().includes(search) ||
+        (app.external_id && app.external_id.toLowerCase().includes(search))
+      )
+    }
+    return result
+  }, [apps, sourceFilter, statusFilter, searchText])
+
+  // Selection helpers
+  const toggleRowSelection = (appId: string) => {
+    setSelectedRowIds(prev => {
+      const next = new Set(prev)
+      if (next.has(appId)) next.delete(appId)
+      else next.add(appId)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedRowIds.size === filteredApps.length) {
+      setSelectedRowIds(new Set())
+    } else {
+      setSelectedRowIds(new Set(filteredApps.map(app => app.id)))
+    }
+  }
+
+  // Available target workspaces (exclude current)
+  const targetWorkspaces = useMemo(() =>
+    allWorkspaces
+      .filter(w => w.id !== workspace.id)
+      .sort((a, b) => {
+        if (a.is_global !== b.is_global) return a.is_global ? -1 : 1
+        return a.name.localeCompare(b.name)
+      }),
+    [allWorkspaces, workspace.id])
+
+  const handleBatchMove = async () => {
+    if (selectedRowIds.size === 0 || !batchMoveTargetWs) return
+    try {
+      const appIds = Array.from(selectedRowIds)
+      await api.post(`/api/v1/workspaces/${batchMoveTargetWs}/assign`, {
+        application_ids: appIds,
+      })
+      toast.success(t('workspaces.assignSuccess'))
+      setBatchMoveDialogOpen(false)
+      setSelectedRowIds(new Set())
+      fetchApps()
+    } catch {
+      toast.error(t('workspaces.assignError'))
+    }
+  }
 
   const handleCreate = () => {
     setEditingApp(null)
@@ -145,7 +235,6 @@ const WorkspaceAppsTab: React.FC<{
         await api.put(`/api/v1/applications/${editingApp.id}`, values)
         toast.success(t('common.updateSuccess'))
       } else {
-        // Create app then assign to workspace
         const res = await api.post('/api/v1/applications', values)
         const newAppId = res.data.id
         await api.post(`/api/v1/workspaces/${workspace.id}/assign`, {
@@ -171,24 +260,27 @@ const WorkspaceAppsTab: React.FC<{
     }
   }
 
-  const handleRemoveFromWorkspace = async (app: Application) => {
-    const confirmed = await confirmDialog({
-      title: t('workspaces.removeAppTitle'),
-      description: t('workspaces.removeAppDesc', { name: app.name }),
-    })
-    if (!confirmed) return
-    try {
-      await api.post(`/api/v1/workspaces/${workspace.id}/unassign`, {
-        application_ids: [app.id],
-      })
-      toast.success(t('common.updateSuccess'))
-      fetchApps()
-    } catch {
-      toast.error(t('common.saveFailed'))
-    }
-  }
-
   const columns: ColumnDef<Application>[] = [
+    ...(canEdit ? [{
+      id: 'select',
+      header: () => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-border cursor-pointer"
+          checked={filteredApps.length > 0 && selectedRowIds.size === filteredApps.length}
+          onChange={toggleSelectAll}
+        />
+      ),
+      cell: ({ row }: { row: any }) => (
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-border cursor-pointer"
+          checked={selectedRowIds.has(row.original.id)}
+          onChange={() => toggleRowSelection(row.original.id)}
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        />
+      ),
+    }] : []),
     {
       accessorKey: 'name',
       header: t('applicationManagement.name'),
@@ -198,7 +290,7 @@ const WorkspaceAppsTab: React.FC<{
       accessorKey: 'description',
       header: t('applicationManagement.description'),
       cell: ({ row }) => (
-        <span className="text-muted-foreground text-sm">
+        <span className="text-muted-foreground text-sm truncate max-w-[200px] block">
           {row.original.description || '-'}
         </span>
       ),
@@ -243,9 +335,6 @@ const WorkspaceAppsTab: React.FC<{
           <Button variant="ghost" size="sm" onClick={() => handleEdit(row.original)}>
             <Edit className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => handleRemoveFromWorkspace(row.original)}>
-            <ArrowRightLeft className="h-4 w-4" />
-          </Button>
           <Button variant="ghost" size="sm" onClick={() => handleDelete(row.original)}
             className="text-destructive hover:text-destructive">
             <Trash2 className="h-4 w-4" />
@@ -257,25 +346,83 @@ const WorkspaceAppsTab: React.FC<{
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      {/* Header with search, filters, and actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold">{t('workspaces.tabApplications')}</h3>
           <p className="text-sm text-muted-foreground">{t('workspaces.applicationsDesc')}</p>
         </div>
-        {canEdit && (
-          <Button onClick={handleCreate} size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            {t('applicationManagement.createApplication')}
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder={t('applicationManagement.searchPlaceholder')}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="pl-8 w-[180px] h-8 text-sm"
+            />
+            {searchText && (
+              <button
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setSearchText('')}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          {/* Source filter */}
+          <Select value={sourceFilter} onValueChange={(v: any) => setSourceFilter(v)}>
+            <SelectTrigger className="w-[120px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('applicationManagement.filterAll')}</SelectItem>
+              <SelectItem value="manual">{t('applicationManagement.sourceManual')}</SelectItem>
+              <SelectItem value="auto_discovery">{t('applicationManagement.sourceAutoDiscovery')}</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Status filter */}
+          <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v)}>
+            <SelectTrigger className="w-[100px] h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('applicationManagement.filterAll')}</SelectItem>
+              <SelectItem value="active">{t('common.active')}</SelectItem>
+              <SelectItem value="inactive">{t('common.inactive')}</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Batch move button */}
+          {canEdit && selectedRowIds.size > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setBatchMoveTargetWs('')
+                setBatchMoveDialogOpen(true)
+              }}
+            >
+              <ArrowRightLeft className="mr-1 h-4 w-4" />
+              {t('workspaces.batchMove', { count: selectedRowIds.size })}
+            </Button>
+          )}
+          {canEdit && (
+            <Button onClick={handleCreate} size="sm">
+              <Plus className="h-4 w-4 mr-1" />
+              {t('applicationManagement.createApplication')}
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
         <CardContent className="p-0">
-          <DataTable columns={columns} data={apps} loading={loading} />
+          <DataTable columns={columns} data={filteredApps} loading={loading} />
         </CardContent>
       </Card>
 
+      {/* Create/Edit App Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -317,6 +464,41 @@ const WorkspaceAppsTab: React.FC<{
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Batch Move Dialog */}
+      <Dialog open={batchMoveDialogOpen} onOpenChange={setBatchMoveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('workspaces.batchMoveTitle', { count: selectedRowIds.size })}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('workspaces.batchMoveDesc')}
+            </p>
+            <Select value={batchMoveTargetWs} onValueChange={setBatchMoveTargetWs}>
+              <SelectTrigger>
+                <SelectValue placeholder={t('workspaces.selectWorkspace')} />
+              </SelectTrigger>
+              <SelectContent>
+                {targetWorkspaces.map(ws => (
+                  <SelectItem key={ws.id} value={ws.id}>
+                    {ws.name}
+                    {ws.is_global && ` (${t('workspaces.global')})`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setBatchMoveDialogOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={handleBatchMove} disabled={!batchMoveTargetWs}>
+              {t('workspaces.batchMove', { count: selectedRowIds.size })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -341,13 +523,22 @@ const WorkspaceConfigPanel: React.FC<{
           <ChevronLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold">{workspace.name}</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">{t('workspaces.configSubtitle')}</p>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">{workspace.name}</h1>
+            {workspace.is_global && (
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                {t('workspaces.global')}
+              </span>
+            )}
+          </div>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {workspace.is_global ? t('workspaces.globalConfigSubtitle') : t('workspaces.configSubtitle')}
+          </p>
         </div>
       </div>
 
       <div className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-        {t('workspaces.inheritNote')}
+        {workspace.is_global ? t('workspaces.globalInheritNote') : t('workspaces.inheritNote')}
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -372,12 +563,12 @@ const WorkspaceConfigPanel: React.FC<{
 
         {/* Data Masking Tab - Reuses global DataSecurity */}
         <TabsContent value="data-masking">
-          <DataSecurity />
+          <DataSecurity workspaceId={workspace.id} />
         </TabsContent>
 
         {/* Keywords Tab - Reuses global KeywordListManagement */}
         <TabsContent value="keywords">
-          <KeywordListManagement />
+          <KeywordListManagement workspaceId={workspace.id} />
         </TabsContent>
 
         {/* Answers Tab - Reuses global AnswerManagement */}
@@ -387,7 +578,7 @@ const WorkspaceConfigPanel: React.FC<{
 
         {/* Security Policy Tab - Reuses global SecurityPolicy */}
         <TabsContent value="security">
-          <SecurityPolicy />
+          <SecurityPolicy workspaceId={workspace.id} />
         </TabsContent>
       </Tabs>
     </div>
@@ -401,12 +592,22 @@ const WorkspaceConfigPanel: React.FC<{
 
 const Workspaces: React.FC = () => {
   const { t } = useTranslation()
+  const location = useLocation()
   const canEdit = useCanEdit()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null)
   const [configWorkspace, setConfigWorkspace] = useState<Workspace | null>(null)
+  const prevLocationKeyRef = useRef(location.key)
+
+  // Reset to workspace list when navigating to this page via menu
+  useEffect(() => {
+    if (prevLocationKeyRef.current !== location.key) {
+      prevLocationKeyRef.current = location.key
+      setConfigWorkspace(null)
+    }
+  }, [location.key])
 
   const form = useForm<WorkspaceFormData>({
     resolver: zodResolver(workspaceSchema),
@@ -417,7 +618,12 @@ const Workspaces: React.FC = () => {
     setLoading(true)
     try {
       const response = await api.get('/api/v1/workspaces')
-      setWorkspaces(response.data)
+      // Sort: global first, then alphabetical
+      const sorted = (response.data as Workspace[]).sort((a, b) => {
+        if (a.is_global !== b.is_global) return a.is_global ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+      setWorkspaces(sorted)
     } catch (error) {
       toast.error(t('workspaces.fetchError'))
     } finally {
@@ -445,7 +651,13 @@ const Workspaces: React.FC = () => {
     setDialogOpen(true)
   }
 
+  const isEditingGlobal = editingWorkspace?.is_global === true
+
   const handleDelete = async (workspace: Workspace) => {
+    if (workspace.is_global) {
+      toast.error(t('workspaces.cannotDeleteGlobal', 'Cannot delete the Global workspace'))
+      return
+    }
     const confirmed = await confirmDialog({
       title: t('workspaces.deleteConfirmTitle'),
       description: t('workspaces.deleteConfirmDesc', { name: workspace.name }),
@@ -493,9 +705,19 @@ const Workspaces: React.FC = () => {
       accessorKey: 'name',
       header: t('workspaces.name'),
       cell: ({ row }) => (
-        <span className="font-medium cursor-pointer hover:underline" onClick={() => setConfigWorkspace(row.original)}>
-          {row.original.name}
-        </span>
+        <div className="cursor-pointer hover:underline" onClick={() => setConfigWorkspace(row.original)}>
+          <span className="font-medium flex items-center gap-2">
+            {row.original.name}
+            {row.original.is_global && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/20">
+                {t('workspaces.global')}
+              </span>
+            )}
+          </span>
+          {row.original.is_global && (
+            <span className="text-xs text-muted-foreground">{t('workspaces.globalHint')}</span>
+          )}
+        </div>
       ),
     },
     {
@@ -548,14 +770,16 @@ const Workspaces: React.FC = () => {
           >
             <Edit className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => handleDelete(row.original)}
-            className="text-destructive hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          {!row.original.is_global && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDelete(row.original)}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       ),
     }] : []),
@@ -603,8 +827,11 @@ const Workspaces: React.FC = () => {
                   <FormItem>
                     <FormLabel>{t('workspaces.name')}</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder={t('workspaces.namePlaceholder')} />
+                      <Input {...field} placeholder={t('workspaces.namePlaceholder')} disabled={isEditingGlobal} />
                     </FormControl>
+                    {isEditingGlobal && (
+                      <p className="text-xs text-muted-foreground">{t('workspaces.globalNameProtected')}</p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}

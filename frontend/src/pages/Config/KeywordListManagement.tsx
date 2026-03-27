@@ -32,7 +32,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTable } from '@/components/data-table/DataTable'
 import { confirmDialog } from '@/utils/confirm-dialog'
-import { configApi } from '../../services/api'
+import api, { configApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 
 import type { Blacklist, Whitelist } from '../../types'
@@ -51,9 +51,14 @@ type KeywordListFormData = z.infer<typeof keywordListSchema>
 
 type ListType = 'blacklist' | 'whitelist'
 
-const KeywordListManagement: React.FC = () => {
+interface KeywordListManagementProps {
+  workspaceId?: string
+}
+
+const KeywordListManagement: React.FC<KeywordListManagementProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
   const canEdit = useCanEdit()
+  const wsPrefix = workspaceId ? `/api/v1/workspaces/${workspaceId}/config` : null
   const [activeTab, setActiveTab] = useState<ListType>('whitelist')
   const [blacklistData, setBlacklistData] = useState<Blacklist[]>([])
   const [whitelistData, setWhitelistData] = useState<Whitelist[]>([])
@@ -77,7 +82,7 @@ const KeywordListManagement: React.FC = () => {
   useEffect(() => {
     fetchBlacklistData()
     fetchWhitelistData()
-  }, [])
+  }, [workspaceId])
 
   useEffect(() => {
     const unsubscribe = onUserSwitch(() => {
@@ -90,7 +95,9 @@ const KeywordListManagement: React.FC = () => {
   const fetchBlacklistData = async () => {
     try {
       setBlacklistLoading(true)
-      const result = await configApi.blacklist.list()
+      const result = wsPrefix
+        ? await api.get(`${wsPrefix}/blacklist`).then(res => res.data)
+        : await configApi.blacklist.list()
       setBlacklistData(result)
     } catch (error) {
       console.error('Error fetching blacklist:', error)
@@ -102,7 +109,9 @@ const KeywordListManagement: React.FC = () => {
   const fetchWhitelistData = async () => {
     try {
       setWhitelistLoading(true)
-      const result = await configApi.whitelist.list()
+      const result = wsPrefix
+        ? await api.get(`${wsPrefix}/whitelist`).then(res => res.data)
+        : await configApi.whitelist.list()
       setWhitelistData(result)
     } catch (error) {
       console.error('Error fetching whitelist:', error)
@@ -147,14 +156,22 @@ const KeywordListManagement: React.FC = () => {
     if (confirmed) {
       try {
         if (type === 'blacklist') {
-          await configApi.blacklist.delete(record.id)
+          if (wsPrefix) {
+            await api.delete(`${wsPrefix}/blacklist/${record.id}`).then(res => res.data)
+          } else {
+            await configApi.blacklist.delete(record.id)
+          }
           eventBus.emit(EVENTS.BLACKLIST_DELETED, {
             blacklistId: record.id,
             blacklistName: record.name,
           })
           fetchBlacklistData()
         } else {
-          await configApi.whitelist.delete(record.id)
+          if (wsPrefix) {
+            await api.delete(`${wsPrefix}/whitelist/${record.id}`).then(res => res.data)
+          } else {
+            await configApi.whitelist.delete(record.id)
+          }
           eventBus.emit(EVENTS.WHITELIST_DELETED, {
             whitelistId: record.id,
             whitelistName: record.name,
@@ -181,20 +198,36 @@ const KeywordListManagement: React.FC = () => {
 
       if (modalType === 'blacklist') {
         if (editingItem) {
-          await configApi.blacklist.update(editingItem.id, submitData)
+          if (wsPrefix) {
+            await api.put(`${wsPrefix}/blacklist/${editingItem.id}`, submitData).then(res => res.data)
+          } else {
+            await configApi.blacklist.update(editingItem.id, submitData)
+          }
           toast.success(t('common.updateSuccess'))
         } else {
-          await configApi.blacklist.create(submitData)
+          if (wsPrefix) {
+            await api.post(`${wsPrefix}/blacklist`, submitData).then(res => res.data)
+          } else {
+            await configApi.blacklist.create(submitData)
+          }
           toast.success(t('common.createSuccess'))
           eventBus.emit(EVENTS.BLACKLIST_CREATED)
         }
         fetchBlacklistData()
       } else {
         if (editingItem) {
-          await configApi.whitelist.update(editingItem.id, submitData)
+          if (wsPrefix) {
+            await api.put(`${wsPrefix}/whitelist/${editingItem.id}`, submitData).then(res => res.data)
+          } else {
+            await configApi.whitelist.update(editingItem.id, submitData)
+          }
           toast.success(t('common.updateSuccess'))
         } else {
-          await configApi.whitelist.create(submitData)
+          if (wsPrefix) {
+            await api.post(`${wsPrefix}/whitelist`, submitData).then(res => res.data)
+          } else {
+            await configApi.whitelist.create(submitData)
+          }
           toast.success(t('common.createSuccess'))
           eventBus.emit(EVENTS.WHITELIST_CREATED)
         }
@@ -218,10 +251,18 @@ const KeywordListManagement: React.FC = () => {
       }
 
       if (type === 'blacklist') {
-        await configApi.blacklist.update(record.id, updateData)
+        if (wsPrefix) {
+          await api.put(`${wsPrefix}/blacklist/${record.id}`, updateData).then(res => res.data)
+        } else {
+          await configApi.blacklist.update(record.id, updateData)
+        }
         fetchBlacklistData()
       } else {
-        await configApi.whitelist.update(record.id, updateData)
+        if (wsPrefix) {
+          await api.put(`${wsPrefix}/whitelist/${record.id}`, updateData).then(res => res.data)
+        } else {
+          await configApi.whitelist.update(record.id, updateData)
+        }
         fetchWhitelistData()
       }
       toast.success(

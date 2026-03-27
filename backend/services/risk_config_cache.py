@@ -6,7 +6,7 @@ import time
 logger = setup_logger()
 
 class RiskConfigCache:
-    """Risk config cache - memory cache for application risk type configuration"""
+    """Risk config cache - memory cache keyed by workspace_id"""
 
     def __init__(self):
         self._cache: Dict[str, Dict[str, bool]] = {}
@@ -18,22 +18,54 @@ class RiskConfigCache:
         self._cache_ttl = 300  # 5 minutes cache
         self._lock = asyncio.Lock()
 
+    def _resolve_workspace_id(self, db, tenant_id: str = None, application_id: str = None) -> Optional[str]:
+        """Resolve workspace_id from application_id or tenant_id."""
+        from services.workspace_resolver import get_workspace_id_for_app, get_global_workspace_id
+
+        if application_id:
+            workspace_id = get_workspace_id_for_app(db, application_id)
+            if workspace_id:
+                return workspace_id
+            # Fallback: try tenant's global workspace
+            if tenant_id:
+                return get_global_workspace_id(db, tenant_id)
+            # Try to get tenant_id from the application
+            from database.models import Application
+            app = db.query(Application.tenant_id).filter(Application.id == application_id).first()
+            if app and app.tenant_id:
+                return get_global_workspace_id(db, str(app.tenant_id))
+            return None
+
+        if tenant_id:
+            return get_global_workspace_id(db, tenant_id)
+
+        return None
+
+    def _get_workspace_id_with_db(self, tenant_id: str = None, application_id: str = None) -> Optional[str]:
+        """Resolve workspace_id using a fresh DB session."""
+        from database.connection import get_db
+
+        db = next(get_db())
+        try:
+            return self._resolve_workspace_id(db, tenant_id=tenant_id, application_id=application_id)
+        finally:
+            db.close()
+
     async def get_user_risk_config(self, tenant_id: str = None, application_id: str = None) -> Dict[str, bool]:
         """
-        Get risk config (with cache)
+        Get risk config (with cache), keyed by workspace_id.
 
         Args:
-            tenant_id: DEPRECATED - kept for backward compatibility
-            application_id: Application ID to get config for
+            tenant_id: Tenant ID (resolves to global workspace)
+            application_id: Application ID (resolves to app's workspace)
 
         Returns:
             Risk type configuration dict
         """
-        # Prefer application_id, fallback to tenant_id
-        cache_key = application_id if application_id else tenant_id
+        cache_key = self._get_workspace_id_with_db(tenant_id=tenant_id, application_id=application_id)
 
         if not cache_key:
-            # Return default all enabled when no ID
+            # Return default all enabled when no workspace resolved
             return self._get_default_config()
 
         async with self._lock:
@@ -46,36 +78,29 @@ class RiskConfigCache:
 
             # Cache invalid or not exist, load from database
             try:
-                config = await self._load_from_db(cache_key, use_application_id=bool(application_id))
+                config = await self._load_from_db(cache_key)
                 self._cache[cache_key] = config
                 self._cache_timestamps[cache_key] = current_time
                 return config
             except Exception as e:
-                logger.error(f"Failed to load risk config for {cache_key}: {e}")
+                logger.error(f"Failed to load risk config for workspace {cache_key}: {e}")
                 # Return default configuration when database fails
                 default_config = self._get_default_config()
                 self._cache[cache_key] = default_config
                 self._cache_timestamps[cache_key] = current_time
                 return default_config
 
-    async def _load_from_db(self, cache_key: str, use_application_id: bool = True) -> Dict[str, bool]:
-        """Load risk config from database"""
+    async def _load_from_db(self, workspace_id: str) -> Dict[str, bool]:
+        """Load risk config from database by workspace_id"""
         from database.connection import get_db
         from database.models import RiskTypeConfig
         from sqlalchemy.orm import Session
 
-        # Use synchronous database connection
         db: Session = next(get_db())
         try:
-            if use_application_id:
-                config = db.query(RiskTypeConfig).filter(
-                    RiskTypeConfig.application_id == cache_key
-                ).first()
-            else:
-                # Backward compatibility: lookup by tenant_id (will use first application)
-                config = db.query(RiskTypeConfig).filter(
-                    RiskTypeConfig.tenant_id == cache_key
-                ).first()
+            config = db.query(RiskTypeConfig).filter(
+                RiskTypeConfig.workspace_id == workspace_id
+            ).first()
 
             if config:
                 return {
@@ -87,11 +112,10 @@ class RiskConfigCache:
                     'S21': config.s21_enabled
                 }
             else:
-                # Return default enabled when no configuration found
                 return self._get_default_config()
         finally:
             db.close()
-    
+
     def _get_default_config(self) -> Dict[str, bool]:
         """Get default configuration (all enabled)"""
         return {
@@ -108,9 +132,9 @@ class RiskConfigCache:
         config = await self.get_user_risk_config(tenant_id=tenant_id, application_id=application_id)
         return config.get(risk_type, True)  # Default enabled
 
-    async def invalidate_user_cache(self, tenant_id: str = None, application_id: str = None):
-        """Invalidate cache for specified user/application"""
-        cache_key = application_id if application_id else tenant_id
+    async def invalidate_user_cache(self, tenant_id: str = None, application_id: str = None, workspace_id: str = None):
+        """Invalidate cache for specified user/application (resolves to workspace_id)"""
+        cache_key = workspace_id or self._get_workspace_id_with_db(tenant_id=tenant_id, application_id=application_id)
         if not cache_key:
             return
 
@@ -119,8 +143,8 @@ class RiskConfigCache:
                 del self._cache[cache_key]
             if cache_key in self._cache_timestamps:
                 del self._cache_timestamps[cache_key]
-            logger.info(f"Invalidated risk config cache for {cache_key}")
-    
+            logger.info(f"Invalidated risk config cache for workspace {cache_key}")
+
     async def clear_cache(self):
         """Clear all cache"""
         async with self._lock:
@@ -133,8 +157,8 @@ class RiskConfigCache:
             logger.info("Cleared all risk config cache")
 
     async def get_sensitivity_thresholds(self, tenant_id: str = None, application_id: str = None) -> Dict[str, float]:
-        """Get sensitivity threshold configuration (with cache)"""
-        cache_key = application_id if application_id else tenant_id
+        """Get sensitivity threshold configuration (with cache), keyed by workspace_id"""
+        cache_key = self._get_workspace_id_with_db(tenant_id=tenant_id, application_id=application_id)
         if not cache_key:
             return self._get_default_sensitivity_thresholds()
 
@@ -148,36 +172,28 @@ class RiskConfigCache:
 
             # Cache invalid or not exist, load from database
             try:
-                config = await self._load_sensitivity_thresholds_from_db(cache_key, use_application_id=bool(application_id))
+                config = await self._load_sensitivity_thresholds_from_db(cache_key)
                 self._sensitivity_cache[cache_key] = config
                 self._sensitivity_timestamps[cache_key] = current_time
                 return config
             except Exception as e:
-                logger.error(f"Failed to load sensitivity thresholds for {cache_key}: {e}")
-                # Return default configuration when database fails
+                logger.error(f"Failed to load sensitivity thresholds for workspace {cache_key}: {e}")
                 default_config = self._get_default_sensitivity_thresholds()
                 self._sensitivity_cache[cache_key] = default_config
                 self._sensitivity_timestamps[cache_key] = current_time
                 return default_config
 
-    async def _load_sensitivity_thresholds_from_db(self, cache_key: str, use_application_id: bool = True) -> Dict[str, float]:
-        """Load sensitivity threshold configuration from database"""
+    async def _load_sensitivity_thresholds_from_db(self, workspace_id: str) -> Dict[str, float]:
+        """Load sensitivity threshold configuration from database by workspace_id"""
         from database.connection import get_db
         from database.models import RiskTypeConfig
         from sqlalchemy.orm import Session
 
-        # Use synchronous database connection
         db: Session = next(get_db())
         try:
-            if use_application_id:
-                config = db.query(RiskTypeConfig).filter(
-                    RiskTypeConfig.application_id == cache_key
-                ).first()
-            else:
-                # Backward compatibility: lookup by tenant_id
-                config = db.query(RiskTypeConfig).filter(
-                    RiskTypeConfig.tenant_id == cache_key
-                ).first()
+            config = db.query(RiskTypeConfig).filter(
+                RiskTypeConfig.workspace_id == workspace_id
+            ).first()
 
             if config:
                 return {
@@ -186,7 +202,6 @@ class RiskConfigCache:
                     'high': config.high_sensitivity_threshold or 0.40,
                 }
             else:
-                # Return default thresholds when no configuration found
                 return self._get_default_sensitivity_thresholds()
         finally:
             db.close()
@@ -199,9 +214,9 @@ class RiskConfigCache:
             'high': 0.40
         }
 
-    async def invalidate_sensitivity_cache(self, tenant_id: str = None, application_id: str = None):
-        """Invalidate sensitivity cache for specified user/application"""
-        cache_key = application_id if application_id else tenant_id
+    async def invalidate_sensitivity_cache(self, tenant_id: str = None, application_id: str = None, workspace_id: str = None):
+        """Invalidate sensitivity cache (resolves to workspace_id)"""
+        cache_key = workspace_id or self._get_workspace_id_with_db(tenant_id=tenant_id, application_id=application_id)
         if not cache_key:
             return
 
@@ -214,11 +229,11 @@ class RiskConfigCache:
                 del self._trigger_level_cache[cache_key]
             if cache_key in self._trigger_level_timestamps:
                 del self._trigger_level_timestamps[cache_key]
-            logger.info(f"Invalidated sensitivity config cache for {cache_key}")
+            logger.info(f"Invalidated sensitivity config cache for workspace {cache_key}")
 
     async def get_sensitivity_trigger_level(self, tenant_id: str = None, application_id: str = None) -> str:
-        """Get sensitivity trigger level configuration (with cache)"""
-        cache_key = application_id if application_id else tenant_id
+        """Get sensitivity trigger level configuration (with cache), keyed by workspace_id"""
+        cache_key = self._get_workspace_id_with_db(tenant_id=tenant_id, application_id=application_id)
         if not cache_key:
             return "medium"
 
@@ -232,41 +247,32 @@ class RiskConfigCache:
 
             # Cache invalid or not exist, load from database
             try:
-                trigger_level = await self._load_trigger_level_from_db(cache_key, use_application_id=bool(application_id))
+                trigger_level = await self._load_trigger_level_from_db(cache_key)
                 self._trigger_level_cache[cache_key] = trigger_level
                 self._trigger_level_timestamps[cache_key] = current_time
                 return trigger_level
             except Exception as e:
-                logger.error(f"Failed to load trigger level for {cache_key}: {e}")
-                # Return default configuration when database fails
+                logger.error(f"Failed to load trigger level for workspace {cache_key}: {e}")
                 default_level = "medium"
                 self._trigger_level_cache[cache_key] = default_level
                 self._trigger_level_timestamps[cache_key] = current_time
                 return default_level
 
-    async def _load_trigger_level_from_db(self, cache_key: str, use_application_id: bool = True) -> str:
-        """Load sensitivity trigger level configuration from database"""
+    async def _load_trigger_level_from_db(self, workspace_id: str) -> str:
+        """Load sensitivity trigger level configuration from database by workspace_id"""
         from database.connection import get_db
         from database.models import RiskTypeConfig
         from sqlalchemy.orm import Session
 
-        # Use synchronous database connection
         db: Session = next(get_db())
         try:
-            if use_application_id:
-                config = db.query(RiskTypeConfig).filter(
-                    RiskTypeConfig.application_id == cache_key
-                ).first()
-            else:
-                # Backward compatibility: lookup by tenant_id
-                config = db.query(RiskTypeConfig).filter(
-                    RiskTypeConfig.tenant_id == cache_key
-                ).first()
+            config = db.query(RiskTypeConfig).filter(
+                RiskTypeConfig.workspace_id == workspace_id
+            ).first()
 
             if config:
                 return config.sensitivity_trigger_level or "medium"
             else:
-                # Return default trigger level when no configuration found
                 return "medium"
         finally:
             db.close()

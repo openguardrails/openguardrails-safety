@@ -111,11 +111,13 @@ The overall severity is the highest severity across security, compliance, and da
 | `msg` | string | `content` | Detected content (truncated to 1024 chars, sensitive entities masked) |
 | `cn2` | int | `image_count` | Number of images in request |
 | `cn2Label` | string | — | `"ImageCount"` |
+| `cs10` | string | `source` | Detection source: `guardrail_api`, `proxy`, `gateway`, `direct_model`, `content_scan` |
+| `cs10Label` | string | — | `"DetectionSource"` |
 
 ### Example CEF Message
 
 ```
-CEF:0|OpenGuardrails|AI-Safety-Platform|5.2.0|detection|AI Content Detection|9|externalId=req_abc123 rt=1711234567000 src=192.168.1.100 duid=tenant_456 cs1=app_789 cs1Label=ApplicationId act=reject cs2=high cs2Label=SecurityRiskLevel cs3=S5 cs3Label=SecurityCategories cs4=no_risk cs4Label=ComplianceRiskLevel cs5= cs5Label=ComplianceCategories cs6=no_risk cs6Label=DataRiskLevel cs7= cs7Label=DataCategories cn1=0.95 cn1Label=SensitivityScore cs8=S5 cs8Label=MatchedScannerTags msg=User attempted prompt injection... cn2=0 cn2Label=ImageCount
+CEF:0|OpenGuardrails|AI-Safety-Platform|5.2.0|detection|AI Content Detection|9|externalId=req_abc123 rt=1711234567000 src=192.168.1.100 duid=tenant_456 cs1=app_789 cs1Label=ApplicationId act=reject cs2=high cs2Label=SecurityRiskLevel cs3=S5 cs3Label=SecurityCategories cs4=no_risk cs4Label=ComplianceRiskLevel cs5= cs5Label=ComplianceCategories cs6=no_risk cs6Label=DataRiskLevel cs7= cs7Label=DataCategories cn1=0.95 cn1Label=SensitivityScore cs8=S5 cs8Label=MatchedScannerTags msg=User attempted prompt injection... cn2=0 cn2Label=ImageCount cs10=guardrail_api cs10Label=DetectionSource
 ```
 
 ## SIEM-Specific Notes

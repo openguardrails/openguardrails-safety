@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Layout from './components/Layout/Layout';
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 import { ApplicationProvider } from './contexts/ApplicationContext';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 import Login from './pages/Login/Login';
 import Register from './pages/Register/Register';
 import Verify from './pages/Verify/Verify';
@@ -26,6 +27,21 @@ import { AccessControl } from './pages/AccessControl';
 import TeamManagement from './pages/Team/TeamManagement';
 import AcceptInvitation from './pages/Auth/AcceptInvitation';
 import { initSystemConfig, features } from './config';
+import WorkspaceSelector from './components/WorkspaceSelector';
+import { useWorkspace } from './contexts/WorkspaceContext';
+
+// Wrapper to add workspace selector above SecurityPolicy
+const SecurityPolicyWithWorkspace: React.FC = () => {
+  const { currentWorkspaceId } = useWorkspace();
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-end">
+        <WorkspaceSelector />
+      </div>
+      <SecurityPolicy workspaceId={currentWorkspaceId || undefined} />
+    </div>
+  );
+};
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -52,6 +68,7 @@ function App() {
 
   return (
     <ApplicationProvider>
+    <WorkspaceProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
         {features.showRegistration() && (
@@ -78,7 +95,7 @@ function App() {
               <Route path="/connection/models" element={<ProvidersAndRoutes />} />
               <Route path="/connection/gateway" element={<GatewayConnection />} />
               <Route path="/security-gateway/providers" element={<ProvidersAndRoutes />} />
-              <Route path="/security-gateway/policy" element={<SecurityPolicy />} />
+              <Route path="/security-gateway/policy" element={<SecurityPolicyWithWorkspace />} />
               <Route path="/config/*" element={<Config />} />
               <Route path="/access-control/*" element={<AccessControl />} />
               <Route path="/team" element={<TeamManagement />} />
@@ -95,6 +112,7 @@ function App() {
       {/* Root redirect to dashboard */}
       <Route path="/" element={<Login />} />
       </Routes>
+    </WorkspaceProvider>
     </ApplicationProvider>
   );
 }

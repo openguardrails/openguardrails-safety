@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # Data directory configuration
     data_dir: str = "/mnt/data/openguardrails-data"
 
+    # Encryption key for API key encryption (Fernet key, base64-encoded)
+    # If set, this key is used instead of auto-generated file-based key.
+    # This ensures API keys survive Docker container rebuilds as long as the same key is used.
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    encryption_key: str = ""
+
     @property
     def media_dir(self) -> str:
         """Media file directory"""

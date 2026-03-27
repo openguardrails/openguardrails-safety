@@ -26,6 +26,7 @@ from database.models import KnowledgeBase, TenantKnowledgeBaseDisable, Applicati
 from database.connection import get_db_session
 from services.knowledge_base_service import knowledge_base_service
 from services.proxy_answer_service import proxy_answer_service
+from services.workspace_resolver import get_workspace_id_for_app
 from utils.logger import setup_logger
 from utils.i18n_loader import get_translation
 
@@ -54,8 +55,10 @@ class EnhancedTemplateService:
         self._global_knowledge_base_cache: Dict[str, List[int]] = {}
         # Tenant disabled KB cache: {tenant_id: set(kb_ids)}
         self._tenant_disabled_kb_cache: Dict[str, set] = {}
-        # Application settings cache: {application_id: ApplicationSettings}
-        self._application_settings_cache: Dict[str, dict] = {}
+        # Workspace settings cache: {workspace_id: settings_dict}
+        self._workspace_settings_cache: Dict[str, dict] = {}
+        # App-to-workspace mapping cache: {application_id: workspace_id}
+        self._app_workspace_map: Dict[str, str] = {}
         self._cache_timestamp = 0
         self._cache_ttl = cache_ttl
         self._lock = asyncio.Lock()
@@ -290,6 +293,12 @@ class EnhancedTemplateService:
         }
         return category_mapping.get(category)
 
+    def _resolve_workspace_id(self, application_id: Optional[str]) -> Optional[str]:
+        """Resolve application_id to workspace_id using cached mapping."""
+        if not application_id:
+            return None
+        return self._app_workspace_map.get(str(application_id))
+
     def _get_fixed_answer(self, guardrail_name: str, language: str, application_id: Optional[str] = None) -> str:
         """
         Get fixed answer (据答) using user-configured or default template.
@@ -304,13 +313,15 @@ class EnhancedTemplateService:
         """
         template = None
 
-        # First, try to get user-configured template from cache
+        # First, try to get user-configured template from workspace settings cache
         if application_id:
-            app_settings = self._application_settings_cache.get(str(application_id))
-            if app_settings and app_settings.get('security_risk_template'):
-                template_dict = app_settings['security_risk_template']
-                if isinstance(template_dict, dict):
-                    template = template_dict.get(language) or template_dict.get('en')
+            workspace_id = self._resolve_workspace_id(application_id)
+            if workspace_id:
+                ws_settings = self._workspace_settings_cache.get(workspace_id)
+                if ws_settings and ws_settings.get('security_risk_template'):
+                    template_dict = ws_settings['security_risk_template']
+                    if isinstance(template_dict, dict):
+                        template = template_dict.get(language) or template_dict.get('en')
 
         # Fallback to default template
         if not template:
@@ -341,13 +352,15 @@ class EnhancedTemplateService:
         lang = user_language or 'en'
         template = None
 
-        # First, try to get user-configured template from cache
+        # First, try to get user-configured template from workspace settings cache
         if application_id:
-            app_settings = self._application_settings_cache.get(str(application_id))
-            if app_settings and app_settings.get('data_leakage_template'):
-                template_dict = app_settings['data_leakage_template']
-                if isinstance(template_dict, dict):
-                    template = template_dict.get(lang) or template_dict.get('en')
+            workspace_id = self._resolve_workspace_id(application_id)
+            if workspace_id:
+                ws_settings = self._workspace_settings_cache.get(workspace_id)
+                if ws_settings and ws_settings.get('data_leakage_template'):
+                    template_dict = ws_settings['data_leakage_template']
+                    if isinstance(template_dict, dict):
+                        template = template_dict.get(lang) or template_dict.get('en')
 
         # Fallback to default template
         if not template:
@@ -424,16 +437,30 @@ class EnhancedTemplateService:
                 self._tenant_disabled_kb_cache = tenant_disabled_kb_cache
                 self._knowledge_base_cache = new_kb_cache
 
-                # Load application settings (fixed answer templates)
-                application_settings_cache: Dict[str, dict] = {}
-                app_settings_records = db.query(ApplicationSettings).all()
-                for settings in app_settings_records:
-                    app_key = str(settings.application_id)
-                    application_settings_cache[app_key] = {
+                # Load workspace-level settings (fixed answer templates)
+                # Workspace-level: workspace_id IS NOT NULL and application_id IS NULL
+                workspace_settings_cache: Dict[str, dict] = {}
+                ws_settings_records = db.query(ApplicationSettings).filter(
+                    ApplicationSettings.workspace_id.isnot(None),
+                    ApplicationSettings.application_id.is_(None)
+                ).all()
+                for settings in ws_settings_records:
+                    ws_key = str(settings.workspace_id)
+                    workspace_settings_cache[ws_key] = {
                         'security_risk_template': settings.security_risk_template,
                         'data_leakage_template': settings.data_leakage_template
                     }
-                self._application_settings_cache = application_settings_cache
+                self._workspace_settings_cache = workspace_settings_cache
+
+                # Load app-to-workspace mapping
+                from database.models import Application
+                app_workspace_map: Dict[str, str] = {}
+                app_records = db.query(Application.id, Application.workspace_id).filter(
+                    Application.workspace_id.isnot(None)
+                ).all()
+                for app in app_records:
+                    app_workspace_map[str(app.id)] = str(app.workspace_id)
+                self._app_workspace_map = app_workspace_map
 
                 self._cache_timestamp = time.time()
 
@@ -441,7 +468,7 @@ class EnhancedTemplateService:
                     sum(len(kb_ids) for kb_ids in app_kbs.values())
                     for app_kbs in new_kb_cache.values()
                 )
-                logger.debug(f"KB cache refreshed: {kb_count} knowledge bases, {len(application_settings_cache)} app settings")
+                logger.debug(f"KB cache refreshed: {kb_count} knowledge bases, {len(workspace_settings_cache)} workspace settings, {len(app_workspace_map)} app mappings")
 
             finally:
                 db.close()
@@ -452,25 +479,39 @@ class EnhancedTemplateService:
     async def invalidate_cache(self):
         """Invalidate cache and force immediate refresh of application settings"""
         async with self._lock:
-            # Immediately refresh application settings cache (fixed answer templates)
+            # Immediately refresh workspace settings cache (fixed answer templates)
             # so user-configured templates take effect immediately
             try:
                 db = get_db_session()
                 try:
-                    application_settings_cache: Dict[str, dict] = {}
-                    app_settings_records = db.query(ApplicationSettings).all()
-                    for settings in app_settings_records:
-                        app_key = str(settings.application_id)
-                        application_settings_cache[app_key] = {
+                    workspace_settings_cache: Dict[str, dict] = {}
+                    ws_settings_records = db.query(ApplicationSettings).filter(
+                        ApplicationSettings.workspace_id.isnot(None),
+                        ApplicationSettings.application_id.is_(None)
+                    ).all()
+                    for settings in ws_settings_records:
+                        ws_key = str(settings.workspace_id)
+                        workspace_settings_cache[ws_key] = {
                             'security_risk_template': settings.security_risk_template,
                             'data_leakage_template': settings.data_leakage_template
                         }
-                    self._application_settings_cache = application_settings_cache
-                    logger.info(f"Application settings cache refreshed: {len(application_settings_cache)} settings")
+                    self._workspace_settings_cache = workspace_settings_cache
+
+                    # Also refresh app-to-workspace mapping
+                    from database.models import Application
+                    app_workspace_map: Dict[str, str] = {}
+                    app_records = db.query(Application.id, Application.workspace_id).filter(
+                        Application.workspace_id.isnot(None)
+                    ).all()
+                    for app in app_records:
+                        app_workspace_map[str(app.id)] = str(app.workspace_id)
+                    self._app_workspace_map = app_workspace_map
+
+                    logger.info(f"Workspace settings cache refreshed: {len(workspace_settings_cache)} settings, {len(app_workspace_map)} app mappings")
                 finally:
                     db.close()
             except Exception as e:
-                logger.error(f"Failed to refresh application settings cache: {e}", exc_info=True)
+                logger.error(f"Failed to refresh workspace settings cache: {e}", exc_info=True)
 
             # Mark other caches as stale (will refresh on next access)
             self._cache_timestamp = 0
@@ -486,7 +527,8 @@ class EnhancedTemplateService:
 
         return {
             "applications": len(self._knowledge_base_cache),
-            "application_settings": len(self._application_settings_cache),
+            "workspace_settings": len(self._workspace_settings_cache),
+            "app_workspace_mappings": len(self._app_workspace_map),
             "templates": 0,  # Not used in new design
             "knowledge_bases": kb_count,
             "global_knowledge_bases": global_kb_count,

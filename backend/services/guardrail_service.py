@@ -83,7 +83,8 @@ class GuardrailService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         tenant_id: Optional[str] = None,  # tenant_id for backward compatibility
-        application_id: Optional[str] = None  # application_id for new multi-application support
+        application_id: Optional[str] = None,  # application_id for new multi-application support
+        source: Optional[str] = None  # Detection source: guardrail_api, proxy, gateway, etc.
     ) -> GuardrailResponse:
         """Execute guardrail detection"""
 
@@ -117,7 +118,7 @@ class GuardrailService:
             if blacklist_hit:
                 return await self._handle_blacklist_hit(
                     request_id, user_content, blacklist_name, blacklist_keywords,
-                    ip_address, user_agent, tenant_id, application_id
+                    ip_address, user_agent, tenant_id, application_id, source=source
                 )
 
             whitelist_hit, whitelist_name, whitelist_keywords = await keyword_cache.check_whitelist(
@@ -126,7 +127,7 @@ class GuardrailService:
             if whitelist_hit:
                 return await self._handle_whitelist_hit(
                     request_id, user_content, whitelist_name, whitelist_keywords,
-                    ip_address, user_agent, tenant_id, application_id
+                    ip_address, user_agent, tenant_id, application_id, source=source
                 )
 
             # 2. Data leak detection for INPUT (before sending to model)
@@ -343,7 +344,7 @@ class GuardrailService:
                 suggest_action, suggest_answer, model_response,
                 ip_address, user_agent, tenant_id,
                 has_image=has_image, image_count=len(saved_image_paths), image_paths=saved_image_paths,
-                data_result=data_result
+                data_result=data_result, source=source
             )
 
             # 8. Construct response
@@ -364,7 +365,7 @@ class GuardrailService:
         except Exception as e:
             logger.error(f"Guardrail check error: {e}")
             # Return safe default response on error
-            return await self._handle_error(request_id, user_content, str(e), tenant_id)
+            return await self._handle_error(request_id, user_content, str(e), tenant_id, source=source)
     
     def _extract_assistant_content(self, messages: List[Message]) -> str:
         """Extract assistant message content for output detection"""
@@ -626,7 +627,8 @@ class GuardrailService:
         self, request_id: str, content: str, list_name: str,
         keywords: List[str], ip_address: Optional[str], user_agent: Optional[str],
         tenant_id: Optional[str] = None,
-        application_id: Optional[str] = None
+        application_id: Optional[str] = None,
+        source: Optional[str] = None
     ) -> GuardrailResponse:
         """Handle blacklist hit"""
 
@@ -670,7 +672,8 @@ class GuardrailService:
             "security_categories": [],
             "compliance_risk_level": "high_risk",
             "compliance_categories": [list_name],
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source": source
         }
         await async_detection_logger.log_detection(detection_data)
 
@@ -690,7 +693,8 @@ class GuardrailService:
         self, request_id: str, content: str, list_name: str,
         keywords: List[str], ip_address: Optional[str], user_agent: Optional[str],
         tenant_id: Optional[str] = None,
-        application_id: Optional[str] = None
+        application_id: Optional[str] = None,
+        source: Optional[str] = None
     ) -> GuardrailResponse:
         """Handle whitelist hit"""
 
@@ -710,10 +714,11 @@ class GuardrailService:
             "security_categories": [],
             "compliance_risk_level": "no_risk",
             "compliance_categories": [],
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source": source
         }
         await async_detection_logger.log_detection(detection_data)
-        
+
         return GuardrailResponse(
             id=request_id,
             result=GuardrailResult(
@@ -728,17 +733,57 @@ class GuardrailService:
     
     @staticmethod
     def _mask_sensitive_entities(text: str, detected_entities: List[Dict[str, Any]]) -> str:
-        """Replace detected sensitive entity texts with asterisks."""
+        """Replace detected sensitive entity texts using each entity's configured anonymization method.
+
+        Default is 'replace' which substitutes with <entity_type_name>.
+        For genai/genai_code methods, falls back to replace since model calls are too expensive for logging.
+        """
         if not text or not detected_entities:
             return text
-        entity_texts = sorted(
-            {e['text'] for e in detected_entities if e.get('text')},
-            key=len, reverse=True,
-        )
+
+        # Build a mapping from entity text to its replacement, longest first
+        # If the same text is detected by multiple entity types, the first one wins
+        replacements = {}
+        for entity in sorted(detected_entities, key=lambda e: len(e.get('text', '')), reverse=True):
+            et = entity.get('text')
+            if not et or et in replacements:
+                continue
+
+            method = entity.get('anonymization_method', 'replace')
+            config = entity.get('anonymization_config') or {}
+            entity_type_name = entity.get('entity_type_name') or entity.get('entity_type', 'UNKNOWN')
+
+            if method == 'mask':
+                mask_char = config.get('mask_char', '*')
+                keep_prefix = config.get('keep_prefix', 0)
+                keep_suffix = config.get('keep_suffix', 0)
+                if len(et) <= keep_prefix + keep_suffix:
+                    replacements[et] = et
+                else:
+                    prefix = et[:keep_prefix] if keep_prefix > 0 else ''
+                    suffix = et[-keep_suffix:] if keep_suffix > 0 else ''
+                    middle_length = len(et) - keep_prefix - keep_suffix
+                    replacements[et] = prefix + mask_char * middle_length + suffix
+            elif method == 'hash':
+                import hashlib
+                replacements[et] = hashlib.sha256(et.encode()).hexdigest()[:16]
+            elif method == 'regex_replace':
+                import re
+                pattern = config.get('pattern', '')
+                replacement_template = config.get('replacement', f'<{entity_type_name}>')
+                try:
+                    replacements[et] = re.sub(pattern, replacement_template, et) if pattern else f'<{entity_type_name}>'
+                except re.error:
+                    replacements[et] = f'<{entity_type_name}>'
+            else:
+                # 'replace' (default), 'genai', 'genai_natural', 'genai_code', 'encrypt', 'shuffle', 'random'
+                # For logging, use configured replacement or default to <entity_type_name>
+                replacements[et] = config.get('replacement', f'<{entity_type_name}>')
+
         masked = text
-        for et in entity_texts:
-            if et and et in masked:
-                masked = masked.replace(et, '***')
+        for et, replacement in replacements.items():
+            if et in masked:
+                masked = masked.replace(et, replacement)
         return masked
 
     async def _log_detection_result(
@@ -747,7 +792,8 @@ class GuardrailService:
         model_response: str, ip_address: Optional[str], user_agent: Optional[str],
         tenant_id: Optional[str] = None, has_image: bool = False,
         image_count: int = 0, image_paths: List[str] = None,
-        data_result: Optional[DataSecurityResult] = None
+        data_result: Optional[DataSecurityResult] = None,
+        source: Optional[str] = None
     ):
         """Asynchronously record detection results to log"""
 
@@ -778,15 +824,16 @@ class GuardrailService:
             "hit_keywords": None,  # Only hit keywords for blacklist/whitelist
             "has_image": has_image,
             "image_count": image_count,
-            "image_paths": image_paths or []
+            "image_paths": image_paths or [],
+            "source": source
         }
 
         # Only write log file, not write database (managed by admin service's log processor)
         await async_detection_logger.log_detection(detection_data)
     
-    async def _handle_error(self, request_id: str, content: str, error: str, tenant_id: Optional[int] = None) -> GuardrailResponse:
+    async def _handle_error(self, request_id: str, content: str, error: str, tenant_id: Optional[int] = None, source: Optional[str] = None) -> GuardrailResponse:
         """Handle error situation"""
-        
+
         # Asynchronously record error detection results
         detection_data = {
             "request_id": request_id,
@@ -802,7 +849,8 @@ class GuardrailService:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "hit_keywords": None,
             "ip_address": None,
-            "user_agent": None
+            "user_agent": None,
+            "source": source
         }
         await async_detection_logger.log_detection(detection_data)
         

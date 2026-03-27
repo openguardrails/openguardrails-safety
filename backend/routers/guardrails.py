@@ -79,7 +79,8 @@ async def check_guardrails(
             ip_address=ip_address,
             user_agent=user_agent,
             tenant_id=tenant_id,
-            application_id=application_id
+            application_id=application_id,
+            source="guardrail_api"
         )
 
         # Check and apply ban policy
@@ -188,7 +189,8 @@ async def check_input_guardrails(
             guardrail_request,
             ip_address=ip_address,
             user_agent=user_agent,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            source="guardrail_api"
         )
 
         # Check and apply ban policy
@@ -273,7 +275,8 @@ async def check_output_guardrails(
             guardrail_request,
             ip_address=ip_address,
             user_agent=user_agent,
-            tenant_id=tenant_id
+            tenant_id=tenant_id,
+            source="guardrail_api"
         )
 
         # Check and apply ban policy

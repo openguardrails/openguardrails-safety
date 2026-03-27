@@ -287,6 +287,73 @@ For content exceeding `MAX_DETECTION_CONTEXT_LENGTH`, the system applies sliding
 - **Parallel execution**: All windows detected in parallel for performance
 - **Aggregation**: Scanner matched if it triggers in ANY window (highest sensitivity wins)
 
+---
+
+## Third-Party Gateway Integration
+
+All detection (input/output) is unified through `GatewayIntegrationService` (`backend/services/gateway_integration_service.py`). Both the self-hosted proxy and third-party gateways use the same code path.
+
+### Unified Detection Interface
+
+**Python (direct call, used by self-hosted proxy):**
+```python
+from services.gateway_integration_service import get_gateway_integration_service
+
+service = get_gateway_integration_service(db)
+
+# Input detection
+result = await service.process_input(
+    application_id=app_id, tenant_id=tid,
+    messages=messages, stream=True, user_id=uid
+)
+# result["action"]: "pass" | "block" | "replace" | "anonymize" | "switch_private_model"
+
+# Output detection
+result = await service.process_output(
+    application_id=app_id, tenant_id=tid,
+    content=output_text, restore_mapping=mapping, input_messages=messages
+)
+# result["action"]: "pass" | "block" | "restore" | "anonymize"
+```
+
+**HTTP API (used by external gateways like Higress, LiteLLM):**
+- `POST /v1/gateway/process-input` - Input detection
+- `POST /v1/gateway/process-output` - Output detection + restoration
+
+Auth: Application API key (`Authorization: Bearer sk-xxai-xxx`)
+
+### Integration Patterns
+
+| Gateway | Integration Method | Streaming |
+|---------|-------------------|-----------|
+| **Self-hosted proxy** (5002) | Direct Python call to `GatewayIntegrationService` | Real-time passthrough + async output detection |
+| **Higress** | WASM plugin calls HTTP API | Higress handles streaming, OG does sidecar detection |
+| **LiteLLM** | Guardrail API (`/beta/litellm_basic_guardrail_api`) | Not supported (LiteLLM limitation) |
+
+### Adding a New Gateway Integration
+
+1. **If gateway supports plugins/webhooks:** Call the HTTP API (`/v1/gateway/process-input` before LLM, `/v1/gateway/process-output` after)
+2. **If gateway is Python-based:** Import and call `GatewayIntegrationService` directly (zero HTTP overhead)
+3. **Handle each action:** pass, block, replace, anonymize (+ restore_mapping), switch_private_model
+
+### Self-Hosted Proxy Architecture
+
+```
+Client ←──stream──→ OG Proxy (5002) ←──stream──→ LLM
+                        │
+                        ├── service.process_input()     # Sync, before forwarding
+                        ├── Real-time chunk passthrough  # No buffering
+                        └── service.process_output()     # Async, after stream ends (log-only)
+```
+
+Key files:
+- `backend/routers/proxy_api.py` - Proxy endpoint, streaming/non-streaming handlers
+- `backend/services/gateway_integration_service.py` - Unified detection service
+- `backend/routers/gateway_integration_api.py` - HTTP API for external gateways
+- `backend/routers/litellm_guardrail_api.py` - LiteLLM-specific adapter
+
+---
+
 ## Deployment
 
 ### Quick Start

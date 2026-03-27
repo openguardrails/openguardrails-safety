@@ -153,7 +153,8 @@ async def process_input(
         messages=body.messages,
         stream=body.stream,
         client_ip=body.client_ip,
-        user_id=body.user_id
+        user_id=body.user_id,
+        source="gateway"
     )
 
     # Add timing info
@@ -165,6 +166,9 @@ async def process_input(
         f"risk={result.get('detection_result', {}).get('overall_risk_level', 'unknown')}, "
         f"time={result['processing_time_ms']}ms"
     )
+
+    # Remove raw ORM object (used only by self-hosted proxy via direct Python call)
+    result.pop("modified_model_config", None)
 
     return JSONResponse(content=result)
 
@@ -209,7 +213,8 @@ async def process_output(
         restore_mapping=body.restore_mapping,
         is_streaming=body.is_streaming,
         chunk_index=body.chunk_index,
-        input_messages=body.messages
+        input_messages=body.messages,
+        source="gateway"
     )
 
     # Add timing info

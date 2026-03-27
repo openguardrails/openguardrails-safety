@@ -67,6 +67,8 @@ export interface DetectionResult {
   image_urls?: string[];  // Signed image access URLs
   // Direct Model Access flag
   is_direct_model_access?: boolean;  // Whether this is a direct model access call
+  // Detection source: guardrail_api, proxy, gateway, direct_model, content_scan
+  source?: string;
   // Application and workspace info (for global results view)
   application_id?: string;
   application_name?: string;

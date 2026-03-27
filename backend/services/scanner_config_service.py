@@ -12,6 +12,7 @@ from database.models import (
     ApplicationScannerConfig, Scanner, ScannerPackage,
     PackagePurchase, CustomScanner, Application, Tenant
 )
+from services.workspace_resolver import get_workspace_id_for_app
 from utils.logger import setup_logger
 
 logger = setup_logger()
@@ -45,27 +46,23 @@ class ScannerConfigService:
         Returns:
             List of scanner config dicts
         """
+        # Resolve application_id → workspace_id
+        workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
         # Get all available scanners
         available_scanners = self._get_available_scanners(tenant_id)
-        custom_scanners = self._get_custom_scanners(application_id)
+        custom_scanners = self._get_custom_scanners(application_id, workspace_id)
 
         all_scanners = available_scanners + custom_scanners
 
-        # Get application configs
-        configs = self.db.query(ApplicationScannerConfig).filter(
-            ApplicationScannerConfig.application_id == application_id
-        ).all()
-        config_map = {str(c.scanner_id): c for c in configs}
-
-        # If no app-level configs, fall back to workspace-level configs
-        if not config_map:
-            app = self.db.query(Application).filter(Application.id == application_id).first()
-            if app and app.workspace_id:
-                ws_configs = self.db.query(ApplicationScannerConfig).filter(
-                    ApplicationScannerConfig.workspace_id == app.workspace_id,
-                    ApplicationScannerConfig.application_id.is_(None)
-                ).all()
-                config_map = {str(c.scanner_id): c for c in ws_configs}
+        # Get workspace-level configs (all config lives at workspace level)
+        config_map = {}
+        if workspace_id:
+            ws_configs = self.db.query(ApplicationScannerConfig).filter(
+                ApplicationScannerConfig.workspace_id == workspace_id,
+                ApplicationScannerConfig.application_id.is_(None)
+            ).all()
+            config_map = {str(c.scanner_id): c for c in ws_configs}
 
         # Combine scanner definitions with configs
         result = []
@@ -314,35 +311,43 @@ class ScannerConfigService:
 
     def initialize_default_configs(
         self,
-        application_id: UUID,
-        tenant_id: UUID
+        application_id: UUID = None,
+        tenant_id: UUID = None,
+        workspace_id: UUID = None,
     ) -> int:
         """
-        Initialize default configs for all available scanners.
-
-        Called when a new application is created.
+        Initialize default configs for all available scanners at workspace level.
 
         Args:
-            application_id: Application UUID
+            application_id: Application UUID (resolved to workspace_id if workspace_id not provided)
             tenant_id: Tenant UUID
+            workspace_id: Workspace UUID (direct, takes priority over application_id)
 
         Returns:
             Number of configs created
         """
+        # Resolve workspace_id
+        if not workspace_id and application_id:
+            workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+        if not workspace_id:
+            logger.warning(f"Cannot initialize configs: no workspace_id (app={application_id})")
+            return 0
+
         # Get all available scanners
         available_scanners = self._get_available_scanners(tenant_id)
 
         count = 0
         for scanner in available_scanners:
-            # Check if config already exists
+            # Check if workspace-level config already exists
             existing = self.db.query(ApplicationScannerConfig).filter(
-                ApplicationScannerConfig.application_id == application_id,
+                ApplicationScannerConfig.workspace_id == workspace_id,
+                ApplicationScannerConfig.application_id.is_(None),
                 ApplicationScannerConfig.scanner_id == scanner.id
             ).first()
 
             if not existing:
                 config = ApplicationScannerConfig(
-                    application_id=application_id,
+                    workspace_id=workspace_id,
                     scanner_id=scanner.id,
                     is_enabled=True  # All enabled by default
                 )
@@ -352,7 +357,7 @@ class ScannerConfigService:
         self.db.commit()
 
         logger.info(
-            f"Initialized {count} default scanner configs for app={application_id}"
+            f"Initialized {count} default scanner configs for workspace={workspace_id} (app={application_id})"
         )
 
         return count
@@ -405,18 +410,24 @@ class ScannerConfigService:
 
         return builtin + purchased
 
-    def _get_custom_scanners(self, application_id: UUID) -> List[Scanner]:
+    def _get_custom_scanners(self, application_id: UUID, workspace_id: Optional[str] = None) -> List[Scanner]:
         """
-        Get custom scanners for application.
+        Get custom scanners for workspace.
 
         Args:
-            application_id: Application UUID
+            application_id: Application UUID (kept for backward compatibility)
+            workspace_id: Workspace UUID (resolved from application_id)
 
         Returns:
             List of scanners with _is_custom flag
         """
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+        if not workspace_id:
+            return []
+
         scanners = self.db.query(Scanner).join(CustomScanner).filter(
-            CustomScanner.application_id == application_id,
+            CustomScanner.workspace_id == workspace_id,
             Scanner.is_active == True
         ).all()
 

@@ -106,26 +106,27 @@ def get_application_id(
 @router.get("", response_model=List[CustomScannerResponse])
 async def get_custom_scanners(
     request: Request,
+    workspace_id: Optional[str] = None,
     application_id: UUID = Depends(get_application_id),
     db: Session = Depends(get_admin_db)
 ):
     """
-    Get all custom scanners for application.
+    Get all custom scanners for workspace.
 
-    Returns only active custom scanners (S100+) created by this application.
-    
+    Returns only active custom scanners (S100+) created in this workspace.
+
     **Premium Feature**: Requires subscribed plan.
     """
     current_user = require_subscription(request, db)
     service = CustomScannerService(db)
 
-    scanners = service.get_custom_scanners(application_id)
+    scanners = service.get_custom_scanners(application_id, workspace_id=workspace_id)
 
     result = [CustomScannerResponse(**scanner) for scanner in scanners]
 
     logger.info(
         f"User {current_user['email']} retrieved {len(result)} custom scanners "
-        f"for app={application_id}"
+        f"for workspace={workspace_id}, app={application_id}"
     )
 
     return result
@@ -135,12 +136,13 @@ async def get_custom_scanners(
 async def get_custom_scanner(
     request: Request,
     scanner_id: str,
+    workspace_id: Optional[str] = None,
     application_id: UUID = Depends(get_application_id),
     db: Session = Depends(get_admin_db)
 ):
     """
     Get custom scanner details by ID.
-    
+
     **Premium Feature**: Requires subscribed plan.
     """
     current_user = require_subscription(request, db)
@@ -156,7 +158,8 @@ async def get_custom_scanner(
 
     scanner = service.get_custom_scanner(
         scanner_id=scanner_uuid,
-        application_id=application_id
+        application_id=application_id,
+        workspace_id=workspace_id
     )
 
     if not scanner:
@@ -176,6 +179,7 @@ async def get_custom_scanner(
 async def create_custom_scanner(
     request: Request,
     scanner_data: CustomScannerCreateRequest,
+    workspace_id: Optional[str] = None,
     application_id: UUID = Depends(get_application_id),
     db: Session = Depends(get_admin_db)
 ):
@@ -192,7 +196,7 @@ async def create_custom_scanner(
     - genai: Calls OpenGuardrails-Text model
     - regex: Python regex pattern matching
     - keyword: Case-insensitive keyword matching
-    
+
     **Premium Feature**: Requires subscribed plan.
     """
     current_user = require_subscription(request, db)
@@ -205,7 +209,8 @@ async def create_custom_scanner(
         scanner = service.create_custom_scanner(
             application_id=application_id,
             tenant_id=tenant_id,
-            scanner_data=scanner_dict
+            scanner_data=scanner_dict,
+            workspace_id=workspace_id
         )
     except ValueError as e:
         # Handle validation errors
@@ -228,6 +233,7 @@ async def update_custom_scanner(
     request: Request,
     scanner_id: str,
     updates: CustomScannerUpdateRequest,
+    workspace_id: Optional[str] = None,
     application_id: UUID = Depends(get_application_id),
     db: Session = Depends(get_admin_db)
 ):
@@ -236,7 +242,7 @@ async def update_custom_scanner(
 
     Note: Cannot update scanner_type or tag (would break detection logic).
     Can update: name, description, definition, risk_level, scan_prompt, scan_response, notes
-    
+
     **Premium Feature**: Requires subscribed plan.
     """
     current_user = require_subscription(request, db)
@@ -255,7 +261,8 @@ async def update_custom_scanner(
     scanner = service.update_custom_scanner(
         scanner_id=scanner_uuid,
         application_id=application_id,
-        updates=update_dict
+        updates=update_dict,
+        workspace_id=workspace_id
     )
 
     if not scanner:
@@ -276,6 +283,7 @@ async def update_custom_scanner(
 async def delete_custom_scanner(
     request: Request,
     scanner_id: str,
+    workspace_id: Optional[str] = None,
     application_id: UUID = Depends(get_application_id),
     db: Session = Depends(get_admin_db)
 ):
@@ -284,7 +292,7 @@ async def delete_custom_scanner(
 
     This will mark the scanner as inactive and cascade disable
     in all scanner configurations.
-    
+
     **Premium Feature**: Requires subscribed plan.
     """
     current_user = require_subscription(request, db)
@@ -300,7 +308,8 @@ async def delete_custom_scanner(
 
     success = service.delete_custom_scanner(
         scanner_id=scanner_uuid,
-        application_id=application_id
+        application_id=application_id,
+        workspace_id=workspace_id
     )
 
     if not success:

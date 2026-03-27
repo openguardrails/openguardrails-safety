@@ -104,6 +104,7 @@ def format_as_cef(data: Dict[str, Any]) -> str:
     add("msg", content)
 
     add("cn2", data.get("image_count", 0), "ImageCount")
+    add("cs10", data.get("source", ""), "DetectionSource")
 
     extensions = " ".join(ext_parts)
     return f"CEF:0|OpenGuardrails|AI-Safety-Platform|{version}|detection|AI Content Detection|{severity}|{extensions}"

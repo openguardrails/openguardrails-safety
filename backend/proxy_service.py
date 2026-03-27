@@ -9,7 +9,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.middleware.gzip import GZipMiddleware
+# GZipMiddleware removed: it buffers responses and breaks SSE streaming
 import uvicorn
 import os
 import uuid
@@ -234,8 +234,9 @@ app = FastAPI(
 # Add concurrent control middleware (highest priority, last added)
 app.add_middleware(ConcurrentLimitMiddleware, service_type="proxy", max_concurrent=settings.proxy_max_concurrent_requests)
 
-# Performance optimization middleware
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# NOTE: GZipMiddleware removed - it buffers the entire response body before
+# compressing, which completely breaks SSE streaming (text/event-stream).
+# If gzip is needed for non-streaming responses, handle it at the nginx layer.
 
 # Add authentication context middleware
 app.add_middleware(AuthContextMiddleware)

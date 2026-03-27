@@ -6,7 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import EntityTypeManagement from './EntityTypeManagement'
 import SmartProcessingTab from './SmartProcessingTab'
 
-const DataSecurity: React.FC = () => {
+interface DataSecurityProps {
+  workspaceId?: string
+}
+
+const DataSecurity: React.FC<DataSecurityProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
 
   return (
@@ -29,10 +33,10 @@ const DataSecurity: React.FC = () => {
               </TabsTrigger>
             </TabsList>
             <TabsContent value="entity-types" className="mt-6">
-              <EntityTypeManagement />
+              <EntityTypeManagement workspaceId={workspaceId} />
             </TabsContent>
             <TabsContent value="smart-processing" className="mt-6">
-              <SmartProcessingTab />
+              <SmartProcessingTab workspaceId={workspaceId} />
             </TabsContent>
           </Tabs>
         </CardContent>

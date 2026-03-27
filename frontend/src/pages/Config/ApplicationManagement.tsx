@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Plus, Edit, Trash2, Key, Copy, Eye, EyeOff, Info, Search, X, ArrowUpDown, ArrowUp, ArrowDown, ArrowRightLeft } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Plus, Edit, Trash2, Key, Copy, Eye, EyeOff, Info, Search, X, ArrowUpDown, ArrowUp, ArrowDown, ArrowRightLeft, ExternalLink } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useCanEdit } from '../../hooks/useCanEdit'
+import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { copyToClipboard } from '@/utils/clipboard'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -105,7 +107,9 @@ interface ApiKey {
 
 const ApplicationManagement: React.FC = () => {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const canEdit = useCanEdit()
+  const { setCurrentWorkspaceId } = useWorkspace()
   const { refreshApplications } = useApplication()
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(false)
@@ -533,10 +537,19 @@ const ApplicationManagement: React.FC = () => {
       header: t('workspaces.workspace'),
       cell: ({ row }) => {
         const wsName = row.original.workspace_name
+        const wsId = row.original.workspace_id
+        const handleClick = () => {
+          if (wsId) {
+            setCurrentWorkspaceId(wsId)
+          }
+          navigate('/applications/workspaces')
+        }
         return wsName ? (
-          <Badge variant="outline">{wsName}</Badge>
+          <Badge variant="outline" className="cursor-pointer hover:bg-accent transition-colors" onClick={handleClick}>
+            {wsName} <ExternalLink className="ml-1 h-3 w-3" />
+          </Badge>
         ) : (
-          <span className="text-muted-foreground text-xs">{t('workspaces.global')}</span>
+          <span className="text-muted-foreground text-xs cursor-pointer hover:underline" onClick={handleClick}>{t('workspaces.global')}</span>
         )
       },
     },
@@ -1075,15 +1088,29 @@ const ApplicationManagement: React.FC = () => {
                   <h4 className="font-medium">{t('applicationManagement.protectionSummary')}</h4>
                   <div className="rounded-lg border p-3 space-y-3 text-sm">
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:bg-accent rounded px-1 py-0.5 -mx-1 transition-colors"
+                        onClick={() => {
+                          if (selectedApp.workspace_id) setCurrentWorkspaceId(selectedApp.workspace_id)
+                          navigate('/config/guardrails')
+                        }}
+                      >
                         <span className="text-muted-foreground">{t('applicationManagement.scanners')}:</span>
                         <Badge variant="default">
                           {selectedApp.protection_summary.risk_types_enabled}/{selectedApp.protection_summary.total_risk_types}
                         </Badge>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:bg-accent rounded px-1 py-0.5 -mx-1 transition-colors"
+                        onClick={() => {
+                          if (selectedApp.workspace_id) setCurrentWorkspaceId(selectedApp.workspace_id)
+                          navigate('/config/data-masking')
+                        }}
+                      >
                         <span className="text-muted-foreground">{t('applicationManagement.dlpEntities')}:</span>
                         <Badge variant="default">{selectedApp.protection_summary.data_security_entities}</Badge>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-muted-foreground">{t('applicationManagement.sensitivityLevel')}:</span>
@@ -1097,17 +1124,38 @@ const ApplicationManagement: React.FC = () => {
                           {selectedApp.protection_summary.ban_policy_enabled ? t('common.enabled') : t('common.disabled')}
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:bg-accent rounded px-1 py-0.5 -mx-1 transition-colors"
+                        onClick={() => {
+                          if (selectedApp.workspace_id) setCurrentWorkspaceId(selectedApp.workspace_id)
+                          navigate('/config/keyword-list')
+                        }}
+                      >
                         <span className="text-muted-foreground">{t('applicationManagement.blacklist')}:</span>
                         <Badge variant="destructive">{selectedApp.protection_summary.blacklist_count}</Badge>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:bg-accent rounded px-1 py-0.5 -mx-1 transition-colors"
+                        onClick={() => {
+                          if (selectedApp.workspace_id) setCurrentWorkspaceId(selectedApp.workspace_id)
+                          navigate('/config/keyword-list')
+                        }}
+                      >
                         <span className="text-muted-foreground">{t('applicationManagement.whitelist')}:</span>
                         <Badge variant="outline">{selectedApp.protection_summary.whitelist_count}</Badge>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div
+                        className="flex items-center gap-2 cursor-pointer hover:bg-accent rounded px-1 py-0.5 -mx-1 transition-colors"
+                        onClick={() => {
+                          if (selectedApp.workspace_id) setCurrentWorkspaceId(selectedApp.workspace_id)
+                          navigate('/config/answers')
+                        }}
+                      >
                         <span className="text-muted-foreground">{t('applicationManagement.knowledgeBase')}:</span>
                         <Badge variant="secondary">{selectedApp.protection_summary.knowledge_base_count}</Badge>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
                       </div>
                     </div>
                   </div>

@@ -116,7 +116,8 @@ class DetectionGuardrailService:
         tenant_id: str,
         request_id: str,
         model_sensitivity_trigger_level: Optional[str] = None,
-        application_id: Optional[str] = None
+        application_id: Optional[str] = None,
+        source: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Context-aware detection method - support messages structure for question-answer pairs
@@ -139,7 +140,8 @@ class DetectionGuardrailService:
             request=request,
             tenant_id=tenant_id,
             application_id=application_id,
-            model_sensitivity_trigger_level=model_sensitivity_trigger_level
+            model_sensitivity_trigger_level=model_sensitivity_trigger_level,
+            source=source
         )
         
         # Return format compatible with proxy API
@@ -160,7 +162,8 @@ class DetectionGuardrailService:
         user_agent: Optional[str] = None,
         tenant_id: Optional[str] = None,
         application_id: Optional[str] = None,
-        model_sensitivity_trigger_level: Optional[str] = None
+        model_sensitivity_trigger_level: Optional[str] = None,
+        source: Optional[str] = None
     ) -> GuardrailResponse:
         """Execute guardrail detection (only write log file)"""
         
@@ -173,7 +176,7 @@ class DetectionGuardrailService:
         # If no messages after truncation, return error
         if not truncated_messages:
             logger.warning(f"No valid messages after truncation for request {request_id}")
-            return await self._handle_error(request_id, "", "No valid messages after truncation", tenant_id, application_id)
+            return await self._handle_error(request_id, "", "No valid messages after truncation", tenant_id, application_id, source=source)
         
         # If application_id is not provided but tenant_id is, find default application
         if not application_id and tenant_id:
@@ -207,7 +210,7 @@ class DetectionGuardrailService:
             if blacklist_hit:
                 return await self._handle_blacklist_hit(
                     request_id, user_content, blacklist_name, blacklist_keywords,
-                    ip_address, user_agent, tenant_id, application_id
+                    ip_address, user_agent, tenant_id, application_id, source=source
                 )
 
             whitelist_hit, whitelist_name, whitelist_keywords = await keyword_cache.check_whitelist(
@@ -216,7 +219,7 @@ class DetectionGuardrailService:
             if whitelist_hit:
                 return await self._handle_whitelist_hit(
                     request_id, user_content, whitelist_name, whitelist_keywords,
-                    ip_address, user_agent, tenant_id, application_id
+                    ip_address, user_agent, tenant_id, application_id, source=source
                 )
             
             # 2. Data security detection
@@ -378,7 +381,7 @@ class DetectionGuardrailService:
                 suggest_action, suggest_answer, model_response,
                 ip_address, user_agent, tenant_id, application_id, sensitivity_score,
                 has_image=has_image, image_count=len(saved_image_paths), image_paths=saved_image_paths,
-                matched_scanner_tags=matched_scanner_tags
+                matched_scanner_tags=matched_scanner_tags, source=source
             )
 
             # 7. Construct response
@@ -400,7 +403,7 @@ class DetectionGuardrailService:
         except Exception as e:
             logger.error(f"Guardrail check error: {e}")
             # When an error occurs, return safe default response
-            return await self._handle_error(request_id, user_content, str(e), tenant_id, application_id)
+            return await self._handle_error(request_id, user_content, str(e), tenant_id, application_id, source=source)
     
     def _extract_user_content(self, messages: List[Message]) -> str:
         """Extract complete conversation content
@@ -911,8 +914,8 @@ class DetectionGuardrailService:
         self, request_id: str, content: str, list_name: str,
         keywords: List[str], ip_address: Optional[str], user_agent: Optional[str],
         tenant_id: Optional[str] = None,
-        application_id: Optional[str] = None
-    ) -> GuardrailResponse:
+        application_id: Optional[str] = None,
+        source: Optional[str] = None    ) -> GuardrailResponse:
         """Handle blacklist hit"""
 
         # Get user's language preference
@@ -960,7 +963,8 @@ class DetectionGuardrailService:
             "compliance_categories": [list_name],
             "data_risk_level": "no_risk",
             "data_categories": [],
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source": source,
         }
         await async_detection_logger.log_detection(detection_data)
 
@@ -980,7 +984,8 @@ class DetectionGuardrailService:
         self, request_id: str, content: str, list_name: str,
         keywords: List[str], ip_address: Optional[str], user_agent: Optional[str],
         tenant_id: Optional[str] = None,
-        application_id: Optional[str] = None
+        application_id: Optional[str] = None,
+        source: Optional[str] = None
     ) -> GuardrailResponse:
         """Handle whitelist hit"""
 
@@ -1001,7 +1006,8 @@ class DetectionGuardrailService:
             "compliance_categories": [],
             "data_risk_level": "no_risk",
             "data_categories": [],
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "source": source
         }
         await async_detection_logger.log_detection(detection_data)
 
@@ -1019,27 +1025,61 @@ class DetectionGuardrailService:
     
     @staticmethod
     def _mask_sensitive_entities(text: str, detected_entities: List[Dict[str, Any]]) -> str:
-        """Replace detected sensitive entity texts with asterisks in the given text.
+        """Replace detected sensitive entity texts using each entity's configured anonymization method.
 
         Uses text-based replacement (not position-based) so it works even when
         the detected entities came from a different text extraction than the logged content.
         Longer entity texts are replaced first to avoid partial replacements.
+
+        Default is 'replace' which substitutes with <entity_type_name>.
+        For genai/genai_code methods, falls back to replace since model calls are too expensive for logging.
         """
         if not text or not detected_entities:
             return text
 
-        # Collect unique entity texts, sort by length descending to replace longer matches first
-        entity_texts = sorted(
-            {entity['text'] for entity in detected_entities if entity.get('text')},
-            key=len,
-            reverse=True,
-        )
+        # Build a mapping from entity text to its replacement, longest first
+        # If the same text is detected by multiple entity types, the first one wins
+        replacements = {}
+        for entity in sorted(detected_entities, key=lambda e: len(e.get('text', '')), reverse=True):
+            et = entity.get('text')
+            if not et or et in replacements:
+                continue
+
+            method = entity.get('anonymization_method', 'replace')
+            config = entity.get('anonymization_config') or {}
+            entity_type_name = entity.get('entity_type_name') or entity.get('entity_type', 'UNKNOWN')
+
+            if method == 'mask':
+                mask_char = config.get('mask_char', '*')
+                keep_prefix = config.get('keep_prefix', 0)
+                keep_suffix = config.get('keep_suffix', 0)
+                if len(et) <= keep_prefix + keep_suffix:
+                    replacements[et] = et
+                else:
+                    prefix = et[:keep_prefix] if keep_prefix > 0 else ''
+                    suffix = et[-keep_suffix:] if keep_suffix > 0 else ''
+                    middle_length = len(et) - keep_prefix - keep_suffix
+                    replacements[et] = prefix + mask_char * middle_length + suffix
+            elif method == 'hash':
+                import hashlib
+                replacements[et] = hashlib.sha256(et.encode()).hexdigest()[:16]
+            elif method == 'regex_replace':
+                import re
+                pattern = config.get('pattern', '')
+                replacement_template = config.get('replacement', f'<{entity_type_name}>')
+                try:
+                    replacements[et] = re.sub(pattern, replacement_template, et) if pattern else f'<{entity_type_name}>'
+                except re.error:
+                    replacements[et] = f'<{entity_type_name}>'
+            else:
+                # 'replace' (default), 'genai', 'genai_natural', 'genai_code', 'encrypt', 'shuffle', 'random'
+                # For logging, use configured replacement or default to <entity_type_name>
+                replacements[et] = config.get('replacement', f'<{entity_type_name}>')
 
         masked = text
-        for entity_text in entity_texts:
-            if entity_text and entity_text in masked:
-                masked = masked.replace(entity_text, '***')
-
+        for et, replacement in replacements.items():
+            if et in masked:
+                masked = masked.replace(et, replacement)
         return masked
 
     async def _log_detection_result(
@@ -1050,8 +1090,7 @@ class DetectionGuardrailService:
         tenant_id: Optional[str] = None, application_id: Optional[str] = None,
         sensitivity_score: Optional[float] = None,
         has_image: bool = False, image_count: int = 0, image_paths: List[str] = None,
-        matched_scanner_tags: List[str] = None
-    ):
+        matched_scanner_tags: List[str] = None, source: Optional[str] = None    ):
         """Asynchronously record detection results to log file (not write to database)"""
 
         # Clean NUL characters from content
@@ -1086,11 +1125,12 @@ class DetectionGuardrailService:
             "has_image": has_image,
             "image_count": image_count,
             "image_paths": image_paths or [],
-            "matched_scanner_tags": matched_scanner_tags or []
+            "matched_scanner_tags": matched_scanner_tags or [],
+            "source": source,
         }
         await async_detection_logger.log_detection(detection_data)
-    
-    async def _handle_error(self, request_id: str, content: str, error: str, tenant_id: Optional[str] = None, application_id: Optional[str] = None) -> GuardrailResponse:
+
+    async def _handle_error(self, request_id: str, content: str, error: str, tenant_id: Optional[str] = None, application_id: Optional[str] = None, source: Optional[str] = None) -> GuardrailResponse:
         """Handle error situation"""
 
         detection_data = {
@@ -1110,7 +1150,8 @@ class DetectionGuardrailService:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "hit_keywords": None,
             "ip_address": None,
-            "user_agent": None
+            "user_agent": None,
+            "source": source,
         }
         await async_detection_logger.log_detection(detection_data)
 

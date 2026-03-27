@@ -51,7 +51,7 @@ def create_user(db: Session, email: str, password: str) -> Tenant:
 
 def create_default_application_and_key(db: Session, tenant_id: Union[str, uuid.UUID], tenant_email: str) -> Optional[dict]:
     """
-    Create default application and API key for new user.
+    Create global workspace, default application and API key for new user.
 
     The application API key is separate from the tenant API key:
     - Tenant API key: Used for auto-discovery mode (with X-OG-Application-ID header)
@@ -65,13 +65,23 @@ def create_default_application_and_key(db: Session, tenant_id: Union[str, uuid.U
         if isinstance(tenant_id, str):
             tenant_id = uuid.UUID(tenant_id)
 
-        # Create default application
+        # Create global workspace with default configs
+        from services.workspace_resolver import ensure_global_workspace
+        global_ws_id = ensure_global_workspace(db, str(tenant_id))
+        db.flush()
+
+        # Initialize default workspace configs if they don't exist
+        _initialize_global_workspace_configs(db, global_ws_id, str(tenant_id))
+        db.flush()
+
+        # Create default application in the global workspace
         app = Application(
             tenant_id=tenant_id,
             name="Default Application",
             description="Default application created automatically",
             is_active=True,
-            source='manual'
+            source='manual',
+            workspace_id=global_ws_id,
         )
         db.add(app)
         db.flush()  # Flush to get the app.id
@@ -92,19 +102,7 @@ def create_default_application_and_key(db: Session, tenant_id: Union[str, uuid.U
         db.add(key)
         db.flush()
 
-        # NOTE: We intentionally do NOT update tenant.api_key here.
-        # The tenant API key and application API key serve different purposes:
-        # - Tenant API key: For auto-discovery mode (tenant API key + X-OG-Application-ID header)
-        # - Application API key: For direct API calls to this specific application
-
-        # Initialize application configurations (risk config, ban policy, entity types)
-        try:
-            from routers.applications import initialize_application_configs
-            initialize_application_configs(db, str(app.id), str(tenant_id))
-            logger.info(f"Created default application '{app.name}' with API key for tenant {tenant_email}")
-        except Exception as e:
-            logger.error(f"Failed to initialize configs for default application: {e}")
-            # Continue anyway - the app and key are created
+        logger.info(f"Created default application '{app.name}' with API key in global workspace for tenant {tenant_email}")
 
         db.commit()
 
@@ -118,6 +116,79 @@ def create_default_application_and_key(db: Session, tenant_id: Union[str, uuid.U
         logger.error(f"Failed to create default application for tenant {tenant_email}: {e}")
         db.rollback()
         return None
+
+
+def _initialize_global_workspace_configs(db: Session, workspace_id: str, tenant_id: str):
+    """Initialize default configurations for a global workspace."""
+    from database.models import (
+        RiskTypeConfig, BanPolicy, DataSecurityEntityType,
+        ApplicationDataLeakagePolicy
+    )
+    from services.scanner_config_service import ScannerConfigService
+
+    ws_uuid = uuid.UUID(str(workspace_id))
+    tenant_uuid = uuid.UUID(str(tenant_id))
+
+    # 1. RiskTypeConfig (all enabled by default)
+    existing = db.query(RiskTypeConfig).filter(RiskTypeConfig.workspace_id == ws_uuid).first()
+    if not existing:
+        db.add(RiskTypeConfig(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            s1_enabled=True, s2_enabled=True, s3_enabled=True, s4_enabled=True,
+            s5_enabled=True, s6_enabled=True, s7_enabled=True, s8_enabled=True,
+            s9_enabled=True, s10_enabled=True, s11_enabled=True, s12_enabled=True,
+            s13_enabled=True, s14_enabled=True, s15_enabled=True, s16_enabled=True,
+            s17_enabled=True, s18_enabled=True, s19_enabled=True, s20_enabled=True,
+            s21_enabled=True,
+            low_sensitivity_threshold=0.95,
+            medium_sensitivity_threshold=0.60,
+            high_sensitivity_threshold=0.40,
+            sensitivity_trigger_level="medium"
+        ))
+
+    # 2. BanPolicy (disabled by default)
+    existing_ban = db.query(BanPolicy).filter(BanPolicy.workspace_id == ws_uuid).first()
+    if not existing_ban:
+        db.add(BanPolicy(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            enabled=False, risk_level='high_risk',
+            trigger_count=3, time_window_minutes=10, ban_duration_minutes=1440
+        ))
+
+    # 3. DataSecurityEntityTypes (copy from system templates)
+    existing_entities = db.query(DataSecurityEntityType).filter(
+        DataSecurityEntityType.workspace_id == ws_uuid
+    ).count()
+    if existing_entities == 0:
+        system_templates = db.query(DataSecurityEntityType).filter(
+            DataSecurityEntityType.source_type == 'system_template',
+            DataSecurityEntityType.application_id.is_(None),
+            DataSecurityEntityType.workspace_id.is_(None),
+        ).all()
+        for template in system_templates:
+            db.add(DataSecurityEntityType(
+                tenant_id=tenant_uuid, workspace_id=ws_uuid,
+                entity_type=template.entity_type,
+                entity_type_name=template.entity_type_name,
+                category=template.category,
+                recognition_method=template.recognition_method,
+                recognition_config=(template.recognition_config or {}).copy() if isinstance(template.recognition_config, dict) else {},
+                anonymization_method=template.anonymization_method,
+                anonymization_config=(template.anonymization_config or {}).copy() if isinstance(template.anonymization_config, dict) else {},
+                is_active=True, is_global=False,
+                source_type='system_copy', template_id=template.id,
+            ))
+
+    # 4. Scanner configs
+    try:
+        scanner_service = ScannerConfigService(db)
+        scanner_service.initialize_default_configs(
+            application_id=None,
+            tenant_id=tenant_uuid,
+            workspace_id=ws_uuid,
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize scanner configs for global workspace: {e}")
 
 def verify_user_email(db: Session, email: str, verification_code: str) -> bool:
     """Verify tenant email"""
@@ -402,7 +473,12 @@ def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, 
 
     if app:
         logger.debug(f"Found existing application for external_id '{external_id}': app_id={app.id}")
-        # Assign to workspace if specified and not already assigned
+        # Ensure app is in a workspace (migration safety)
+        if not app.workspace_id:
+            from services.workspace_resolver import ensure_global_workspace
+            app.workspace_id = ensure_global_workspace(db, str(tenant_id))
+            db.flush()
+        # Assign to specific workspace if specified
         if workspace_external_name and not app.workspace_id:
             _assign_app_to_workspace(db, app, tenant_id, workspace_external_name)
         return {
@@ -411,29 +487,25 @@ def get_or_create_application_by_external_id(db: Session, tenant_id: Union[str, 
             "is_new": False
         }
 
-    # 2. Auto-create new application
+    # 2. Auto-create new application (assigned to global workspace, no app-level configs)
     try:
+        # Ensure global workspace exists
+        from services.workspace_resolver import ensure_global_workspace
+        global_ws_id = ensure_global_workspace(db, str(tenant_id))
+
         new_app = Application(
             tenant_id=tenant_id,
             name=external_id,  # Use external_id as application name
             description=f"Auto-discovered from gateway: {external_id}",
             external_id=external_id,
             source='auto_discovery',
-            is_active=True
+            is_active=True,
+            workspace_id=global_ws_id,  # All apps must be in a workspace
         )
         db.add(new_app)
         db.flush()  # Get the app ID
 
-        # 3. Initialize application configurations
-        try:
-            from routers.applications import initialize_application_configs
-            initialize_application_configs(db, str(new_app.id), str(tenant_id))
-            logger.info(f"Initialized configs for auto-discovered application '{external_id}'")
-        except Exception as e:
-            logger.warning(f"Failed to initialize configs for auto-discovered app '{external_id}': {e}")
-            # Continue anyway - the app is created
-
-        # Assign to workspace if specified
+        # Assign to specific workspace if specified (overrides global)
         if workspace_external_name:
             _assign_app_to_workspace(db, new_app, tenant_id, workspace_external_name)
 

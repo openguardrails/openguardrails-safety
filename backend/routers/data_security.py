@@ -15,6 +15,7 @@ from utils.subscription_check import (
     get_feature_availability
 )
 from config import settings
+from services.workspace_resolver import get_workspace_id_for_app
 
 logger = setup_logger()
 router = APIRouter(tags=["Data Security"])
@@ -25,6 +26,7 @@ async def get_entity_types(
     request: Request,
     risk_level: Optional[str] = None,
     is_active: Optional[bool] = None,
+    workspace_id: Optional[str] = None,
     db: Session = Depends(get_admin_db)
 ):
     """
@@ -32,11 +34,14 @@ async def get_entity_types(
     """
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        
+        # Use explicit workspace_id query param if provided, otherwise resolve from application
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(db, str(application_id)) if application_id else None
+
         service = DataSecurityService(db)
         entity_types = service.get_entity_types(
             tenant_id=str(current_user.id),
-            application_id=str(application_id),
+            workspace_id=workspace_id,
             risk_level=risk_level,
             is_active=is_active
         )
@@ -98,18 +103,25 @@ async def get_entity_type(
         import uuid
         
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        
-        # Query entity type - allow access if it belongs to the application or is a global template
+        workspace_id = get_workspace_id_for_app(db, str(application_id)) if application_id else None
+
+        # Query entity type - allow access if it belongs to the workspace or is a global template
         try:
             entity_type_uuid = uuid.UUID(entity_type_id)
         except (ValueError, AttributeError):
             raise HTTPException(status_code=400, detail="Invalid entity type ID format")
-        
+
         conditions = [DataSecurityEntityType.id == entity_type_uuid]
-        conditions.append(
-            (DataSecurityEntityType.application_id == application_id) |
-            (DataSecurityEntityType.source_type == 'system_template')
-        )
+        if workspace_id:
+            conditions.append(
+                (DataSecurityEntityType.workspace_id == workspace_id) |
+                (DataSecurityEntityType.source_type == 'system_template')
+            )
+        else:
+            conditions.append(
+                (DataSecurityEntityType.application_id == application_id) |
+                (DataSecurityEntityType.source_type == 'system_template')
+            )
         
         entity_type = db.query(DataSecurityEntityType).filter(and_(*conditions)).first()
         
@@ -153,6 +165,7 @@ async def get_entity_type(
 async def create_entity_type(
     data: dict,
     request: Request,
+    workspace_id: Optional[str] = None,
     db: Session = Depends(get_admin_db)
 ):
     """
@@ -167,6 +180,8 @@ async def create_entity_type(
     """
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(db, str(application_id)) if application_id else None
 
         recognition_method = data.get("recognition_method", "regex")
 
@@ -176,7 +191,7 @@ async def create_entity_type(
             logger.info(f"Auto-corrected recognition_method to 'genai' based on entity_definition presence")
 
         # 允许用户自定义脱敏方法，GenAI识别也可以使用任何脱敏方法
-        anonymization_method = data.get("anonymization_method", "mask")
+        anonymization_method = data.get("anonymization_method", "replace")
 
         # Check subscription for premium features (SaaS mode only)
         # GenAI recognition requires subscription
@@ -209,7 +224,7 @@ async def create_entity_type(
         service = DataSecurityService(db)
         entity_type = service.create_entity_type(
             tenant_id=str(current_user.id),
-            application_id=str(application_id),
+            workspace_id=workspace_id,
             entity_type=data.get("entity_type"),
             entity_type_name=data.get("entity_type_name"),
             risk_level=data.get("category", "medium"),  # category is risk_level in the service
@@ -232,7 +247,7 @@ async def create_entity_type(
             entity_type.restore_code_hash = hashlib.sha256(genai_code.encode()).hexdigest()
             db.commit()
 
-        logger.info(f"Entity type created: {data.get('entity_type')} for user: {current_user.email}, app: {application_id}")
+        logger.info(f"Entity type created: {data.get('entity_type')} for user: {current_user.email}, workspace: {workspace_id}")
 
         return {
             "success": True,
@@ -252,6 +267,7 @@ async def update_entity_type(
     entity_type_id: str,
     data: dict,
     request: Request,
+    workspace_id: Optional[str] = None,
     db: Session = Depends(get_admin_db)
 ):
     """
@@ -266,6 +282,8 @@ async def update_entity_type(
     """
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(db, str(application_id)) if application_id else None
 
         service = DataSecurityService(db)
 
@@ -348,14 +366,14 @@ async def update_entity_type(
         result = service.update_entity_type(
             entity_type_id=entity_type_id,
             tenant_id=str(current_user.id),
-            application_id=str(application_id),
+            workspace_id=workspace_id,
             **update_kwargs
         )
-        
+
         if not result:
             raise HTTPException(status_code=404, detail="Entity type not found or update failed")
-        
-        logger.info(f"Entity type updated: {entity_type_id} for user: {current_user.email}, app: {application_id}")
+
+        logger.info(f"Entity type updated: {entity_type_id} for user: {current_user.email}, workspace: {workspace_id}")
         
         return {
             "success": True,
@@ -373,11 +391,12 @@ async def update_entity_type(
 async def delete_entity_type(
     entity_type_id: str,
     request: Request,
+    workspace_id: Optional[str] = None,
     db: Session = Depends(get_admin_db)
 ):
     """
     Delete entity type
-    
+
     Permission rules:
     - system_template: Only super admin can delete
     - system_copy: Cannot delete (system will auto-recreate)
@@ -385,13 +404,17 @@ async def delete_entity_type(
     """
     try:
         current_user, application_id = get_current_user_and_application_from_request(request, db)
-        
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(db, str(application_id)) if application_id else None
+
         # First, check if the entity type exists and get its source_type
         from database.models import DataSecurityEntityType
         from sqlalchemy import and_
-        
+
         conditions = [DataSecurityEntityType.id == entity_type_id]
-        if application_id:
+        if workspace_id:
+            conditions.append(DataSecurityEntityType.workspace_id == workspace_id)
+        elif application_id:
             conditions.append(DataSecurityEntityType.application_id == application_id)
         else:
             conditions.append(DataSecurityEntityType.tenant_id == current_user.id)
@@ -423,13 +446,13 @@ async def delete_entity_type(
         success = service.delete_entity_type(
             entity_type_id=entity_type_id,
             tenant_id=str(current_user.id),
-            application_id=str(application_id) if application_id else None
+            workspace_id=workspace_id
         )
-        
+
         if not success:
             raise HTTPException(status_code=404, detail="Entity type not found or delete failed")
-        
-        logger.info(f"Entity type deleted: {entity_type_id} (type: {source_type}) for user: {current_user.email}, app: {application_id}")
+
+        logger.info(f"Entity type deleted: {entity_type_id} (type: {source_type}) for user: {current_user.email}, workspace: {workspace_id}")
         
         return {
             "success": True,
@@ -467,7 +490,7 @@ async def create_global_entity_type(
             logger.info(f"Auto-corrected recognition_method to 'genai' based on entity_definition presence")
 
         # 允许用户自定义脱敏方法，GenAI识别也可以使用任何脱敏方法
-        anonymization_method = data.get("anonymization_method", "mask")
+        anonymization_method = data.get("anonymization_method", "replace")
 
         service = DataSecurityService(db)
         entity_type = service.create_entity_type(

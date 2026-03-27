@@ -62,6 +62,8 @@ class DetectionResultResponse(BaseModel):
     image_urls: List[str] = []  # Signed image access URLs
     # Direct Model Access flag
     is_direct_model_access: bool = False  # Whether this is a direct model access call
+    # Detection source: guardrail_api, proxy, gateway, direct_model, content_scan
+    source: Optional[str] = None
     # Application and workspace info (for global results view)
     application_id: Optional[str] = None
     application_name: Optional[str] = None

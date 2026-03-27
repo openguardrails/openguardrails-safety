@@ -2,18 +2,20 @@ import time
 import asyncio
 from typing import Dict, Optional, List
 from sqlalchemy.orm import Session
-from database.models import ResponseTemplate
+from database.models import ResponseTemplate, Application
 from database.connection import get_db_session
 from utils.logger import setup_logger
 
 logger = setup_logger()
 
 class TemplateCache:
-    """Response template cache service (application-scoped)"""
+    """Response template cache service (workspace-scoped)"""
 
     def __init__(self, cache_ttl: int = 600):  # 10 minutes cache, template changes rarely
-        # Multi-application template cache structure: {application_id: {category: {is_default: template_content}}}
+        # Workspace-scoped template cache structure: {workspace_id: {category: {is_default: template_content}}}
         self._template_cache: Dict[str, Dict[str, Dict[bool, str]]] = {}
+        # App-to-workspace mapping cache: {application_id: workspace_id}
+        self._app_workspace_map: Dict[str, str] = {}
         self._cache_timestamp = 0
         self._cache_ttl = cache_ttl
         self._lock = asyncio.Lock()
@@ -25,12 +27,16 @@ class TemplateCache:
         Args:
             categories: Risk categories
             tenant_id: DEPRECATED - kept for backward compatibility
-            application_id: Application ID to get templates for
+            application_id: Application ID (resolved to workspace_id for lookup)
         """
         await self._ensure_cache_fresh()
 
-        # Prefer application_id, fallback to tenant_id
-        cache_key = application_id if application_id else tenant_id
+        # Resolve application_id to workspace_id for cache lookup
+        cache_key = None
+        if application_id:
+            cache_key = self._app_workspace_map.get(str(application_id))
+        if not cache_key:
+            cache_key = tenant_id
 
         if not categories:
             return self._get_default_answer(cache_key)
@@ -98,7 +104,7 @@ class TemplateCache:
             
             # Find template by highest risk level
             for category_key, risk_level, priority in category_risk_mapping:
-                # First find template for "current application" (non-default priority), if not found, fallback to global default
+                # First find template for "current workspace" (non-default priority), if not found, fallback to global default
                 app_cache = self._template_cache.get(str(cache_key or "__none__"), {})
                 if category_key in app_cache:
                     templates = app_cache[category_key]
@@ -122,7 +128,7 @@ class TemplateCache:
 
     def _get_default_answer(self, cache_key: Optional[str]) -> str:
         """Get default answer"""
-        # First find application-defined default
+        # First find workspace-defined default
         app_cache = self._template_cache.get(str(cache_key or "__none__"), {})
         if "default" in app_cache and True in app_cache["default"]:
             return app_cache["default"][True]
@@ -143,36 +149,53 @@ class TemplateCache:
                     await self._refresh_cache()
     
     async def _refresh_cache(self):
-        """Refresh cache (application-scoped)"""
+        """Refresh cache (workspace-scoped)"""
         try:
             db = get_db_session()
             try:
-                # Load all enabled response templates (grouped by application, None represents global default template)
+                # Build app-to-workspace mapping
+                app_workspace_map: Dict[str, str] = {}
+                app_records = db.query(Application.id, Application.workspace_id).filter(
+                    Application.workspace_id.isnot(None)
+                ).all()
+                for app in app_records:
+                    app_workspace_map[str(app.id)] = str(app.workspace_id)
+                self._app_workspace_map = app_workspace_map
+
+                # Load all enabled response templates, keyed by workspace_id
                 templates = db.query(ResponseTemplate).filter_by(is_active=True).all()
                 new_cache: Dict[str, Dict[str, Dict[bool, str]]] = {}
                 for template in templates:
-                    # Use application_id as cache key, None represents global templates
-                    app_key = str(template.application_id) if template.application_id is not None else "__global__"
+                    if template.application_id is not None:
+                        # Resolve application_id to workspace_id
+                        ws_key = app_workspace_map.get(str(template.application_id))
+                        if not ws_key:
+                            # Fallback: skip templates for apps without a workspace
+                            continue
+                    else:
+                        # Global templates (no application_id)
+                        ws_key = "__global__"
+
                     category = template.category
                     is_default = template.is_default
                     content = template.template_content
 
-                    if app_key not in new_cache:
-                        new_cache[app_key] = {}
-                    if category not in new_cache[app_key]:
-                        new_cache[app_key][category] = {}
-                    new_cache[app_key][category][is_default] = content
+                    if ws_key not in new_cache:
+                        new_cache[ws_key] = {}
+                    if category not in new_cache[ws_key]:
+                        new_cache[ws_key][category] = {}
+                    new_cache[ws_key][category][is_default] = content
 
                 # Atomic update cache
                 self._template_cache = new_cache
                 self._cache_timestamp = time.time()
 
                 template_count = sum(
-                    sum(len(templates) for templates in app_categories.values())
-                    for app_categories in new_cache.values()
+                    sum(len(templates) for templates in ws_categories.values())
+                    for ws_categories in new_cache.values()
                 )
                 logger.debug(
-                    f"Template cache refreshed - Applications: {len(new_cache)}, Templates: {template_count}"
+                    f"Template cache refreshed - Workspaces: {len(new_cache)}, Templates: {template_count}, App mappings: {len(app_workspace_map)}"
                 )
 
             finally:
@@ -195,8 +218,9 @@ class TemplateCache:
         )
 
         return {
-            "applications": len(self._template_cache),
+            "workspaces": len(self._template_cache),
             "templates": template_count,
+            "app_workspace_mappings": len(self._app_workspace_map),
             "last_refresh": self._cache_timestamp,
             "cache_age_seconds": time.time() - self._cache_timestamp if self._cache_timestamp > 0 else 0
         }

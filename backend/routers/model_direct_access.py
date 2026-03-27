@@ -249,7 +249,8 @@ async def track_direct_model_access(
             image_count=0,
             image_paths=[],
             ip_address=ip_address,
-            user_agent=user_agent
+            user_agent=user_agent,
+            source="direct_model"
         )
 
         db.add(detection_result)

@@ -107,6 +107,7 @@ async def _log_scan_result(
             "user_agent": user_agent,
             "url": url,
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "source": "content_scan",
         }
         await async_detection_logger.log_detection(detection_data)
     except Exception as e:

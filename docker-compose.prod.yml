@@ -64,6 +64,10 @@ services:
       - DEBUG=${DEBUG:-false}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-in-production}
 
+      # Encryption key for upstream API key persistence across Docker rebuilds
+      # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+
       # Deployment mode configuration
       # 'enterprise': Private enterprise deployment (default) - no subscription, no third-party package marketplace
       # 'saas': SaaS deployment - with subscription system and third-party package marketplace

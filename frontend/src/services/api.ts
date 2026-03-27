@@ -668,8 +668,11 @@ export const knowledgeBaseApi = {
 // Data security API
 export const dataSecurityApi = {
   // Get all sensitive data types
-  getEntityTypes: (): Promise<{ items: any[] }> =>
-    api.get('/api/v1/config/data-security/entity-types').then(res => res.data),
+  getEntityTypes: (overrideWorkspaceId?: string): Promise<{ items: any[] }> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.get('/api/v1/config/data-security/entity-types', { params }).then(res => res.data)
+  },
 
   // Alias for getEntityTypes (for consistency with Results page)
   list: (): Promise<{ items: any[] }> =>
@@ -680,16 +683,25 @@ export const dataSecurityApi = {
     api.get(`/api/v1/config/data-security/entity-types/${id}`).then(res => res.data),
 
   // Create sensitive data type
-  createEntityType: (data: any): Promise<any> =>
-    api.post('/api/v1/config/data-security/entity-types', data).then(res => res.data),
+  createEntityType: (data: any, overrideWorkspaceId?: string): Promise<any> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.post('/api/v1/config/data-security/entity-types', data, { params }).then(res => res.data)
+  },
 
   // Update sensitive data type
-  updateEntityType: (id: string, data: any): Promise<any> =>
-    api.put(`/api/v1/config/data-security/entity-types/${id}`, data).then(res => res.data),
+  updateEntityType: (id: string, data: any, overrideWorkspaceId?: string): Promise<any> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.put(`/api/v1/config/data-security/entity-types/${id}`, data, { params }).then(res => res.data)
+  },
 
   // Delete sensitive data type
-  deleteEntityType: (id: string): Promise<any> =>
-    api.delete(`/api/v1/config/data-security/entity-types/${id}`).then(res => res.data),
+  deleteEntityType: (id: string, overrideWorkspaceId?: string): Promise<any> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.delete(`/api/v1/config/data-security/entity-types/${id}`, { params }).then(res => res.data)
+  },
 
   // Create global sensitive data type (only admin)
   createGlobalEntityType: (data: any): Promise<any> =>
@@ -910,13 +922,19 @@ export const scannerConfigsApi = {
 };
 
 export const customScannersApi = {
-  // Get all custom scanners for application
-  getAll: (): Promise<any[]> =>
-    api.get('/api/v1/custom-scanners').then(res => res.data),
+  // Get all custom scanners for workspace
+  getAll: (overrideWorkspaceId?: string): Promise<any[]> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.get('/api/v1/custom-scanners', { params }).then(res => res.data)
+  },
 
   // Get custom scanner by ID
-  get: (scannerId: string): Promise<any> =>
-    api.get(`/api/v1/custom-scanners/${scannerId}`).then(res => res.data),
+  get: (scannerId: string, overrideWorkspaceId?: string): Promise<any> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.get(`/api/v1/custom-scanners/${scannerId}`, { params }).then(res => res.data)
+  },
 
   // Create custom scanner
   create: (scannerData: {
@@ -927,16 +945,25 @@ export const customScannersApi = {
     scan_prompt?: boolean;
     scan_response?: boolean;
     notes?: string;
-  }): Promise<any> =>
-    api.post('/api/v1/custom-scanners', scannerData).then(res => res.data),
+  }, overrideWorkspaceId?: string): Promise<any> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.post('/api/v1/custom-scanners', scannerData, { params }).then(res => res.data)
+  },
 
   // Update custom scanner
-  update: (scannerId: string, updates: any): Promise<any> =>
-    api.put(`/api/v1/custom-scanners/${scannerId}`, updates).then(res => res.data),
+  update: (scannerId: string, updates: any, overrideWorkspaceId?: string): Promise<any> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.put(`/api/v1/custom-scanners/${scannerId}`, updates, { params }).then(res => res.data)
+  },
 
   // Delete custom scanner
-  delete: (scannerId: string): Promise<{ success: boolean; message: string }> =>
-    api.delete(`/api/v1/custom-scanners/${scannerId}`).then(res => res.data),
+  delete: (scannerId: string, overrideWorkspaceId?: string): Promise<{ success: boolean; message: string }> => {
+    const workspaceId = overrideWorkspaceId ?? localStorage.getItem('current_workspace_id')
+    const params = workspaceId ? { workspace_id: workspaceId } : {}
+    return api.delete(`/api/v1/custom-scanners/${scannerId}`, { params }).then(res => res.data)
+  },
 };
 
 export const purchasesApi = {

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Shield, AlertTriangle, Lock, Save } from 'lucide-react'
 import { useCanEdit } from '../../hooks/useCanEdit'
-import { gatewayPolicyApi } from '../../services/api'
+import api, { gatewayPolicyApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useApplication } from '../../contexts/ApplicationContext'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -59,12 +59,18 @@ interface GatewayPolicy {
   available_private_models: PrivateModel[]
 }
 
-const SecurityPolicy: React.FC = () => {
+interface SecurityPolicyProps {
+  workspaceId?: string
+}
+
+const SecurityPolicy: React.FC<SecurityPolicyProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
   const canEdit = useCanEdit()
   const { onUserSwitch } = useAuth()
   const { currentApplicationId } = useApplication()
+  const wsPrefix = workspaceId ? `/api/v1/workspaces/${workspaceId}/config` : null
   const [policy, setPolicy] = useState<GatewayPolicy | null>(null)
+  const [wsPrivateModels, setWsPrivateModels] = useState<PrivateModel[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'general' | 'data-leakage'>('general')
@@ -93,31 +99,104 @@ const SecurityPolicy: React.FC = () => {
 
   // Fetch policy
   const fetchPolicy = async () => {
-    if (!currentApplicationId) return
+    if (!wsPrefix && !currentApplicationId) return
 
     setLoading(true)
     try {
-      const data = await gatewayPolicyApi.getPolicy(currentApplicationId)
-      setPolicy(data)
-      setFormData({
-        // General risk - Input
-        general_input_high_risk_action: data.general_input_high_risk_action_override || data.general_input_high_risk_action || 'block',
-        general_input_medium_risk_action: data.general_input_medium_risk_action_override || data.general_input_medium_risk_action || 'replace',
-        general_input_low_risk_action: data.general_input_low_risk_action_override || data.general_input_low_risk_action || 'pass',
-        // General risk - Output
-        general_output_high_risk_action: data.general_output_high_risk_action_override || data.general_output_high_risk_action || 'block',
-        general_output_medium_risk_action: data.general_output_medium_risk_action_override || data.general_output_medium_risk_action || 'replace',
-        general_output_low_risk_action: data.general_output_low_risk_action_override || data.general_output_low_risk_action || 'pass',
-        // Data leakage - Input
-        input_high_risk_action: data.input_high_risk_action_override || data.input_high_risk_action || 'block',
-        input_medium_risk_action: data.input_medium_risk_action_override || data.input_medium_risk_action || 'anonymize',
-        input_low_risk_action: data.input_low_risk_action_override || data.input_low_risk_action || 'pass',
-        // Data leakage - Output
-        output_high_risk_action: data.output_high_risk_action_override || data.output_high_risk_action || 'block',
-        output_medium_risk_action: data.output_medium_risk_action_override || data.output_medium_risk_action || 'anonymize',
-        output_low_risk_action: data.output_low_risk_action_override || data.output_low_risk_action || 'pass',
-        private_model_id: data.private_model_override,
-      })
+      if (wsPrefix) {
+        // Workspace mode: fetch from workspace endpoints
+        const data = await api.get(`${wsPrefix}/data-leakage-policy`).then(res => res.data)
+        // Store available private models from workspace response
+        setWsPrivateModels(data.available_private_models || [])
+        // Workspace endpoint returns flat fields (no _override suffix)
+        // In workspace mode, always set a policy object (with defaults if not exists)
+        // so the form is always visible and editable
+        const defaults = {
+          general_input_high_risk_action: 'block',
+          general_input_medium_risk_action: 'replace',
+          general_input_low_risk_action: 'pass',
+          general_output_high_risk_action: 'block',
+          general_output_medium_risk_action: 'replace',
+          general_output_low_risk_action: 'pass',
+          input_high_risk_action: 'block',
+          input_medium_risk_action: 'anonymize',
+          input_low_risk_action: 'pass',
+          output_high_risk_action: 'block',
+          output_medium_risk_action: 'anonymize',
+          output_low_risk_action: 'pass',
+        }
+        const vals = data.exists ? {
+          general_input_high_risk_action: data.general_input_high_risk_action || defaults.general_input_high_risk_action,
+          general_input_medium_risk_action: data.general_input_medium_risk_action || defaults.general_input_medium_risk_action,
+          general_input_low_risk_action: data.general_input_low_risk_action || defaults.general_input_low_risk_action,
+          general_output_high_risk_action: data.general_output_high_risk_action || defaults.general_output_high_risk_action,
+          general_output_medium_risk_action: data.general_output_medium_risk_action || defaults.general_output_medium_risk_action,
+          general_output_low_risk_action: data.general_output_low_risk_action || defaults.general_output_low_risk_action,
+          input_high_risk_action: data.input_high_risk_action || defaults.input_high_risk_action,
+          input_medium_risk_action: data.input_medium_risk_action || defaults.input_medium_risk_action,
+          input_low_risk_action: data.input_low_risk_action || defaults.input_low_risk_action,
+          output_high_risk_action: data.output_high_risk_action || defaults.output_high_risk_action,
+          output_medium_risk_action: data.output_medium_risk_action || defaults.output_medium_risk_action,
+          output_low_risk_action: data.output_low_risk_action || defaults.output_low_risk_action,
+          private_model_id: data.private_model_id || null,
+        } : { ...defaults, private_model_id: null as string | null }
+
+        setPolicy({
+          id: workspaceId!,
+          application_id: '',
+          general_input_high_risk_action: vals.general_input_high_risk_action,
+          general_input_medium_risk_action: vals.general_input_medium_risk_action,
+          general_input_low_risk_action: vals.general_input_low_risk_action,
+          general_input_high_risk_action_override: vals.general_input_high_risk_action,
+          general_input_medium_risk_action_override: vals.general_input_medium_risk_action,
+          general_input_low_risk_action_override: vals.general_input_low_risk_action,
+          general_output_high_risk_action: vals.general_output_high_risk_action,
+          general_output_medium_risk_action: vals.general_output_medium_risk_action,
+          general_output_low_risk_action: vals.general_output_low_risk_action,
+          general_output_high_risk_action_override: vals.general_output_high_risk_action,
+          general_output_medium_risk_action_override: vals.general_output_medium_risk_action,
+          general_output_low_risk_action_override: vals.general_output_low_risk_action,
+          input_high_risk_action: vals.input_high_risk_action,
+          input_medium_risk_action: vals.input_medium_risk_action,
+          input_low_risk_action: vals.input_low_risk_action,
+          input_high_risk_action_override: vals.input_high_risk_action,
+          input_medium_risk_action_override: vals.input_medium_risk_action,
+          input_low_risk_action_override: vals.input_low_risk_action,
+          output_high_risk_action: vals.output_high_risk_action,
+          output_medium_risk_action: vals.output_medium_risk_action,
+          output_low_risk_action: vals.output_low_risk_action,
+          output_high_risk_action_override: vals.output_high_risk_action,
+          output_medium_risk_action_override: vals.output_medium_risk_action,
+          output_low_risk_action_override: vals.output_low_risk_action,
+          private_model: null,
+          private_model_override: vals.private_model_id,
+          available_private_models: data.available_private_models || [],
+        })
+        setFormData(vals)
+      } else {
+        // Application mode: use existing gateway policy API
+        const data = await gatewayPolicyApi.getPolicy(currentApplicationId!)
+        setPolicy(data)
+        setFormData({
+          // General risk - Input
+          general_input_high_risk_action: data.general_input_high_risk_action_override || data.general_input_high_risk_action || 'block',
+          general_input_medium_risk_action: data.general_input_medium_risk_action_override || data.general_input_medium_risk_action || 'replace',
+          general_input_low_risk_action: data.general_input_low_risk_action_override || data.general_input_low_risk_action || 'pass',
+          // General risk - Output
+          general_output_high_risk_action: data.general_output_high_risk_action_override || data.general_output_high_risk_action || 'block',
+          general_output_medium_risk_action: data.general_output_medium_risk_action_override || data.general_output_medium_risk_action || 'replace',
+          general_output_low_risk_action: data.general_output_low_risk_action_override || data.general_output_low_risk_action || 'pass',
+          // Data leakage - Input
+          input_high_risk_action: data.input_high_risk_action_override || data.input_high_risk_action || 'block',
+          input_medium_risk_action: data.input_medium_risk_action_override || data.input_medium_risk_action || 'anonymize',
+          input_low_risk_action: data.input_low_risk_action_override || data.input_low_risk_action || 'pass',
+          // Data leakage - Output
+          output_high_risk_action: data.output_high_risk_action_override || data.output_high_risk_action || 'block',
+          output_medium_risk_action: data.output_medium_risk_action_override || data.output_medium_risk_action || 'anonymize',
+          output_low_risk_action: data.output_low_risk_action_override || data.output_low_risk_action || 'pass',
+          private_model_id: data.private_model_override,
+        })
+      }
     } catch (error) {
       console.error('Failed to fetch policy:', error)
       toast.error(t('gateway.fetchPolicyFailed'))
@@ -128,7 +207,7 @@ const SecurityPolicy: React.FC = () => {
 
   useEffect(() => {
     fetchPolicy()
-  }, [currentApplicationId])
+  }, [currentApplicationId, workspaceId])
 
   useEffect(() => {
     const unsubscribe = onUserSwitch(() => {
@@ -139,11 +218,17 @@ const SecurityPolicy: React.FC = () => {
 
   // Save policy
   const handleSave = async () => {
-    if (!currentApplicationId) return
+    if (!wsPrefix && !currentApplicationId) return
 
     setSaving(true)
     try {
-      await gatewayPolicyApi.updatePolicy(currentApplicationId, formData)
+      if (wsPrefix) {
+        // Workspace mode: save to workspace endpoint
+        await api.put(`${wsPrefix}/data-leakage-policy`, formData).then(res => res.data)
+      } else {
+        // Application mode: use existing gateway policy API
+        await gatewayPolicyApi.updatePolicy(currentApplicationId!, formData)
+      }
       toast.success(t('gateway.policySaved'))
       fetchPolicy()
     } catch (error) {
@@ -176,7 +261,8 @@ const SecurityPolicy: React.FC = () => {
     { value: 'pass', label: t('gateway.actionPass'), description: t('gateway.actionPassDesc') },
   ]
 
-  const hasPrivateModels = policy?.available_private_models && policy.available_private_models.length > 0
+  const availablePrivateModels = wsPrefix ? wsPrivateModels : (policy?.available_private_models || [])
+  const hasPrivateModels = availablePrivateModels.length > 0
 
   // Risk level row component
   const RiskLevelRow = ({
@@ -245,7 +331,7 @@ const SecurityPolicy: React.FC = () => {
     )
   }
 
-  if (!currentApplicationId) {
+  if (!workspaceId && !currentApplicationId) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
@@ -386,7 +472,7 @@ const SecurityPolicy: React.FC = () => {
                       <SelectItem value="default">
                         {t('gateway.useDefaultPrivateModel')}
                       </SelectItem>
-                      {policy?.available_private_models?.map((model) => (
+                      {availablePrivateModels?.map((model) => (
                         <SelectItem key={model.id} value={model.id}>
                           {model.config_name}
                           {model.is_default_private_model && ` [${t('gateway.defaultBadge')}]`}

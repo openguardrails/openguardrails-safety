@@ -16,7 +16,7 @@
 
 > **The only production-ready, fully open-source AI guardrails platform for enterprise data protection**
 
-**OpenGuardrails** is an **open-source AI security gateway** that prevents enterprise AI applications from leaking sensitive data to external model providerss — **without disrupting user workflows**.
+**OpenGuardrails** is an **open-source AI security gateway** that prevents enterprise AI applications from leaking sensitive data to external model providers — **without disrupting user workflows**.
 
 <p align="center">
     <a href="https://www.youtube.com/watch?v=b1ZRODONTm8" target="_blank">
@@ -28,7 +28,7 @@
 
 ## The Enterprise AI Data Masking Problem
 
-When employees use AI applications (Copilot, ChatGPT, internal AI agents), sensitive enterprise data flows to external model providerss:
+When employees use AI applications (Copilot, ChatGPT, internal AI agents), sensitive enterprise data flows to external model providers:
 
 - **PII**: Employee emails, customer phone numbers, government IDs
 - **Credentials**: API keys, database passwords, access tokens in code
@@ -42,7 +42,7 @@ When employees use AI applications (Copilot, ChatGPT, internal AI agents), sensi
 
 ## How It Works
 
-OpenGuardrails acts as an AI Gateway between your AI applications and model providerss, automatically detecting and protecting sensitive data:
+OpenGuardrails acts as an AI Gateway between your AI applications and model providers, automatically detecting and protecting sensitive data:
 <p align="center">
     <img src="frontend/public/arch.png" width="800"/>
 </p>

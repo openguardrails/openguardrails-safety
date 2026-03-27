@@ -67,7 +67,11 @@ interface EntityType {
   updated_at: string
 }
 
-const EntityTypeManagement: React.FC = () => {
+interface EntityTypeManagementProps {
+  workspaceId?: string
+}
+
+const EntityTypeManagement: React.FC<EntityTypeManagementProps> = ({ workspaceId }) => {
   const { t } = useTranslation()
   const canEdit = useCanEdit()
 
@@ -152,7 +156,7 @@ const EntityTypeManagement: React.FC = () => {
     pattern: z.string().optional(),
     entity_definition: z.string().optional(),
     // Anonymization method (no more anonymization_mode, use disposal action in policy instead)
-    anonymization_method: z.string().default('regex_replace'),
+    anonymization_method: z.string().default('replace'),
     // Regex masking configuration
     replace_text: z.string().optional(), // replace method replacement content
     mask_keep_prefix: z.string().optional(), // mask method keep prefix
@@ -221,7 +225,7 @@ const EntityTypeManagement: React.FC = () => {
       is_active: true,
       check_input: true,
       check_output: true,
-      anonymization_method: 'regex_replace',
+      anonymization_method: 'replace',
       is_global: false,
       mask_char: '*',
       mask_keep_prefix: '',
@@ -243,7 +247,7 @@ const EntityTypeManagement: React.FC = () => {
   useEffect(() => {
     loadEntityTypes()
     loadFeatureAvailability()
-  }, [])
+  }, [workspaceId])
 
   // Listen to user switch event, automatically refresh data
   useEffect(() => {
@@ -292,7 +296,7 @@ const EntityTypeManagement: React.FC = () => {
   const loadEntityTypes = async () => {
     setLoading(true)
     try {
-      const response = await dataSecurityApi.getEntityTypes()
+      const response = await dataSecurityApi.getEntityTypes(workspaceId)
       setEntityTypes(response.items || [])
     } catch (error) {
       toast.error(t('entityType.loadEntityTypesFailed'))
@@ -314,7 +318,7 @@ const EntityTypeManagement: React.FC = () => {
       is_active: true,
       check_input: true,
       check_output: true,
-      anonymization_method: 'regex_replace',
+      anonymization_method: 'replace',
       is_global: false,
       mask_char: '*',
       mask_keep_prefix: '',
@@ -409,7 +413,7 @@ const EntityTypeManagement: React.FC = () => {
     if (!confirmed) return
 
     try {
-      await dataSecurityApi.deleteEntityType(id)
+      await dataSecurityApi.deleteEntityType(id, workspaceId)
       toast.success(t('common.deleteSuccess'))
       loadEntityTypes()
     } catch (error) {
@@ -419,7 +423,7 @@ const EntityTypeManagement: React.FC = () => {
 
   const handleSubmit = async (values: z.infer<typeof formSchema>) => {
     const recognitionMethod = values.recognition_method || 'regex'
-    const anonymizationMethod = values.anonymization_method || 'regex_replace'
+    const anonymizationMethod = values.anonymization_method || 'replace'
 
     // Build anonymization configuration based on method
     let anonymization_config: any = {}
@@ -479,7 +483,7 @@ const EntityTypeManagement: React.FC = () => {
 
     try {
       if (editingEntity) {
-        await dataSecurityApi.updateEntityType(editingEntity.id, data)
+        await dataSecurityApi.updateEntityType(editingEntity.id, data, workspaceId)
         toast.success(t('common.updateSuccess'))
       } else {
         // Determine which API to call based on is_global field
@@ -487,7 +491,7 @@ const EntityTypeManagement: React.FC = () => {
           await dataSecurityApi.createGlobalEntityType(data)
           toast.success(t('entityType.createGlobalSuccess'))
         } else {
-          await dataSecurityApi.createEntityType(data)
+          await dataSecurityApi.createEntityType(data, workspaceId)
           toast.success(t('common.createSuccess'))
         }
       }

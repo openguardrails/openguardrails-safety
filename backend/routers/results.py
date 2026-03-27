@@ -91,6 +91,7 @@ def _enrich_result(result, app_map: dict, image_urls: list, truncate_content: bo
         image_paths=result.image_paths if hasattr(result, 'image_paths') else [],
         image_urls=image_urls,
         is_direct_model_access=result.is_direct_model_access if hasattr(result, 'is_direct_model_access') else False,
+        source=result.source if hasattr(result, 'source') else None,
         application_id=app_id_str,
         application_name=app_info.get("application_name"),
         workspace_id=app_info.get("workspace_id"),

@@ -14,6 +14,7 @@ from database.models import (
 )
 from utils.logger import setup_logger
 from services.response_template_service import ResponseTemplateService
+from services.workspace_resolver import get_workspace_id_for_app
 
 logger = setup_logger()
 
@@ -28,31 +29,53 @@ class CustomScannerService:
 
     def get_custom_scanners(
         self,
-        application_id: UUID
+        application_id: UUID,
+        workspace_id: str = None
     ) -> List[Dict[str, Any]]:
         """
-        Get all custom scanners for application.
+        Get all custom scanners for workspace.
 
         Args:
-            application_id: Application UUID
+            application_id: Application UUID (used to resolve workspace if workspace_id not provided)
+            workspace_id: Workspace UUID (preferred)
 
         Returns:
             List of custom scanner dicts
         """
-        custom_scanners = self.db.query(CustomScanner).join(Scanner).filter(
-            CustomScanner.application_id == application_id,
-            Scanner.is_active == True
-        ).all()
+        # Resolve workspace_id
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
+        if workspace_id:
+            custom_scanners = self.db.query(CustomScanner).join(Scanner).filter(
+                CustomScanner.workspace_id == workspace_id,
+                Scanner.is_active == True
+            ).all()
+        else:
+            # Fallback to application_id for backward compatibility
+            custom_scanners = self.db.query(CustomScanner).join(Scanner).filter(
+                CustomScanner.application_id == application_id,
+                Scanner.is_active == True
+            ).all()
 
         result = []
         for cs in custom_scanners:
             scanner = cs.scanner
+            ws_id = workspace_id or str(cs.workspace_id) if cs.workspace_id else None
 
-            # Get scanner config for is_enabled status
-            config = self.db.query(ApplicationScannerConfig).filter(
-                ApplicationScannerConfig.application_id == application_id,
-                ApplicationScannerConfig.scanner_id == scanner.id
-            ).first()
+            # Get scanner config for is_enabled status (workspace-level first, then app-level fallback)
+            config = None
+            if ws_id:
+                config = self.db.query(ApplicationScannerConfig).filter(
+                    ApplicationScannerConfig.workspace_id == ws_id,
+                    ApplicationScannerConfig.application_id.is_(None),
+                    ApplicationScannerConfig.scanner_id == scanner.id
+                ).first()
+            if not config:
+                config = self.db.query(ApplicationScannerConfig).filter(
+                    ApplicationScannerConfig.application_id == application_id,
+                    ApplicationScannerConfig.scanner_id == scanner.id
+                ).first()
 
             result.append({
                 'id': str(scanner.id),
@@ -77,7 +100,8 @@ class CustomScannerService:
     def get_custom_scanner(
         self,
         scanner_id: UUID,
-        application_id: UUID
+        application_id: UUID,
+        workspace_id: str = None
     ) -> Optional[Dict[str, Any]]:
         """
         Get custom scanner details.
@@ -85,26 +109,50 @@ class CustomScannerService:
         Args:
             scanner_id: Scanner UUID
             application_id: Application UUID
+            workspace_id: Workspace UUID
 
         Returns:
             Scanner dict or None
         """
-        cs = self.db.query(CustomScanner).join(Scanner).filter(
-            CustomScanner.application_id == application_id,
-            Scanner.id == scanner_id,
-            Scanner.is_active == True
-        ).first()
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
+        # Try workspace-level first
+        cs = None
+        if workspace_id:
+            cs = self.db.query(CustomScanner).join(Scanner).filter(
+                CustomScanner.workspace_id == workspace_id,
+                Scanner.id == scanner_id,
+                Scanner.is_active == True
+            ).first()
+
+        # Fallback to app-level
+        if not cs:
+            cs = self.db.query(CustomScanner).join(Scanner).filter(
+                CustomScanner.application_id == application_id,
+                Scanner.id == scanner_id,
+                Scanner.is_active == True
+            ).first()
 
         if not cs:
             return None
 
         scanner = cs.scanner
+        ws_id = workspace_id or (str(cs.workspace_id) if cs.workspace_id else None)
 
-        # Get scanner config for is_enabled status
-        config = self.db.query(ApplicationScannerConfig).filter(
-            ApplicationScannerConfig.application_id == application_id,
-            ApplicationScannerConfig.scanner_id == scanner.id
-        ).first()
+        # Get scanner config for is_enabled status (workspace-level first)
+        config = None
+        if ws_id:
+            config = self.db.query(ApplicationScannerConfig).filter(
+                ApplicationScannerConfig.workspace_id == ws_id,
+                ApplicationScannerConfig.application_id.is_(None),
+                ApplicationScannerConfig.scanner_id == scanner.id
+            ).first()
+        if not config:
+            config = self.db.query(ApplicationScannerConfig).filter(
+                ApplicationScannerConfig.application_id == application_id,
+                ApplicationScannerConfig.scanner_id == scanner.id
+            ).first()
 
         return {
             'id': str(scanner.id),
@@ -128,7 +176,8 @@ class CustomScannerService:
         self,
         application_id: UUID,
         tenant_id: UUID,
-        scanner_data: Dict[str, Any]
+        scanner_data: Dict[str, Any],
+        workspace_id: str = None
     ) -> Dict[str, Any]:
         """
         Create a new custom scanner with auto-assigned S100+ tag.
@@ -137,6 +186,7 @@ class CustomScannerService:
             application_id: Application UUID
             tenant_id: Tenant UUID (creator)
             scanner_data: Scanner data dict
+            workspace_id: Workspace UUID (resolved from application if not provided)
 
         Returns:
             Created scanner dict
@@ -146,6 +196,10 @@ class CustomScannerService:
         """
         # Validate scanner data
         self._validate_scanner_data(scanner_data)
+
+        # Resolve workspace_id
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(self.db, str(application_id))
 
         # Auto-assign tag (S100+)
         tag = self._get_next_custom_tag(application_id)
@@ -166,18 +220,20 @@ class CustomScannerService:
         self.db.add(scanner)
         self.db.flush()
 
-        # Create custom scanner record
+        # Create custom scanner record (workspace-level)
+        import uuid as uuid_mod
         custom_scanner = CustomScanner(
             application_id=application_id,
+            workspace_id=uuid_mod.UUID(workspace_id) if workspace_id else None,
             scanner_id=scanner.id,
             created_by=tenant_id,
             notes=scanner_data.get('notes')
         )
         self.db.add(custom_scanner)
 
-        # Create default config (enabled)
+        # Create default config at workspace level (enabled)
         config = ApplicationScannerConfig(
-            application_id=application_id,
+            workspace_id=workspace_id,
             scanner_id=scanner.id,
             is_enabled=True
         )
@@ -225,7 +281,8 @@ class CustomScannerService:
         self,
         scanner_id: UUID,
         application_id: UUID,
-        updates: Dict[str, Any]
+        updates: Dict[str, Any],
+        workspace_id: str = None
     ) -> Optional[Dict[str, Any]]:
         """
         Update custom scanner.
@@ -234,15 +291,27 @@ class CustomScannerService:
             scanner_id: Scanner UUID
             application_id: Application UUID
             updates: Fields to update
+            workspace_id: Workspace UUID
 
         Returns:
             Updated scanner dict or None
         """
-        # Verify this is a custom scanner for this application
-        cs = self.db.query(CustomScanner).filter(
-            CustomScanner.application_id == application_id,
-            CustomScanner.scanner_id == scanner_id
-        ).first()
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
+        # Verify this is a custom scanner for this workspace
+        cs = None
+        if workspace_id:
+            cs = self.db.query(CustomScanner).filter(
+                CustomScanner.workspace_id == workspace_id,
+                CustomScanner.scanner_id == scanner_id
+            ).first()
+        # Fallback to app-level
+        if not cs:
+            cs = self.db.query(CustomScanner).filter(
+                CustomScanner.application_id == application_id,
+                CustomScanner.scanner_id == scanner_id
+            ).first()
 
         if not cs:
             return None
@@ -265,17 +334,26 @@ class CustomScannerService:
 
         # Update is_enabled in ApplicationScannerConfig
         if 'is_enabled' in updates:
-            config = self.db.query(ApplicationScannerConfig).filter(
-                ApplicationScannerConfig.application_id == application_id,
-                ApplicationScannerConfig.scanner_id == scanner_id
-            ).first()
+            # Try workspace-level config first
+            config = None
+            if workspace_id:
+                config = self.db.query(ApplicationScannerConfig).filter(
+                    ApplicationScannerConfig.workspace_id == workspace_id,
+                    ApplicationScannerConfig.application_id.is_(None),
+                    ApplicationScannerConfig.scanner_id == scanner_id
+                ).first()
+            if not config:
+                config = self.db.query(ApplicationScannerConfig).filter(
+                    ApplicationScannerConfig.application_id == application_id,
+                    ApplicationScannerConfig.scanner_id == scanner_id
+                ).first()
 
             if config:
                 config.is_enabled = updates['is_enabled']
             else:
-                # Create config if it doesn't exist
+                # Create config at workspace level
                 config = ApplicationScannerConfig(
-                    application_id=application_id,
+                    workspace_id=workspace_id,
                     scanner_id=scanner_id,
                     is_enabled=updates['is_enabled']
                 )
@@ -290,12 +368,13 @@ class CustomScannerService:
             f"fields={list(updates.keys())}"
         )
 
-        return self.get_custom_scanner(scanner_id, application_id)
+        return self.get_custom_scanner(scanner_id, application_id, workspace_id)
 
     def delete_custom_scanner(
         self,
         scanner_id: UUID,
-        application_id: UUID
+        application_id: UUID,
+        workspace_id: str = None
     ) -> bool:
         """
         Delete custom scanner.
@@ -305,15 +384,27 @@ class CustomScannerService:
         Args:
             scanner_id: Scanner UUID
             application_id: Application UUID
+            workspace_id: Workspace UUID
 
         Returns:
             True if deleted, False if not found
         """
-        # Verify this is a custom scanner for this application
-        cs = self.db.query(CustomScanner).filter(
-            CustomScanner.application_id == application_id,
-            CustomScanner.scanner_id == scanner_id
-        ).first()
+        if not workspace_id:
+            workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
+        # Verify this is a custom scanner for this workspace
+        cs = None
+        if workspace_id:
+            cs = self.db.query(CustomScanner).filter(
+                CustomScanner.workspace_id == workspace_id,
+                CustomScanner.scanner_id == scanner_id
+            ).first()
+        # Fallback to app-level
+        if not cs:
+            cs = self.db.query(CustomScanner).filter(
+                CustomScanner.application_id == application_id,
+                CustomScanner.scanner_id == scanner_id
+            ).first()
 
         if not cs:
             return False

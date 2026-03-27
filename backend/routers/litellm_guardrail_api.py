@@ -268,7 +268,8 @@ async def litellm_generic_guardrail(
             messages=messages,
             stream=False,
             client_ip=None,
-            user_id=body.request_data.get("user_api_key_user_id") if body.request_data else None
+            user_id=body.request_data.get("user_api_key_user_id") if body.request_data else None,
+            source="gateway"
         )
 
     else:
@@ -290,7 +291,8 @@ async def litellm_generic_guardrail(
             restore_mapping=None,
             is_streaming=False,
             chunk_index=0,
-            input_messages=input_messages
+            input_messages=input_messages,
+            source="gateway"
         )
 
     # Convert OG result to LiteLLM response format

@@ -956,6 +956,23 @@ const Results: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Detection Source */}
+                <div className="grid grid-cols-3 gap-4 border-b pb-3">
+                  <div className="font-medium text-muted-foreground text-sm">{t('results.detectionSource')}:</div>
+                  <div className="col-span-2">
+                    <Badge variant="outline" className={
+                      selectedResult.source === 'proxy' ? '!bg-blue-500/10 !text-blue-400 !border-blue-300 text-xs' :
+                      selectedResult.source === 'gateway' ? '!bg-orange-500/10 !text-orange-400 !border-orange-300 text-xs' :
+                      selectedResult.source === 'guardrail_api' ? '!bg-green-500/10 !text-green-400 !border-green-300 text-xs' :
+                      selectedResult.source === 'direct_model' ? '!bg-purple-500/10 !text-purple-400 !border-purple-300 text-xs' :
+                      selectedResult.source === 'content_scan' ? '!bg-cyan-500/10 !text-cyan-400 !border-cyan-300 text-xs' :
+                      '!bg-gray-500/10 !text-gray-400 !border-gray-300 text-xs'
+                    }>
+                      {t(`results.source_${selectedResult.source || 'unknown'}`)}
+                    </Badge>
+                  </div>
+                </div>
+
                 {/* Prompt Attack */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
                   <div className="font-medium text-muted-foreground text-sm">{t('results.promptAttack')}:</div>
