@@ -112,9 +112,13 @@ const OfficialScannersManagement: React.FC<OfficialScannersManagementProps> = ({
     return 'builtin'
   })
 
+  // Reload scanner configs when workspace changes
+  useEffect(() => {
+    loadScannerConfigs()
+  }, [workspaceId])
+
   useEffect(() => {
     loadPackagesOnly()
-    loadScannerConfigs()
 
     // Load payment config (only in SaaS mode)
     if (features.showPayment()) {

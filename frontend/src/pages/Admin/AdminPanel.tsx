@@ -4,6 +4,7 @@ import UserManagement from './UserManagement';
 import RateLimitManagement from './RateLimitManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import PackageMarketplace from './PackageMarketplace';
+import GuardrailUpload from './GuardrailUpload';
 import { features } from '../../config';
 
 const AdminPanel: React.FC = () => {
@@ -16,6 +17,7 @@ const AdminPanel: React.FC = () => {
       )}
       <Route path="/subscriptions" element={<SubscriptionManagement />} />
       <Route path="/package-marketplace" element={<PackageMarketplace />} />
+      <Route path="/guardrail-upload" element={<GuardrailUpload />} />
     </Routes>
   );
 };

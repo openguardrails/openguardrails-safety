@@ -1,5 +1,6 @@
 """Workspace Management Router - CRUD operations for workspaces and workspace guardrail configs"""
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from database.connection import get_admin_db
@@ -7,12 +8,14 @@ from database.models import (
     Workspace, Application, Tenant, RiskTypeConfig,
     Blacklist, Whitelist, BanPolicy, ApplicationDataLeakagePolicy,
     ApplicationScannerConfig, Scanner, ScannerPackage, ApplicationSettings,
-    DataSecurityEntityType, CustomScanner, UpstreamApiConfig
+    DataSecurityEntityType, CustomScanner, UpstreamApiConfig,
+    ApiKey, KnowledgeBase
 )
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime
 import uuid
+import json
 from utils.logger import setup_logger
 from services.keyword_cache import keyword_cache
 
@@ -179,6 +182,7 @@ class WorkspaceCreate(BaseModel):
     name: str
     description: Optional[str] = None
     owner: Optional[str] = None
+    import_config: Optional[Dict[str, Any]] = None  # If provided, import this config instead of copying from Global
 
 class WorkspaceUpdate(BaseModel):
     name: Optional[str] = None
@@ -261,17 +265,22 @@ async def create_workspace(
     db.add(workspace)
     db.flush()  # Get workspace.id before copying config
 
-    # Copy config from global workspace
-    global_ws = db.query(Workspace).filter(
-        Workspace.tenant_id == tenant_id,
-        Workspace.is_global == True
-    ).first()
-    if global_ws:
+    # Initialize config: from import or copy from global workspace
+    if body.import_config:
         try:
-            copy_workspace_config(db, str(global_ws.id), str(workspace.id), tenant_id)
+            import_workspace_config(db, str(workspace.id), tenant_id, body.import_config)
         except Exception as e:
-            logger.error(f"Failed to copy global config to new workspace: {e}")
-            # Continue anyway - workspace is created, config can be set up manually
+            logger.error(f"Failed to import config to new workspace: {e}")
+    else:
+        global_ws = db.query(Workspace).filter(
+            Workspace.tenant_id == tenant_id,
+            Workspace.is_global == True
+        ).first()
+        if global_ws:
+            try:
+                copy_workspace_config(db, str(global_ws.id), str(workspace.id), tenant_id)
+            except Exception as e:
+                logger.error(f"Failed to copy global config to new workspace: {e}")
 
     db.commit()
     db.refresh(workspace)
@@ -487,15 +496,76 @@ async def list_workspace_applications(
         Application.tenant_id == tenant_id,
     ).order_by(Application.created_at.desc()).all()
 
-    return [{
-        "id": str(app.id),
-        "name": app.name,
-        "description": app.description,
-        "is_active": app.is_active,
-        "source": app.source,
-        "external_id": app.external_id,
-        "created_at": app.created_at.isoformat() if app.created_at else None,
-    } for app in apps]
+    results = []
+    for app in apps:
+        key_count = db.query(ApiKey).filter(ApiKey.application_id == app.id).count()
+
+        # Build protection summary from workspace config
+        ws_id = workspace.id
+
+        enabled_scanners_count = db.query(ApplicationScannerConfig).filter(
+            ApplicationScannerConfig.workspace_id == ws_id,
+            ApplicationScannerConfig.is_enabled == True
+        ).count()
+
+        total_scanners_count = db.query(ApplicationScannerConfig).filter(
+            ApplicationScannerConfig.workspace_id == ws_id
+        ).count()
+
+        risk_config = db.query(RiskTypeConfig).filter(
+            RiskTypeConfig.workspace_id == ws_id
+        ).first()
+
+        ban_policy = db.query(BanPolicy).filter(
+            BanPolicy.workspace_id == ws_id
+        ).first()
+
+        data_security_count = db.query(DataSecurityEntityType).filter(
+            DataSecurityEntityType.workspace_id == ws_id,
+            DataSecurityEntityType.is_active == True
+        ).count()
+
+        blacklist_count = db.query(Blacklist).filter(
+            Blacklist.workspace_id == ws_id,
+            Blacklist.is_active == True
+        ).count()
+
+        whitelist_count = db.query(Whitelist).filter(
+            Whitelist.workspace_id == ws_id,
+            Whitelist.is_active == True
+        ).count()
+
+        knowledge_base_count = db.query(KnowledgeBase).filter(
+            KnowledgeBase.application_id == app.id,
+            KnowledgeBase.is_active == True
+        ).count()
+
+        protection_summary = {
+            "risk_types_enabled": enabled_scanners_count,
+            "total_risk_types": total_scanners_count,
+            "ban_policy_enabled": ban_policy.enabled if ban_policy else False,
+            "sensitivity_level": risk_config.sensitivity_trigger_level if risk_config else "medium",
+            "data_security_entities": data_security_count,
+            "blacklist_count": blacklist_count,
+            "whitelist_count": whitelist_count,
+            "knowledge_base_count": knowledge_base_count
+        }
+
+        results.append({
+            "id": str(app.id),
+            "name": app.name,
+            "description": app.description,
+            "is_active": app.is_active,
+            "source": getattr(app, 'source', 'manual') or 'manual',
+            "external_id": getattr(app, 'external_id', None),
+            "workspace_id": str(app.workspace_id) if app.workspace_id else None,
+            "created_at": app.created_at.isoformat() if app.created_at else None,
+            "updated_at": app.updated_at.isoformat() if app.updated_at else None,
+            "api_keys_count": key_count,
+            "protection_summary": protection_summary,
+        })
+
+    return results
 
 
 # ============================================================
@@ -1111,6 +1181,9 @@ async def get_workspace_scanner_configs(
             "description": scanner.description,
             "scanner_type": scanner.scanner_type,
             "package_name": scanner.package.package_name if scanner.package else "Custom",
+            "package_id": str(scanner.package_id) if scanner.package_id else None,
+            "package_type": scanner.package.package_type if scanner.package else "custom",
+            "is_custom": False,
             "is_enabled": is_enabled,
             "risk_level": risk_level,
             "scan_prompt": scan_prompt,
@@ -1118,7 +1191,9 @@ async def get_workspace_scanner_configs(
             "default_risk_level": scanner.default_risk_level,
             "default_scan_prompt": scanner.default_scan_prompt,
             "default_scan_response": scanner.default_scan_response,
-            "has_override": config is not None,
+            "has_risk_level_override": config is not None and config.risk_level_override is not None if config else False,
+            "has_scan_prompt_override": config is not None and config.scan_prompt_override is not None if config else False,
+            "has_scan_response_override": config is not None and config.scan_response_override is not None if config else False,
         })
 
     return result
@@ -1246,3 +1321,365 @@ async def update_workspace_fixed_answer_templates(
 
     db.commit()
     return {"success": True, "message": "Fixed answer templates updated successfully"}
+
+
+# ============================================================
+# Workspace Config Export / Import
+# ============================================================
+
+def export_workspace_config(db: Session, workspace_id: str, workspace_name: str) -> Dict[str, Any]:
+    """Export all workspace configuration to a serializable dict."""
+    ws_uuid = uuid.UUID(workspace_id)
+
+    config = {}
+
+    # 1. RiskTypeConfig
+    risk = db.query(RiskTypeConfig).filter(RiskTypeConfig.workspace_id == ws_uuid).first()
+    if risk:
+        config["risk_types"] = {
+            **{f"s{i}_enabled": getattr(risk, f"s{i}_enabled", True) for i in range(1, 22)},
+            "high_sensitivity_threshold": risk.high_sensitivity_threshold,
+            "medium_sensitivity_threshold": risk.medium_sensitivity_threshold,
+            "low_sensitivity_threshold": risk.low_sensitivity_threshold,
+            "sensitivity_trigger_level": risk.sensitivity_trigger_level,
+        }
+
+    # 2. BanPolicy
+    ban = db.query(BanPolicy).filter(BanPolicy.workspace_id == ws_uuid).first()
+    if ban:
+        config["ban_policy"] = {
+            "enabled": ban.enabled,
+            "risk_level": ban.risk_level,
+            "trigger_count": ban.trigger_count,
+            "time_window_minutes": ban.time_window_minutes,
+            "ban_duration_minutes": ban.ban_duration_minutes,
+        }
+
+    # 3. Blacklists
+    blacklists = db.query(Blacklist).filter(Blacklist.workspace_id == ws_uuid).all()
+    if blacklists:
+        config["blacklists"] = [{
+            "name": bl.name, "keywords": bl.keywords,
+            "description": bl.description, "is_active": bl.is_active,
+        } for bl in blacklists]
+
+    # 4. Whitelists
+    whitelists = db.query(Whitelist).filter(Whitelist.workspace_id == ws_uuid).all()
+    if whitelists:
+        config["whitelists"] = [{
+            "name": wl.name, "keywords": wl.keywords,
+            "description": wl.description, "is_active": wl.is_active,
+        } for wl in whitelists]
+
+    # 5. DataLeakagePolicy
+    dlp = db.query(ApplicationDataLeakagePolicy).filter(
+        ApplicationDataLeakagePolicy.workspace_id == ws_uuid,
+        ApplicationDataLeakagePolicy.application_id.is_(None),
+    ).first()
+    if dlp:
+        config["data_leakage_policy"] = {
+            col: getattr(dlp, col) for col in [
+                'input_high_risk_action', 'input_medium_risk_action', 'input_low_risk_action',
+                'output_high_risk_anonymize', 'output_medium_risk_anonymize', 'output_low_risk_anonymize',
+                'output_high_risk_action', 'output_medium_risk_action', 'output_low_risk_action',
+                'general_high_risk_action', 'general_medium_risk_action', 'general_low_risk_action',
+                'general_input_high_risk_action', 'general_input_medium_risk_action', 'general_input_low_risk_action',
+                'general_output_high_risk_action', 'general_output_medium_risk_action', 'general_output_low_risk_action',
+                'enable_format_detection', 'enable_smart_segmentation',
+            ]
+        }
+        # private_model_id stored as string (not portable across deployments)
+        if dlp.private_model_id:
+            config["data_leakage_policy"]["private_model_id"] = str(dlp.private_model_id)
+
+    # 6. ScannerConfigs (use scanner tag for portability)
+    scanner_configs = db.query(ApplicationScannerConfig).filter(
+        ApplicationScannerConfig.workspace_id == ws_uuid,
+        ApplicationScannerConfig.application_id.is_(None),
+    ).all()
+    if scanner_configs:
+        sc_list = []
+        for sc in scanner_configs:
+            scanner = db.query(Scanner).filter(Scanner.id == sc.scanner_id).first()
+            if scanner:
+                sc_list.append({
+                    "scanner_tag": scanner.tag,
+                    "is_enabled": sc.is_enabled,
+                    "risk_level_override": sc.risk_level_override,
+                    "scan_prompt_override": sc.scan_prompt_override,
+                    "scan_response_override": sc.scan_response_override,
+                })
+        if sc_list:
+            config["scanner_configs"] = sc_list
+
+    # 7. ApplicationSettings (templates)
+    settings = db.query(ApplicationSettings).filter(
+        ApplicationSettings.workspace_id == ws_uuid,
+        ApplicationSettings.application_id.is_(None),
+    ).first()
+    if settings:
+        config["application_settings"] = {
+            "security_risk_template": settings.security_risk_template,
+            "data_leakage_template": settings.data_leakage_template,
+        }
+
+    # 8. DataSecurityEntityType
+    entities = db.query(DataSecurityEntityType).filter(
+        DataSecurityEntityType.workspace_id == ws_uuid,
+    ).all()
+    if entities:
+        config["data_security_entity_types"] = [{
+            "entity_type": et.entity_type,
+            "entity_type_name": et.entity_type_name,
+            "category": et.category,
+            "recognition_method": et.recognition_method,
+            "recognition_config": et.recognition_config,
+            "anonymization_method": et.anonymization_method,
+            "anonymization_config": et.anonymization_config,
+            "is_active": et.is_active,
+            "is_global": et.is_global,
+            "source_type": et.source_type,
+            "template_id": et.template_id,
+            "restore_code": et.restore_code,
+            "restore_code_hash": et.restore_code_hash,
+            "restore_natural_desc": et.restore_natural_desc,
+        } for et in entities]
+
+    # 9. CustomScanner (use scanner tag for portability)
+    custom_scanners = db.query(CustomScanner).filter(
+        CustomScanner.workspace_id == ws_uuid,
+    ).all()
+    if custom_scanners:
+        cs_list = []
+        for cs in custom_scanners:
+            scanner = db.query(Scanner).filter(Scanner.id == cs.scanner_id).first()
+            if scanner:
+                cs_list.append({
+                    "scanner_tag": scanner.tag,
+                    "scanner_name": scanner.name,
+                    "scanner_description": scanner.description,
+                    "scanner_type": scanner.scanner_type,
+                    "scanner_definition": scanner.definition,
+                    "default_risk_level": scanner.default_risk_level,
+                    "default_scan_prompt": scanner.default_scan_prompt,
+                    "default_scan_response": scanner.default_scan_response,
+                    "notes": cs.notes,
+                })
+        if cs_list:
+            config["custom_scanners"] = cs_list
+
+    return {
+        "version": "1.0",
+        "exported_at": datetime.utcnow().isoformat(),
+        "workspace_name": workspace_name,
+        "config": config,
+    }
+
+
+def import_workspace_config(db: Session, workspace_id: str, tenant_id: str, config_data: Dict[str, Any]):
+    """Import workspace configuration from a config dict (from export JSON).
+    Overwrites existing config for the target workspace."""
+    ws_uuid = uuid.UUID(workspace_id)
+    tenant_uuid = uuid.UUID(tenant_id)
+
+    # If config_data has a "config" wrapper (full export format), unwrap it
+    if "config" in config_data and isinstance(config_data["config"], dict):
+        config_data = config_data["config"]
+
+    # 1. RiskTypeConfig - delete existing then create
+    db.query(RiskTypeConfig).filter(RiskTypeConfig.workspace_id == ws_uuid).delete()
+    if "risk_types" in config_data:
+        rt = config_data["risk_types"]
+        new_risk = RiskTypeConfig(
+            tenant_id=tenant_uuid,
+            workspace_id=ws_uuid,
+            **{k: v for k, v in rt.items() if hasattr(RiskTypeConfig, k)}
+        )
+        db.add(new_risk)
+
+    # 2. BanPolicy
+    db.query(BanPolicy).filter(BanPolicy.workspace_id == ws_uuid).delete()
+    if "ban_policy" in config_data:
+        bp = config_data["ban_policy"]
+        db.add(BanPolicy(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            enabled=bp.get("enabled", False),
+            risk_level=bp.get("risk_level", "high_risk"),
+            trigger_count=bp.get("trigger_count", 3),
+            time_window_minutes=bp.get("time_window_minutes", 10),
+            ban_duration_minutes=bp.get("ban_duration_minutes", 60),
+        ))
+
+    # 3. Blacklists
+    db.query(Blacklist).filter(Blacklist.workspace_id == ws_uuid).delete()
+    for bl in config_data.get("blacklists", []):
+        db.add(Blacklist(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            name=bl["name"], keywords=bl["keywords"],
+            description=bl.get("description"), is_active=bl.get("is_active", True),
+        ))
+
+    # 4. Whitelists
+    db.query(Whitelist).filter(Whitelist.workspace_id == ws_uuid).delete()
+    for wl in config_data.get("whitelists", []):
+        db.add(Whitelist(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            name=wl["name"], keywords=wl["keywords"],
+            description=wl.get("description"), is_active=wl.get("is_active", True),
+        ))
+
+    # 5. DataLeakagePolicy
+    db.query(ApplicationDataLeakagePolicy).filter(
+        ApplicationDataLeakagePolicy.workspace_id == ws_uuid,
+        ApplicationDataLeakagePolicy.application_id.is_(None),
+    ).delete()
+    if "data_leakage_policy" in config_data:
+        dlp = config_data["data_leakage_policy"]
+        private_model_id = None
+        if dlp.get("private_model_id"):
+            try:
+                private_model_id = uuid.UUID(dlp["private_model_id"])
+                # Verify it exists for this tenant
+                exists = db.query(UpstreamApiConfig).filter(
+                    UpstreamApiConfig.id == private_model_id,
+                    UpstreamApiConfig.tenant_id == tenant_uuid,
+                ).first()
+                if not exists:
+                    private_model_id = None
+            except (ValueError, TypeError):
+                private_model_id = None
+        policy_fields = {k: v for k, v in dlp.items()
+                         if k != "private_model_id" and hasattr(ApplicationDataLeakagePolicy, k)}
+        db.add(ApplicationDataLeakagePolicy(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            private_model_id=private_model_id,
+            **policy_fields,
+        ))
+
+    # 6. ScannerConfigs (resolve by scanner tag)
+    db.query(ApplicationScannerConfig).filter(
+        ApplicationScannerConfig.workspace_id == ws_uuid,
+        ApplicationScannerConfig.application_id.is_(None),
+    ).delete()
+    for sc in config_data.get("scanner_configs", []):
+        scanner = db.query(Scanner).filter(Scanner.tag == sc["scanner_tag"]).first()
+        if not scanner:
+            logger.warning(f"Import: scanner tag '{sc['scanner_tag']}' not found, skipping")
+            continue
+        db.add(ApplicationScannerConfig(
+            workspace_id=ws_uuid,
+            scanner_id=scanner.id,
+            is_enabled=sc.get("is_enabled", True),
+            risk_level_override=sc.get("risk_level_override"),
+            scan_prompt_override=sc.get("scan_prompt_override"),
+            scan_response_override=sc.get("scan_response_override"),
+        ))
+
+    # 7. ApplicationSettings
+    db.query(ApplicationSettings).filter(
+        ApplicationSettings.workspace_id == ws_uuid,
+        ApplicationSettings.application_id.is_(None),
+    ).delete()
+    if "application_settings" in config_data:
+        s = config_data["application_settings"]
+        db.add(ApplicationSettings(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            security_risk_template=s.get("security_risk_template"),
+            data_leakage_template=s.get("data_leakage_template"),
+        ))
+
+    # 8. DataSecurityEntityType
+    db.query(DataSecurityEntityType).filter(
+        DataSecurityEntityType.workspace_id == ws_uuid,
+    ).delete()
+    for et in config_data.get("data_security_entity_types", []):
+        db.add(DataSecurityEntityType(
+            tenant_id=tenant_uuid, workspace_id=ws_uuid,
+            entity_type=et["entity_type"],
+            entity_type_name=et.get("entity_type_name"),
+            category=et.get("category"),
+            recognition_method=et.get("recognition_method"),
+            recognition_config=et.get("recognition_config", {}),
+            anonymization_method=et.get("anonymization_method"),
+            anonymization_config=et.get("anonymization_config", {}),
+            is_active=et.get("is_active", True),
+            is_global=et.get("is_global", False),
+            source_type=et.get("source_type"),
+            template_id=et.get("template_id"),
+            restore_code=et.get("restore_code"),
+            restore_code_hash=et.get("restore_code_hash"),
+            restore_natural_desc=et.get("restore_natural_desc"),
+        ))
+
+    # 9. CustomScanner - create scanner record + custom scanner link
+    db.query(CustomScanner).filter(CustomScanner.workspace_id == ws_uuid).delete()
+    for cs in config_data.get("custom_scanners", []):
+        # Check if scanner with this tag already exists
+        scanner = db.query(Scanner).filter(Scanner.tag == cs["scanner_tag"]).first()
+        if not scanner:
+            # Create new scanner record for custom scanner
+            scanner = Scanner(
+                tag=cs["scanner_tag"],
+                name=cs.get("scanner_name", cs["scanner_tag"]),
+                description=cs.get("scanner_description"),
+                scanner_type=cs.get("scanner_type", "genai"),
+                definition=cs.get("scanner_definition", ""),
+                default_risk_level=cs.get("default_risk_level", "medium_risk"),
+                default_scan_prompt=cs.get("default_scan_prompt", True),
+                default_scan_response=cs.get("default_scan_response", True),
+            )
+            db.add(scanner)
+            db.flush()
+        db.add(CustomScanner(
+            workspace_id=ws_uuid,
+            scanner_id=scanner.id,
+            notes=cs.get("notes"),
+        ))
+
+    logger.info(f"Imported config to workspace {workspace_id}")
+
+
+class WorkspaceConfigImport(BaseModel):
+    config: Dict[str, Any]
+
+
+@router.get("/{workspace_id}/export")
+async def export_workspace(
+    workspace_id: str,
+    request: Request,
+    db: Session = Depends(get_admin_db),
+):
+    """Export workspace configuration as JSON file"""
+    tenant_id = get_current_tenant_id(request)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
+
+    data = export_workspace_config(db, workspace_id, workspace.name)
+
+    response = JSONResponse(content=data)
+    safe_name = workspace.name.replace(' ', '_').replace('/', '_')
+    filename = f"workspace_config_{safe_name}.json"
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+@router.post("/{workspace_id}/import")
+async def import_workspace(
+    workspace_id: str,
+    request: Request,
+    body: WorkspaceConfigImport,
+    db: Session = Depends(get_admin_db),
+):
+    """Import workspace configuration from JSON. Overwrites existing config."""
+    tenant_id = get_current_tenant_id(request)
+    _verify_workspace_ownership(db, workspace_id, tenant_id)
+
+    try:
+        import_workspace_config(db, workspace_id, tenant_id, body.config)
+        db.commit()
+        await keyword_cache.invalidate_cache()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to import workspace config: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+    return {"success": True, "message": "Workspace configuration imported successfully"}

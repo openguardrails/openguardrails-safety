@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 
 from database.models import (
-    ScannerPackage, Scanner, PackagePurchase, Tenant
+    ScannerPackage, Scanner, PackagePurchase, Tenant,
+    Workspace, ApplicationScannerConfig
 )
 from utils.logger import setup_logger
 
@@ -539,6 +540,148 @@ class ScannerPackageService:
         logger.info(
             f"Created purchasable package: {package.package_name} v{package.version} "
             f"({package.scanner_count} scanners) by {created_by}"
+        )
+
+        return package
+
+    def create_basic_package(
+        self,
+        package_data: Dict[str, Any],
+        created_by: UUID
+    ) -> ScannerPackage:
+        """
+        Create a new basic (built-in) scanner package (super admin only).
+
+        After creating the package and scanners, propagates ApplicationScannerConfig
+        records to all existing workspaces:
+        - Global workspaces: is_enabled=True
+        - Non-global workspaces: is_enabled=False
+
+        Args:
+            package_data: Package data dict (from JSON file)
+            created_by: Admin user UUID
+
+        Returns:
+            Created package
+        """
+        package_code = package_data['package_code']
+        package_version = package_data.get('version', '1.0.0')
+
+        # Check for exact duplicate (same code + same version)
+        exact_duplicate = self.db.query(ScannerPackage).filter(
+            ScannerPackage.package_code == package_code,
+            ScannerPackage.version == package_version,
+            ScannerPackage.is_active == True,
+            ScannerPackage.archived == False
+        ).first()
+
+        if exact_duplicate:
+            raise ValueError(
+                f"Package with code '{package_code}' and version '{package_version}' already exists. "
+                f"Use a different version number."
+            )
+
+        # Check for active packages with same code (different versions)
+        active_packages = self.db.query(ScannerPackage).filter(
+            ScannerPackage.package_code == package_code,
+            ScannerPackage.is_active == True,
+            ScannerPackage.archived == False
+        ).all()
+
+        if active_packages:
+            package_names = [f"{p.package_name} (v{p.version})" for p in active_packages]
+            raise ValueError(
+                f"Cannot create new version of '{package_code}' because the following "
+                f"packages are still active: {', '.join(package_names)}. "
+                f"Please archive the old version(s) first before uploading a new version."
+            )
+
+        # Create new basic package
+        package = ScannerPackage(
+            package_code=package_code,
+            package_name=package_data['package_name'],
+            author=package_data.get('author', 'OpenGuardrails'),
+            description=package_data.get('description'),
+            version=package_version,
+            license=package_data.get('license', 'Apache-2.0'),
+            package_type='basic',
+            is_official=True,
+            requires_purchase=False,
+            price=None,
+            price_display=None,
+            bundle=package_data.get('bundle'),
+            scanner_count=len(package_data.get('scanners', []))
+        )
+        self.db.add(package)
+        self.db.flush()
+
+        # Create scanners - handle tag re-use
+        new_scanner_ids = []
+        for i, scanner_data in enumerate(package_data.get('scanners', [])):
+            existing_scanner = self.db.query(Scanner).filter(
+                Scanner.tag == scanner_data['tag']
+            ).first()
+
+            if existing_scanner:
+                existing_scanner.package_id = package.id
+                existing_scanner.name = scanner_data['name']
+                existing_scanner.description = scanner_data.get('description', scanner_data['definition'])
+                existing_scanner.scanner_type = scanner_data['type']
+                existing_scanner.definition = scanner_data['definition']
+                existing_scanner.default_risk_level = self._normalize_risk_level(scanner_data['risk_level'])
+                existing_scanner.default_scan_prompt = scanner_data.get('scan_prompt', True)
+                existing_scanner.default_scan_response = scanner_data.get('scan_response', True)
+                existing_scanner.display_order = i
+                existing_scanner.is_active = True
+                new_scanner_ids.append(existing_scanner.id)
+                logger.info(f"Reused existing scanner tag {scanner_data['tag']} for basic package")
+            else:
+                scanner = Scanner(
+                    package_id=package.id,
+                    tag=scanner_data['tag'],
+                    name=scanner_data['name'],
+                    description=scanner_data.get('description', scanner_data['definition']),
+                    scanner_type=scanner_data['type'],
+                    definition=scanner_data['definition'],
+                    default_risk_level=self._normalize_risk_level(scanner_data['risk_level']),
+                    default_scan_prompt=scanner_data.get('scan_prompt', True),
+                    default_scan_response=scanner_data.get('scan_response', True),
+                    display_order=i
+                )
+                self.db.add(scanner)
+                self.db.flush()
+                new_scanner_ids.append(scanner.id)
+                logger.info(f"Created new scanner with tag {scanner_data['tag']}")
+
+        # Propagate scanner configs to all existing workspaces
+        all_workspaces = self.db.query(Workspace).all()
+        config_count = 0
+        for ws in all_workspaces:
+            for scanner_id in new_scanner_ids:
+                # Skip if config already exists
+                existing_config = self.db.query(ApplicationScannerConfig).filter(
+                    ApplicationScannerConfig.workspace_id == ws.id,
+                    ApplicationScannerConfig.scanner_id == scanner_id,
+                    ApplicationScannerConfig.application_id.is_(None),
+                ).first()
+                if existing_config:
+                    continue
+
+                is_enabled = ws.is_global  # True for Global, False for others
+                config = ApplicationScannerConfig(
+                    workspace_id=ws.id,
+                    scanner_id=scanner_id,
+                    is_enabled=is_enabled,
+                )
+                self.db.add(config)
+                config_count += 1
+
+        self.db.commit()
+        self.db.refresh(package)
+
+        logger.info(
+            f"Created basic package: {package.package_name} v{package.version} "
+            f"({package.scanner_count} scanners, {config_count} workspace configs) by {created_by}"
         )
 
         return package

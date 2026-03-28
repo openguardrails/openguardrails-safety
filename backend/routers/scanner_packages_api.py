@@ -409,6 +409,69 @@ async def upload_premium_package(
     )
 
 
+@router.post("/admin/upload-basic", response_model=PackageResponse)
+async def upload_basic_package(
+    upload_request: PackageUploadRequest,
+    request: Request,
+    db: Session = Depends(get_admin_db),
+    current_user: dict = Depends(require_super_admin)
+):
+    """
+    Upload a new basic (built-in) scanner package (super admin only).
+
+    Creates the package with type='basic' so it's visible to all tenants.
+    Propagates scanner configs to all existing workspaces:
+    - Global workspaces: enabled by default
+    - Non-global workspaces: disabled by default
+    """
+    service = ScannerPackageService(db)
+    admin_id = UUID(current_user['tenant_id'])
+
+    package_data = upload_request.package_data.copy()
+    if upload_request.bundle:
+        package_data['bundle'] = upload_request.bundle
+
+    try:
+        package = service.create_basic_package(
+            package_data=package_data,
+            created_by=admin_id
+        )
+    except ValueError as e:
+        logger.error(f"ValueError in basic package upload: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error uploading basic package: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload package: {str(e)}"
+        )
+
+    logger.warning(
+        f"Admin {current_user['email']} uploaded basic package: {package.package_name} "
+        f"({package.scanner_count} scanners)"
+    )
+
+    return PackageResponse(
+        id=str(package.id),
+        package_code=package.package_code,
+        package_name=package.package_name,
+        author=package.author,
+        description=package.description,
+        version=package.version,
+        license=package.license,
+        package_type=package.package_type,
+        scanner_count=package.scanner_count,
+        price=package.price,
+        price_display=package.price_display,
+        bundle=package.bundle,
+        created_at=package.created_at.isoformat() if package.created_at else None,
+        updated_at=package.updated_at.isoformat() if package.updated_at else None
+    )
+
+
 @router.put("/admin/{package_id}", response_model=PackageResponse)
 async def update_package(
     package_id: str,

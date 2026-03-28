@@ -30,7 +30,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import { adminApi, configApi } from '../../services/api'
 import LanguageSwitcher from '../LanguageSwitcher/LanguageSwitcher'
-import { features, isSaasMode } from '../../config'
+import { features } from '../../config'
 import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -129,7 +129,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           ? [{ key: '/subscription', icon: CreditCard, label: t('nav.subscription') }]
           : []),
         { key: '/documentation', icon: Book, label: t('nav.documentation') },
-        ...(user?.is_super_admin && isSaasMode()
+        ...(user?.is_super_admin
           ? [
               {
                 key: '/admin',
@@ -146,6 +146,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   ...(features.showMarketplace()
                     ? [{ key: '/admin/package-marketplace', label: t('nav.packageMarketplace') }]
                     : []),
+                  { key: '/admin/guardrail-upload', label: t('nav.guardrailUpload') },
                 ],
               },
             ]

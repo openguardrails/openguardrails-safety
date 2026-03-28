@@ -870,6 +870,10 @@ export const scannerPackagesApi = {
   uploadPackage: (packageData: any): Promise<any> =>
     api.post('/api/v1/scanner-packages/admin/upload', packageData).then(res => res.data),
 
+  // Admin: Upload basic (built-in) package
+  uploadBasicPackage: (packageData: any): Promise<any> =>
+    api.post('/api/v1/scanner-packages/admin/upload-basic', packageData).then(res => res.data),
+
   // Admin: Update package metadata
   updatePackage: (packageId: string, updates: any): Promise<any> =>
     api.put(`/api/v1/scanner-packages/admin/${packageId}`, updates).then(res => res.data),
@@ -1144,6 +1148,16 @@ export const teamApi = {
 
   getMyRole: (): Promise<{ member_role: string; tenant_id: string; is_super_admin: boolean }> =>
     api.get('/api/v1/team/my-role').then(res => res.data),
+};
+
+export const workspacesApi = {
+  // Export workspace configuration as JSON
+  exportConfig: (workspaceId: string): Promise<any> =>
+    api.get(`/api/v1/workspaces/${workspaceId}/export`).then(res => res.data),
+
+  // Import workspace configuration from JSON
+  importConfig: (workspaceId: string, config: any): Promise<{ success: boolean; message: string }> =>
+    api.post(`/api/v1/workspaces/${workspaceId}/import`, { config }).then(res => res.data),
 };
 
 export default api;
