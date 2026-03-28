@@ -154,7 +154,7 @@ Client sees restored real values in real-time
 When a request is blocked, the plugin returns the appropriate format based on the request type:
 
 - **Non-streaming request**: Standard `application/json` ChatCompletion response
-- **Streaming request**: `text/event-stream` SSE format with `finish_reason: "content_filter"`
+- **Streaming request**: `text/event-stream` SSE format with `finish_reason: "stop"`
 
 This ensures compatibility with all OpenAI-compatible clients (Cherry Studio, Open WebUI, etc.).
 

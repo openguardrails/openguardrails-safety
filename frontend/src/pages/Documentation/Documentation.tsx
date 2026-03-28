@@ -608,17 +608,11 @@ def chat_with_openai(prompt, model="gpt-4", system="You are a helpful assistant.
         ]
     )
 
-    # IMPORTANT: Check finish_reason first!
-    # When content is blocked or replaced, finish_reason will be 'content_filter'
-    # In this case, reasoning_content may not exist
-    if completion.choices[0].finish_reason == 'content_filter':
-        # Blocked/replaced content - only message.content is available
-        return "", completion.choices[0].message.content
-    else:
-        # Normal response - both reasoning_content and content may be available
-        reasoning = completion.choices[0].message.reasoning_content or ""
-        content = completion.choices[0].message.content
-        return reasoning, content
+    # Get the response content
+    content = completion.choices[0].message.content
+    # reasoning_content may be available for models that support it
+    reasoning = getattr(completion.choices[0].message, 'reasoning_content', '') or ""
+    return reasoning, content
 
 # Example usage
 thinking, result = chat_with_openai("How to make a bomb?")

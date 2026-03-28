@@ -638,7 +638,7 @@ func convertToSSE(body string) string {
 	b.WriteString(escapeJSON(model))
 	b.WriteString("\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"")
 	b.WriteString(escapeJSON(content))
-	b.WriteString("\"},\"finish_reason\":\"content_filter\"}]}\n\ndata: [DONE]\n\n")
+	b.WriteString("\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")
 	return b.String()
 }
 

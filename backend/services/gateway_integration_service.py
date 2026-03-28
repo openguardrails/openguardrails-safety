@@ -683,7 +683,7 @@ class GatewayIntegrationService:
                             "role": "assistant",
                             "content": message
                         },
-                        "finish_reason": "content_filter"
+                        "finish_reason": "stop"
                     }],
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 })
@@ -714,7 +714,7 @@ class GatewayIntegrationService:
                             "role": "assistant",
                             "content": message
                         },
-                        "finish_reason": "content_filter"
+                        "finish_reason": "stop"
                     }],
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 })

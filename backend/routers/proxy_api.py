@@ -305,7 +305,7 @@ async def _handle_gateway_non_streaming_response(
                 message['content'] = block_message
                 if 'tool_calls' in message:
                     del message['tool_calls']
-                upstream_response['choices'][0]['finish_reason'] = 'content_filter'
+                upstream_response['choices'][0]['finish_reason'] = 'stop'
 
             elif output_action == "restore":
                 # Restored content from service
@@ -726,7 +726,7 @@ async def create_chat_completion(
                             "choices": [{
                                 "index": 0,
                                 "delta": {"content": suggest_answer},
-                                "finish_reason": "content_filter"
+                                "finish_reason": "stop"
                             }]
                         }
                         yield f"data: {json.dumps(blocked_chunk)}\n\n"
@@ -746,7 +746,7 @@ async def create_chat_completion(
                     "choices": [{
                         "index": 0,
                         "message": {"role": "assistant", "content": suggest_answer},
-                        "finish_reason": "content_filter"
+                        "finish_reason": "stop"
                     }],
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 }
@@ -787,7 +787,7 @@ async def create_chat_completion(
                             "object": "chat.completion.chunk",
                             "created": int(time.time()),
                             "model": request_data.model,
-                            "choices": [{"index": 0, "delta": {}, "finish_reason": "content_filter"}]
+                            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]
                         }
                         yield f"data: {json.dumps(stop_chunk)}\n\n"
                         yield "data: [DONE]\n\n"
@@ -806,7 +806,7 @@ async def create_chat_completion(
                     "choices": [{
                         "index": 0,
                         "message": {"role": "assistant", "content": suggest_answer},
-                        "finish_reason": "content_filter"
+                        "finish_reason": "stop"
                     }],
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 }
@@ -1032,7 +1032,7 @@ async def create_completion(
                     "object": "text_completion",
                     "created": int(time.time()),
                     "model": request_data.model,
-                    "choices": [{"text": suggest_answer, "index": 0, "logprobs": None, "finish_reason": "content_filter"}],
+                    "choices": [{"text": suggest_answer, "index": 0, "logprobs": None, "finish_reason": "stop"}],
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 }
 
@@ -1071,7 +1071,7 @@ async def create_completion(
                         except Exception:
                             pass
                     model_response['choices'][0]['text'] = block_msg
-                    model_response['choices'][0]['finish_reason'] = 'content_filter'
+                    model_response['choices'][0]['finish_reason'] = 'stop'
                 elif output_action == "restore":
                     model_response['choices'][0]['text'] = output_result.get("restored_content", output_text)
                 elif output_action == "anonymize":
