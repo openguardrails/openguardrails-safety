@@ -1,5 +1,5 @@
 """Team member management API - invitation, role management, member listing."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Request, Depends, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -175,7 +175,7 @@ async def create_member(
         role=member_data.role,
         invite_status='accepted',
         invited_by=inviter_user_id,
-        accepted_at=datetime.utcnow(),
+        accepted_at=datetime.now(timezone.utc),
     )
     db.add(membership)
     db.commit()
@@ -223,7 +223,12 @@ async def send_invitation(
         TenantInvitation.status == 'pending',
     ).first()
     if existing_invite:
-        raise HTTPException(status_code=400, detail="A pending invitation already exists for this email")
+        # Auto-expire if past expiration date
+        if existing_invite.expires_at < datetime.now(timezone.utc):
+            existing_invite.status = 'expired'
+            db.commit()
+        else:
+            raise HTTPException(status_code=400, detail="A pending invitation already exists for this email")
 
     # Resolve inviter user_id
     inviter_user_id = auth_data.get('user_id') or auth_data.get('tenant_id')
@@ -237,7 +242,7 @@ async def send_invitation(
         invited_by=inviter_user_id,
         invitation_token=invitation_token,
         status='pending',
-        expires_at=datetime.utcnow() + timedelta(days=7),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
     )
     db.add(invitation)
     db.commit()
@@ -274,7 +279,7 @@ async def list_invitations(request: Request, db: Session = Depends(get_admin_db)
     ).order_by(TenantInvitation.created_at.desc()).all()
 
     # Expire old invitations
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = []
     for inv in invitations:
         if inv.expires_at < now:
@@ -331,7 +336,7 @@ async def verify_invitation(token: str, db: Session = Depends(get_admin_db)):
     if not invitation:
         raise HTTPException(status_code=404, detail="Invalid or expired invitation")
 
-    if invitation.expires_at < datetime.utcnow():
+    if invitation.expires_at < datetime.now(timezone.utc):
         invitation.status = 'expired'
         db.commit()
         raise HTTPException(status_code=410, detail="Invitation has expired")
@@ -365,7 +370,7 @@ async def accept_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invalid or expired invitation")
 
-    if invitation.expires_at < datetime.utcnow():
+    if invitation.expires_at < datetime.now(timezone.utc):
         invitation.status = 'expired'
         db.commit()
         raise HTTPException(status_code=410, detail="Invitation has expired")
@@ -384,7 +389,7 @@ async def accept_invitation(
         if existing_membership and str(existing_membership.tenant_id) == str(invitation.tenant_id):
             # Already a member, just update the invitation
             invitation.status = 'accepted'
-            invitation.accepted_at = datetime.utcnow()
+            invitation.accepted_at = datetime.now(timezone.utc)
             db.commit()
             return {"message": "You are already a member of this team"}
     else:
@@ -419,13 +424,13 @@ async def accept_invitation(
         role=invitation.role,
         invite_status='accepted',
         invited_by=invitation.invited_by,
-        accepted_at=datetime.utcnow(),
+        accepted_at=datetime.now(timezone.utc),
     )
     db.add(membership)
 
     # Mark invitation as accepted
     invitation.status = 'accepted'
-    invitation.accepted_at = datetime.utcnow()
+    invitation.accepted_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"message": "Invitation accepted successfully. You can now log in."}
@@ -458,7 +463,7 @@ async def change_member_role(
         raise HTTPException(status_code=400, detail="Cannot change the owner's role")
 
     membership.role = role_data.role
-    membership.updated_at = datetime.utcnow()
+    membership.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     # Invalidate auth cache for this user
