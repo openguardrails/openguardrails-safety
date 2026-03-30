@@ -127,6 +127,14 @@ services:
       - PROXY_UVICORN_WORKERS=${PROXY_UVICORN_WORKERS:-24}
       - PROXY_MAX_CONCURRENT_REQUESTS=${PROXY_MAX_CONCURRENT_REQUESTS:-300}
 
+      # Syslog forwarding configuration (for SIEM integration)
+      # Set SYSLOG_HOST to enable forwarding; when unset, syslog is disabled
+      - SYSLOG_HOST=${SYSLOG_HOST:-}
+      - SYSLOG_PORT=${SYSLOG_PORT:-514}
+      - SYSLOG_PROTOCOL=${SYSLOG_PROTOCOL:-UDP}
+      - SYSLOG_FACILITY=${SYSLOG_FACILITY:-LOCAL0}
+      - SYSLOG_CA_CERT=${SYSLOG_CA_CERT:-}
+
       # Frontend configuration
       - VITE_BASE=/platform/
 
