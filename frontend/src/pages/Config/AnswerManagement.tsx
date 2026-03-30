@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { FileText, BookOpen, Info, X, Edit2 } from 'lucide-react'
+import { FileText, BookOpen, Info, X, Edit2, ShieldAlert as ShieldAlertIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCanEdit } from '../../hooks/useCanEdit'
 import KnowledgeBaseManagement from './KnowledgeBaseManagement'
+import FalsePositiveAppeal from '../AccessControl/FalsePositiveAppeal'
 import api, { fixedAnswerTemplatesApi } from '../../services/api'
 
 /**
@@ -147,7 +148,7 @@ const AnswerManagement: React.FC<AnswerManagementProps> = ({ workspaceId }) => {
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
+            <TabsList className="grid w-full grid-cols-3 mb-6">
               <TabsTrigger value="fixed-answer" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
                 {t('answer.fixedAnswer')}
@@ -155,6 +156,10 @@ const AnswerManagement: React.FC<AnswerManagementProps> = ({ workspaceId }) => {
               <TabsTrigger value="proxy-answer" className="flex items-center gap-2">
                 <BookOpen className="h-4 w-4" />
                 {t('answer.proxyAnswer')}
+              </TabsTrigger>
+              <TabsTrigger value="false-positive-appeal" className="flex items-center gap-2">
+                <ShieldAlertIcon className="h-4 w-4" />
+                {t('appealConfig.pageTitle')}
               </TabsTrigger>
             </TabsList>
 
@@ -250,6 +255,10 @@ const AnswerManagement: React.FC<AnswerManagementProps> = ({ workspaceId }) => {
                 </div>
               </div>
               <KnowledgeBaseManagement />
+            </TabsContent>
+
+            <TabsContent value="false-positive-appeal" className="mt-0">
+              <FalsePositiveAppeal workspaceId={workspaceId} embedded />
             </TabsContent>
           </Tabs>
         </CardContent>

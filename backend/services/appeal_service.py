@@ -106,28 +106,46 @@ class AppealService:
     def __init__(self):
         self.model_service = ModelService()
 
+    def _config_to_dict(self, config: AppealConfig) -> dict:
+        """Convert AppealConfig to dict"""
+        return {
+            "id": str(config.id),
+            "enabled": config.enabled,
+            "message_template": config.message_template,
+            "appeal_base_url": config.appeal_base_url,
+            "final_reviewer_email": config.final_reviewer_email,
+            "created_at": config.created_at.isoformat() if config.created_at else None,
+            "updated_at": config.updated_at.isoformat() if config.updated_at else None
+        }
+
     async def get_config(self, application_id: str, db: Session = None) -> Optional[dict]:
-        """Get appeal configuration for application"""
+        """Get appeal configuration for application.
+        Falls back to workspace-level config if no app-level config exists."""
         close_db = False
         if db is None:
             db = get_db_session()
             close_db = True
 
         try:
+            # 1. Try application-level config
             config = db.query(AppealConfig).filter(
                 AppealConfig.application_id == uuid.UUID(application_id)
             ).first()
 
             if config:
-                return {
-                    "id": str(config.id),
-                    "enabled": config.enabled,
-                    "message_template": config.message_template,
-                    "appeal_base_url": config.appeal_base_url,
-                    "final_reviewer_email": config.final_reviewer_email,
-                    "created_at": config.created_at.isoformat() if config.created_at else None,
-                    "updated_at": config.updated_at.isoformat() if config.updated_at else None
-                }
+                return self._config_to_dict(config)
+
+            # 2. Fall back to workspace-level config
+            from services.workspace_resolver import get_workspace_id_for_app
+            workspace_id = get_workspace_id_for_app(db, application_id)
+            if workspace_id:
+                config = db.query(AppealConfig).filter(
+                    AppealConfig.workspace_id == uuid.UUID(workspace_id),
+                    AppealConfig.application_id.is_(None),
+                ).first()
+                if config:
+                    return self._config_to_dict(config)
+
             return None
         finally:
             if close_db:

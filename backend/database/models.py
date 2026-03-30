@@ -1132,12 +1132,13 @@ class SubscriptionPayment(Base):
 # =====================================================
 
 class AppealConfig(Base):
-    """Appeal configuration table - per-application settings for false positive appeals"""
+    """Appeal configuration table - per-application or per-workspace settings for false positive appeals"""
     __tablename__ = "appeal_config"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
+    application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="CASCADE"), nullable=True, index=True)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)
     enabled = Column(Boolean, nullable=False, default=False)
     # Template for appeal link message, supports {appeal_url} placeholder
     # Note: Default value uses English. Localized defaults are provided via i18n when config is first displayed.
@@ -1152,6 +1153,7 @@ class AppealConfig(Base):
     # Relationships
     tenant = relationship("Tenant")
     application = relationship("Application", back_populates="appeal_config")
+    workspace = relationship("Workspace")
 
     # Constraints
     __table_args__ = (

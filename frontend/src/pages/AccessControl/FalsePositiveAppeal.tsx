@@ -40,7 +40,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { configApi, resultsApi } from '../../services/api'
+import api, { configApi, resultsApi } from '../../services/api'
 import { translateRiskLevel } from '../../utils/i18nMapper'
 import type { DetectionResult } from '../../types'
 import { useApplication } from '../../contexts/ApplicationContext'
@@ -55,6 +55,11 @@ const appealConfigSchema = z.object({
 })
 
 type AppealConfigFormData = z.infer<typeof appealConfigSchema>
+
+interface FalsePositiveAppealProps {
+  workspaceId?: string
+  embedded?: boolean
+}
 
 interface AppealConfig {
   id?: string
@@ -86,7 +91,7 @@ interface AppealRecord {
   processed_at?: string
 }
 
-const FalsePositiveAppeal: React.FC = () => {
+const FalsePositiveAppeal: React.FC<FalsePositiveAppealProps> = ({ workspaceId, embedded }) => {
   const { t } = useTranslation()
   const [appealConfig, setAppealConfig] = useState<AppealConfig | null>(null)
   const [appealRecords, setAppealRecords] = useState<AppealRecord[]>([])
@@ -105,6 +110,19 @@ const FalsePositiveAppeal: React.FC = () => {
   const { currentApplicationId } = useApplication()
   const { user, onUserSwitch } = useAuth()
 
+  // Workspace-aware API helpers
+  const appealApi = React.useMemo(() => {
+    if (!workspaceId) return configApi.appealConfig
+    const prefix = `/api/v1/workspaces/${workspaceId}/config`
+    return {
+      get: () => api.get(`${prefix}/appeal`).then(res => res.data),
+      update: (data: any) => api.put(`${prefix}/appeal`, data).then(res => res.data),
+      getRecords: (params?: any) => api.get(`${prefix}/appeal/records`, { params }).then(res => res.data),
+      reviewAppeal: configApi.appealConfig.reviewAppeal, // review is per-record, not per-workspace
+      exportRecords: configApi.appealConfig.exportRecords, // export uses application-level
+    }
+  }, [workspaceId])
+
   const appealForm = useForm<AppealConfigFormData>({
     resolver: zodResolver(appealConfigSchema),
     defaultValues: {
@@ -118,17 +136,15 @@ const FalsePositiveAppeal: React.FC = () => {
   const fetchAppealConfig = async () => {
     try {
       setAppealLoading(true)
-      const config = await configApi.appealConfig.get()
+      const config = await appealApi.get()
       setAppealConfig(config)
       appealForm.reset({
         enabled: config.enabled,
         message_template: config.message_template,
         appeal_base_url: config.appeal_base_url,
-        // Use current user's email as default if not set
         final_reviewer_email: config.final_reviewer_email || user?.email || '',
       })
     } catch (error: any) {
-      // If no config exists, set default with user's email
       appealForm.reset({
         enabled: false,
         message_template: t('appealConfig.templatePlaceholder'),
@@ -150,7 +166,7 @@ const FalsePositiveAppeal: React.FC = () => {
       if (status && status !== 'all') {
         params.status = status
       }
-      const response = await configApi.appealConfig.getRecords(params)
+      const response = await appealApi.getRecords(params)
       setAppealRecords(response.items)
       setAppealRecordsTotal(response.total)
       setAppealRecordsPage(response.page)
@@ -163,7 +179,7 @@ const FalsePositiveAppeal: React.FC = () => {
 
   const handleReviewAppeal = async (appealId: string, action: 'approve' | 'reject') => {
     try {
-      await configApi.appealConfig.reviewAppeal(appealId, { action })
+      await appealApi.reviewAppeal(appealId, { action })
       toast.success(t('appealConfig.reviewSuccess'))
       fetchAppealRecords(appealRecordsPage, appealStatusFilter)
     } catch (error: any) {
@@ -178,7 +194,7 @@ const FalsePositiveAppeal: React.FC = () => {
       if (appealStatusFilter && appealStatusFilter !== 'all') {
         params.status = appealStatusFilter
       }
-      const blob = await configApi.appealConfig.exportRecords(params)
+      const blob = await appealApi.exportRecords(params)
       // Create download link
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -198,11 +214,11 @@ const FalsePositiveAppeal: React.FC = () => {
   }
 
   useEffect(() => {
-    if (currentApplicationId) {
+    if (workspaceId || currentApplicationId) {
       fetchAppealConfig()
       fetchAppealRecords(1, appealStatusFilter)
     }
-  }, [currentApplicationId])
+  }, [currentApplicationId, workspaceId])
 
   useEffect(() => {
     const unsubscribe = onUserSwitch(() => {
@@ -213,13 +229,14 @@ const FalsePositiveAppeal: React.FC = () => {
   }, [onUserSwitch])
 
   useEffect(() => {
-    if (currentApplicationId) {
+    if (workspaceId || currentApplicationId) {
       fetchAppealRecords(1, appealStatusFilter)
     }
   }, [appealStatusFilter])
 
-  // Disable html/body scroll to prevent double scrollbars
+  // Disable html/body scroll to prevent double scrollbars (only when standalone, not embedded in tab)
   useEffect(() => {
+    if (embedded) return
     const originalHtmlOverflow = document.documentElement.style.overflow
     const originalBodyOverflow = document.body.style.overflow
     document.documentElement.style.overflow = 'hidden'
@@ -228,12 +245,12 @@ const FalsePositiveAppeal: React.FC = () => {
       document.documentElement.style.overflow = originalHtmlOverflow
       document.body.style.overflow = originalBodyOverflow
     }
-  }, [])
+  }, [embedded])
 
   const handleSaveAppealConfig = async (values: AppealConfigFormData) => {
     try {
       setAppealLoading(true)
-      await configApi.appealConfig.update(values)
+      await appealApi.update(values)
       toast.success(t('appealConfig.saveSuccess'))
       fetchAppealConfig()
       setConfigExpanded(false)
@@ -459,8 +476,8 @@ const FalsePositiveAppeal: React.FC = () => {
   ]
 
   return (
-    <div className="h-full flex flex-col gap-4 overflow-hidden">
-      <h2 className="text-2xl font-bold tracking-tight flex-shrink-0">{t('appealConfig.pageTitle')}</h2>
+    <div className={embedded ? "flex flex-col gap-4" : "h-full flex flex-col gap-4 overflow-hidden"}>
+      {!embedded && <h2 className="text-2xl font-bold tracking-tight flex-shrink-0">{t('appealConfig.pageTitle')}</h2>}
 
       {/* Compact Config Section */}
       <Collapsible open={configExpanded} onOpenChange={setConfigExpanded} className="flex-shrink-0">

@@ -9,7 +9,7 @@ from database.models import (
     Blacklist, Whitelist, BanPolicy, ApplicationDataLeakagePolicy,
     ApplicationScannerConfig, Scanner, ScannerPackage, ApplicationSettings,
     DataSecurityEntityType, CustomScanner, UpstreamApiConfig,
-    ApiKey, KnowledgeBase
+    ApiKey, KnowledgeBase, AppealConfig, AppealRecord
 )
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
@@ -157,6 +157,21 @@ def copy_workspace_config(db: Session, source_ws_id: str, target_ws_id: str, ten
             scanner_id=cs.scanner_id,
             created_by=cs.created_by,
             notes=cs.notes,
+        ))
+
+    # 10. AppealConfig
+    src_appeal = db.query(AppealConfig).filter(
+        AppealConfig.workspace_id == source_uuid,
+        AppealConfig.application_id.is_(None),
+    ).first()
+    if src_appeal:
+        db.add(AppealConfig(
+            tenant_id=tenant_uuid,
+            workspace_id=target_uuid,
+            enabled=src_appeal.enabled,
+            message_template=src_appeal.message_template,
+            appeal_base_url=src_appeal.appeal_base_url,
+            final_reviewer_email=src_appeal.final_reviewer_email,
         ))
 
     logger.info(f"Copied config from workspace {source_ws_id} to {target_ws_id}")
@@ -1324,6 +1339,156 @@ async def update_workspace_fixed_answer_templates(
 
 
 # ============================================================
+# Workspace Appeal Config
+# ============================================================
+
+DEFAULT_APPEAL_CONFIG = {
+    "enabled": False,
+    "message_template": "If you think this is a false positive, please click the following link to appeal: {appeal_url}",
+    "appeal_base_url": "",
+    "final_reviewer_email": None,
+}
+
+
+@router.get("/{workspace_id}/config/appeal")
+async def get_workspace_appeal_config(
+    workspace_id: str,
+    request: Request,
+    db: Session = Depends(get_admin_db),
+):
+    """Get workspace-level appeal configuration"""
+    tenant_id = get_current_tenant_id(request)
+    _verify_workspace_ownership(db, workspace_id, tenant_id)
+
+    config = db.query(AppealConfig).filter(
+        AppealConfig.workspace_id == workspace_id,
+        AppealConfig.application_id.is_(None),
+    ).first()
+
+    if config:
+        return {
+            "id": str(config.id),
+            "enabled": config.enabled,
+            "message_template": config.message_template,
+            "appeal_base_url": config.appeal_base_url,
+            "final_reviewer_email": config.final_reviewer_email,
+            "created_at": config.created_at.isoformat() if config.created_at else None,
+            "updated_at": config.updated_at.isoformat() if config.updated_at else None,
+        }
+    return DEFAULT_APPEAL_CONFIG
+
+
+@router.put("/{workspace_id}/config/appeal")
+async def update_workspace_appeal_config(
+    workspace_id: str,
+    request: Request,
+    db: Session = Depends(get_admin_db),
+):
+    """Update workspace-level appeal configuration"""
+    tenant_id = get_current_tenant_id(request)
+    _verify_workspace_ownership(db, workspace_id, tenant_id)
+
+    body = await request.json()
+
+    config = db.query(AppealConfig).filter(
+        AppealConfig.workspace_id == workspace_id,
+        AppealConfig.application_id.is_(None),
+    ).first()
+
+    if not config:
+        config = AppealConfig(
+            tenant_id=uuid.UUID(tenant_id),
+            workspace_id=uuid.UUID(workspace_id),
+            enabled=False,
+            message_template=DEFAULT_APPEAL_CONFIG["message_template"],
+            appeal_base_url="",
+        )
+        db.add(config)
+
+    if "enabled" in body:
+        config.enabled = body["enabled"]
+    if "message_template" in body:
+        config.message_template = body["message_template"]
+    if "appeal_base_url" in body:
+        config.appeal_base_url = body["appeal_base_url"]
+    if "final_reviewer_email" in body:
+        config.final_reviewer_email = body["final_reviewer_email"] or None
+
+    db.commit()
+    return {
+        "id": str(config.id),
+        "enabled": config.enabled,
+        "message_template": config.message_template,
+        "appeal_base_url": config.appeal_base_url,
+        "final_reviewer_email": config.final_reviewer_email,
+    }
+
+
+@router.get("/{workspace_id}/config/appeal/records")
+async def get_workspace_appeal_records(
+    workspace_id: str,
+    request: Request,
+    status: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_admin_db),
+):
+    """Get appeal records for all applications in a workspace"""
+    tenant_id = get_current_tenant_id(request)
+    _verify_workspace_ownership(db, workspace_id, tenant_id)
+
+    # Get all application IDs in this workspace
+    ws_uuid = uuid.UUID(workspace_id)
+    app_ids = [row[0] for row in db.query(Application.id).filter(
+        Application.workspace_id == ws_uuid,
+        Application.is_active == True,
+    ).all()]
+
+    if not app_ids:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size, "pages": 0}
+
+    from sqlalchemy import desc
+    query = db.query(AppealRecord).filter(AppealRecord.application_id.in_(app_ids))
+    if status:
+        query = query.filter(AppealRecord.status == status)
+
+    total = query.count()
+    pages = (total + page_size - 1) // page_size
+    records = query.order_by(desc(AppealRecord.created_at)).offset((page - 1) * page_size).limit(page_size).all()
+
+    # Get application names
+    app_name_map = {}
+    if records:
+        rec_app_ids = set(r.application_id for r in records if r.application_id)
+        if rec_app_ids:
+            apps = db.query(Application).filter(Application.id.in_(rec_app_ids)).all()
+            app_name_map = {app.id: app.name for app in apps}
+
+    items = []
+    for r in records:
+        items.append({
+            "id": str(r.id),
+            "request_id": r.request_id,
+            "user_id": r.user_id,
+            "application_name": app_name_map.get(r.application_id, ""),
+            "original_content": r.original_content,
+            "original_risk_level": r.original_risk_level,
+            "original_categories": r.original_categories or [],
+            "status": r.status,
+            "ai_approved": r.ai_approved,
+            "ai_review_result": r.ai_review_result,
+            "processor_type": r.processor_type,
+            "processor_id": r.processor_id,
+            "processor_reason": r.processor_reason,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "ai_reviewed_at": r.ai_reviewed_at.isoformat() if r.ai_reviewed_at else None,
+            "processed_at": r.processed_at.isoformat() if r.processed_at else None,
+        })
+
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages}
+
+
+# ============================================================
 # Workspace Config Export / Import
 # ============================================================
 
@@ -1467,6 +1632,19 @@ def export_workspace_config(db: Session, workspace_id: str, workspace_name: str)
                 })
         if cs_list:
             config["custom_scanners"] = cs_list
+
+    # 10. AppealConfig
+    appeal = db.query(AppealConfig).filter(
+        AppealConfig.workspace_id == ws_uuid,
+        AppealConfig.application_id.is_(None),
+    ).first()
+    if appeal:
+        config["appeal_config"] = {
+            "enabled": appeal.enabled,
+            "message_template": appeal.message_template,
+            "appeal_base_url": appeal.appeal_base_url,
+            "final_reviewer_email": appeal.final_reviewer_email,
+        }
 
     return {
         "version": "1.0",
@@ -1634,6 +1812,22 @@ def import_workspace_config(db: Session, workspace_id: str, tenant_id: str, conf
             workspace_id=ws_uuid,
             scanner_id=scanner.id,
             notes=cs.get("notes"),
+        ))
+
+    # 10. AppealConfig
+    db.query(AppealConfig).filter(
+        AppealConfig.workspace_id == ws_uuid,
+        AppealConfig.application_id.is_(None),
+    ).delete()
+    if "appeal_config" in config_data:
+        ac = config_data["appeal_config"]
+        db.add(AppealConfig(
+            tenant_id=tenant_uuid,
+            workspace_id=ws_uuid,
+            enabled=ac.get("enabled", False),
+            message_template=ac.get("message_template", DEFAULT_APPEAL_CONFIG["message_template"]),
+            appeal_base_url=ac.get("appeal_base_url", ""),
+            final_reviewer_email=ac.get("final_reviewer_email"),
         ))
 
     logger.info(f"Imported config to workspace {workspace_id}")
