@@ -22,36 +22,43 @@ def create_user_default_templates(db: Session, tenant_id: uuid.UUID) -> int:
     """
     tenant_id = tenant_id  # For backward compatibility, internally use tenant_id
     try:
-        # Check if tenant already has templates
-        existing_count = db.query(ResponseTemplate).filter_by(tenant_id=tenant_id).count()
-        if existing_count > 0:
-            return existing_count
+        # Use a savepoint so that failures here don't corrupt the outer transaction
+        # (e.g., when called from init_db inside engine.begin() context)
+        nested = db.begin_nested()
+        try:
+            # Check if tenant already has templates
+            existing_count = db.query(ResponseTemplate).filter_by(tenant_id=tenant_id).count()
+            if existing_count > 0:
+                nested.rollback()
+                return existing_count
 
-        # Get all system-level templates (tenant_id is None)
-        system_templates = db.query(ResponseTemplate).filter(
-            ResponseTemplate.tenant_id.is_(None),
-            ResponseTemplate.is_default == True
-        ).all()
+            # Get all system-level templates (tenant_id is None)
+            system_templates = db.query(ResponseTemplate).filter(
+                ResponseTemplate.tenant_id.is_(None),
+                ResponseTemplate.is_default == True
+            ).all()
 
-        created_count = 0
-        for template in system_templates:
-            # Create corresponding template for tenant
-            tenant_template = ResponseTemplate(
-                tenant_id=tenant_id,
-                category=template.category,
-                risk_level=template.risk_level,
-                template_content=template.template_content,
-                is_default=template.is_default,
-                is_active=template.is_active
-            )
-            db.add(tenant_template)
-            created_count += 1
+            created_count = 0
+            for template in system_templates:
+                # Create corresponding template for tenant
+                tenant_template = ResponseTemplate(
+                    tenant_id=tenant_id,
+                    category=template.category,
+                    risk_level=template.risk_level,
+                    template_content=template.template_content,
+                    is_default=template.is_default,
+                    is_active=template.is_active
+                )
+                db.add(tenant_template)
+                created_count += 1
 
-        db.commit()
-        return created_count
+            nested.commit()
+            return created_count
+        except Exception:
+            nested.rollback()
+            raise
 
     except Exception as e:
-        db.rollback()
         raise e
 
 

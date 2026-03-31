@@ -60,13 +60,15 @@ class AdminService:
                     logger.info("Super admin ensured active/verified and password synced to .env")
                 
                 # Check and create default template for super admin (if not exists)
+                # Cache email before template creation in case the transaction breaks
+                admin_email = existing_admin.email
                 try:
                     from services.template_service import create_user_default_templates
                     template_count = create_user_default_templates(db, existing_admin.id)
                     if template_count > 0:
-                        logger.info(f"Created {template_count} default templates for existing super admin {existing_admin.email}")
+                        logger.info(f"Created {template_count} default templates for existing super admin {admin_email}")
                 except Exception as e:
-                    logger.error(f"Failed to create default templates for existing super admin {existing_admin.email}: {e}")
+                    logger.error(f"Failed to create default templates for existing super admin {admin_email}: {e}")
                     # Not affect super admin running, just record error
                 
                 if not updated:
@@ -91,12 +93,13 @@ class AdminService:
             db.refresh(super_admin)
             
             # Create default template for super admin
+            admin_email_new = super_admin.email
             try:
                 from services.template_service import create_user_default_templates
                 template_count = create_user_default_templates(db, super_admin.id)
-                logger.info(f"Created {template_count} default templates for super admin {super_admin.email}")
+                logger.info(f"Created {template_count} default templates for super admin {admin_email_new}")
             except Exception as e:
-                logger.error(f"Failed to create default templates for super admin {super_admin.email}: {e}")
+                logger.error(f"Failed to create default templates for super admin {admin_email_new}: {e}")
                 # Not affect super admin creation process, just record error
             
             logger.info(f"Super admin created: {super_admin.email} (API Key: {api_key})")
