@@ -1604,7 +1604,7 @@ def export_workspace_config(db: Session, workspace_id: str, workspace_name: str)
             "is_active": et.is_active,
             "is_global": et.is_global,
             "source_type": et.source_type,
-            "template_id": et.template_id,
+            "template_id": str(et.template_id) if et.template_id else None,
             "restore_code": et.restore_code,
             "restore_code_hash": et.restore_code_hash,
             "restore_natural_desc": et.restore_natural_desc,
@@ -1617,7 +1617,7 @@ def export_workspace_config(db: Session, workspace_id: str, workspace_name: str)
     if custom_scanners:
         cs_list = []
         for cs in custom_scanners:
-            scanner = db.query(Scanner).filter(Scanner.id == cs.scanner_id).first()
+            scanner = db.query(Scanner).filter(Scanner.id == cs.scanner_id, Scanner.is_active == True).first()
             if scanner:
                 cs_list.append({
                     "scanner_tag": scanner.tag,
@@ -1811,6 +1811,7 @@ def import_workspace_config(db: Session, workspace_id: str, tenant_id: str, conf
         db.add(CustomScanner(
             workspace_id=ws_uuid,
             scanner_id=scanner.id,
+            created_by=tenant_uuid,
             notes=cs.get("notes"),
         ))
 

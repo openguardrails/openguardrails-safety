@@ -3,6 +3,7 @@ import { Plus, Edit, Trash2, ArrowRightLeft, Settings, ChevronLeft, Search, X, E
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useCanEdit } from '../../hooks/useCanEdit'
+import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -921,6 +922,7 @@ const Workspaces: React.FC = () => {
   const { t } = useTranslation()
   const location = useLocation()
   const canEdit = useCanEdit()
+  const { refreshWorkspaces: refreshGlobalWorkspaces } = useWorkspace()
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -999,6 +1001,7 @@ const Workspaces: React.FC = () => {
       await api.delete(`/api/v1/workspaces/${workspace.id}`)
       toast.success(t('workspaces.deleteSuccess'))
       fetchWorkspaces()
+      refreshGlobalWorkspaces()
     } catch (error) {
       toast.error(t('workspaces.deleteError'))
     }
@@ -1031,6 +1034,7 @@ const Workspaces: React.FC = () => {
       setDialogOpen(false)
       setImportFile(null)
       fetchWorkspaces()
+      refreshGlobalWorkspaces()
     } catch (error: any) {
       const msg = error.response?.data?.detail || t('workspaces.saveError')
       toast.error(msg)
@@ -1081,7 +1085,7 @@ const Workspaces: React.FC = () => {
     return (
       <WorkspaceConfigPanel
         workspace={configWorkspace}
-        onBack={() => { setConfigWorkspace(null); fetchWorkspaces() }}
+        onBack={() => { setConfigWorkspace(null); fetchWorkspaces(); refreshGlobalWorkspaces() }}
       />
     )
   }
