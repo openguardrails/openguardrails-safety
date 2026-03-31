@@ -8,8 +8,8 @@ from config import settings
 # Detection service engine - minimal connection pool (only for authentication)
 detection_engine = create_engine(
     settings.database_url,
-    pool_size=1,  # Detection service only needs authentication, minimal connection pool
-    max_overflow=2,  # Detection service minimal overflow connection
+    pool_size=5,  # Detection service needs connections for concurrent async requests (data security, scanner detection, etc.)
+    max_overflow=10,  # Allow burst connections for parallel detection workloads
     pool_pre_ping=True,
     pool_recycle=1800,
     pool_timeout=30,

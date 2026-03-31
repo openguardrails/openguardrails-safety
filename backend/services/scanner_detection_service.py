@@ -9,10 +9,10 @@ supporting three scanner types:
 
 Detection Modes:
 1. Context-aware (default): Messages within MAX_DETECTION_CONTEXT_LENGTH are detected together
-2. Independent message detection: Each message detected separately with 512-char sliding window
-   - Triggered automatically for agent scenarios (tool messages present)
-   - Triggered when total content exceeds MAX_DETECTION_CONTEXT_LENGTH
-   - System messages are never detected in either mode
+2. Sliding window detection: When content exceeds MAX_DETECTION_CONTEXT_LENGTH
+   - User-only messages: Slide window on user content
+   - Multi-turn (user+assistant): Only detect the LAST message with sliding window as user content
+   - Only user/assistant messages are detected; system/developer/tool messages are ignored
 """
 
 import asyncio
@@ -33,9 +33,9 @@ class SlidingWindowProcessor:
     """
     Sliding window processor for long content detection.
 
-    Handles two scenarios:
+    Handles two scenarios when content exceeds MAX_DETECTION_CONTEXT_LENGTH:
     1. User-only messages: Slide window on user content
-    2. User+Assistant messages: Cross-detect user windows × assistant windows
+    2. Multi-turn (user+assistant): Only detect the LAST message with sliding window as user content
     """
 
     def __init__(self, max_context_length: int = None):
@@ -85,18 +85,18 @@ class SlidingWindowProcessor:
         messages: List[Dict]
     ) -> List[List[Dict]]:
         """
-        Generate message window combinations for context-aware detection.
+        Generate message window combinations for detection.
 
-        Only used when content fits in MAX_DETECTION_CONTEXT_LENGTH and no tool messages.
-        System messages should be filtered out by the caller.
+        Only user/assistant messages should be passed in (caller filters others).
 
         Logic:
-        - Tool messages are preserved as prefix in every window
-        - If only user messages (input): Create windows from user content
-        - If user+assistant: Create cross-product of user windows × assistant windows
+        - If content fits in MAX_DETECTION_CONTEXT_LENGTH: return as-is (single detection)
+        - If exceeds limit and only user messages: sliding window on user content
+        - If exceeds limit and multi-turn (user+assistant): only detect the LAST message
+          with sliding window, treated as user content
 
         Args:
-            messages: Original message list
+            messages: List of user/assistant messages only
 
         Returns:
             List of message lists, each representing one detection window
@@ -104,35 +104,14 @@ class SlidingWindowProcessor:
         if not messages:
             return [[]]
 
-        # Separate messages by role (system messages already filtered out by caller)
-        prefix_messages = [m for m in messages if m.get("role") == "tool"]
         user_messages = [m for m in messages if m.get("role") == "user"]
         assistant_messages = [m for m in messages if m.get("role") == "assistant"]
 
-        # Extract text content from messages
-        def get_text_content(msg: Dict) -> str:
-            content = msg.get("content", "")
-            if content is None:
-                return ""
-            if isinstance(content, str):
-                return content
-            elif isinstance(content, list):
-                # Multimodal content - extract text parts
-                text_parts = []
-                for part in content:
-                    if isinstance(part, dict) and part.get("type") == "text":
-                        text_parts.append(part.get("text", ""))
-                return " ".join(text_parts)
-            return str(content)
-
-        # Calculate prefix length (system/tool messages always included)
-        prefix_content_length = sum(len(get_text_content(m)) for m in prefix_messages)
-
-        # Combine all user content and assistant content
+        # Combine all content to check total length
         user_content = "\n".join(get_text_content(m) for m in user_messages)
         assistant_content = "\n".join(get_text_content(m) for m in assistant_messages)
 
-        total_length = prefix_content_length + len(user_content) + len(assistant_content)
+        total_length = len(user_content) + len(assistant_content)
 
         # If total content fits in context, return original messages
         if total_length <= self.max_context_length:
@@ -141,44 +120,35 @@ class SlidingWindowProcessor:
 
         logger.info(f"Content length {total_length} > max {self.max_context_length}, applying sliding window")
 
-        # Reserve space for prefix messages (system/tool)
-        available_length = self.max_context_length - prefix_content_length
-        if available_length <= 0:
-            # Prefix alone exceeds limit, just return prefix truncated
-            logger.warning(f"System/tool prefix ({prefix_content_length}) exceeds max context ({self.max_context_length})")
-            return [prefix_messages]
+        window_size = self.max_context_length
 
-        # Case 1: Only user/input messages (no assistant)
+        # Case 1: Only user messages - sliding window on user content
         if not assistant_messages:
-            window_size = available_length
             user_windows = self._create_windows(user_content, window_size)
 
             result = []
             for window_text, start, end in user_windows:
-                window_messages = [m for m in prefix_messages]  # copy prefix
-                window_messages.append({"role": "user", "content": window_text})
-                result.append(window_messages)
+                result.append([{"role": "user", "content": window_text}])
 
-            logger.info(f"Created {len(result)} user-only windows (with {len(prefix_messages)} prefix messages)")
+            logger.info(f"Created {len(result)} user-only sliding windows")
             return result
 
-        # Case 2: User + Assistant messages - cross-product detection
-        # Each role gets half the available context length
-        half_context = available_length // 2
+        # Case 2: Multi-turn (user+assistant) - only detect the LAST message
+        # Extract the last message and sliding window it as user content
+        last_message = messages[-1]
+        last_content = get_text_content(last_message)
 
-        user_windows = self._create_windows(user_content, half_context)
-        assistant_windows = self._create_windows(assistant_content, half_context)
+        if not last_content:
+            logger.warning("Last message has no text content, returning empty")
+            return [[]]
 
-        # Create cross-product: each user window × each assistant window
+        last_windows = self._create_windows(last_content, window_size)
+
         result = []
-        for user_text, u_start, u_end in user_windows:
-            for asst_text, a_start, a_end in assistant_windows:
-                window_messages = [m for m in prefix_messages]  # copy prefix
-                window_messages.append({"role": "user", "content": user_text})
-                window_messages.append({"role": "assistant", "content": asst_text})
-                result.append(window_messages)
+        for window_text, start, end in last_windows:
+            result.append([{"role": "user", "content": window_text}])
 
-        logger.info(f"Created {len(result)} cross-product windows ({len(user_windows)} user × {len(assistant_windows)} assistant, with {len(prefix_messages)} prefix messages)")
+        logger.info(f"Multi-turn: detecting only last message ({last_message.get('role')}) with {len(result)} sliding windows")
         return result
 
 
@@ -196,56 +166,6 @@ def get_text_content(msg: Dict) -> str:
                 text_parts.append(part.get("text", ""))
         return " ".join(text_parts)
     return str(content)
-
-
-# Window size for independent message detection (512 chars per window)
-INDEPENDENT_WINDOW_SIZE = 512
-
-
-def get_independent_message_windows(messages: List[Dict]) -> List[List[Dict]]:
-    """
-    Generate independent detection windows - one per message, no cross-context.
-
-    Each user/assistant/tool message is detected independently.
-    System messages are skipped entirely.
-    Messages longer than INDEPENDENT_WINDOW_SIZE get 512-char sliding windows.
-
-    Returns:
-        List of message lists, each containing a single message (or window chunk)
-    """
-    if not messages:
-        return [[]]
-
-    overlap_ratio = 0.2
-    step_size = int(INDEPENDENT_WINDOW_SIZE * (1 - overlap_ratio))  # 410 chars
-    result = []
-
-    for msg in messages:
-        role = msg.get("role", "")
-        if role == "system":
-            continue
-
-        text = get_text_content(msg)
-        if not text:
-            continue
-
-        if len(text) <= INDEPENDENT_WINDOW_SIZE:
-            result.append([{"role": role, "content": text}])
-        else:
-            # Sliding window for long messages
-            start = 0
-            while start < len(text):
-                end = min(start + INDEPENDENT_WINDOW_SIZE, len(text))
-                result.append([{"role": role, "content": text[start:end]}])
-                if end >= len(text):
-                    break
-                start += step_size
-
-    if not result:
-        return [[]]
-
-    logger.info(f"Independent detection: {len(result)} windows from {len(messages)} messages (window_size={INDEPENDENT_WINDOW_SIZE})")
-    return result
 
 
 # Global sliding window processor instance
@@ -381,11 +301,11 @@ class ScannerDetectionService:
         Execute GenAI scanners using OpenGuardrails-Text model
 
         Only enabled GenAI scanner definitions are sent to the model
-        in a single call. No filtering needed since all are enabled.
+        in a single call. Only user/assistant messages are detected.
 
-        Supports sliding window for long content:
+        Sliding window for long content:
         - User-only: Slide window on user content
-        - User+Assistant: Cross-detect user windows × assistant windows
+        - Multi-turn (user+assistant): Only detect the LAST message with sliding window
 
         Args:
             scanners: List of enabled GenAI scanner configs only
@@ -408,22 +328,20 @@ class ScannerDetectionService:
             # Check if messages contain images
             has_image = self._check_has_image(messages)
 
-            # Filter out system messages - never detect them
-            non_system_messages = [m for m in messages if m.get("role") != "system"]
+            # Only detect user/assistant messages - ignore system/developer/tool/etc.
+            detected_messages = [m for m in messages if m.get("role") in ("user", "assistant")]
 
-            # Determine detection mode:
-            # - Agent scenario (has tool messages): independent detection per message
-            # - Non-agent with content exceeding limit: independent detection per message
-            # - Non-agent within limit: context-aware detection (existing behavior)
-            has_tool_messages = any(m.get("role") == "tool" for m in non_system_messages)
-            total_content_length = sum(len(get_text_content(m)) for m in non_system_messages)
-            use_independent = has_tool_messages or total_content_length > settings.max_detection_context_length
+            if not detected_messages:
+                logger.info("No user/assistant messages to detect")
+                return [
+                    ScannerDetectionResult(
+                        scanner_tag=s['tag'], guardrail_name=s['name'],
+                        scanner_type='genai', risk_level=s['risk_level'], matched=False
+                    ) for s in scanners
+                ]
 
-            if use_independent:
-                logger.info(f"Using independent message detection (agent={has_tool_messages}, total_len={total_content_length})")
-                message_windows = get_independent_message_windows(non_system_messages)
-            else:
-                message_windows = sliding_window_processor.get_message_windows(non_system_messages)
+            # Use sliding window processor for all cases (handles both within-limit and exceeding-limit)
+            message_windows = sliding_window_processor.get_message_windows(detected_messages)
 
             if len(message_windows) == 1:
                 # No sliding window needed - single detection
