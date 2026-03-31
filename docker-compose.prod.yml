@@ -12,7 +12,7 @@ services:
     container_name: openguardrails-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: openguardrails
+      POSTGRES_DB: ${DATABASE_NAME:-openguardrails}
       POSTGRES_USER: openguardrails
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-your_password}
       POSTGRES_HOST_AUTH_METHOD: md5
@@ -34,7 +34,7 @@ services:
     volumes:
       - openguardrails-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U openguardrails -d openguardrails"]
+      test: ["CMD-SHELL", "pg_isready -U openguardrails -d ${DATABASE_NAME:-openguardrails}"]
       interval: 5s
       timeout: 5s
       retries: 5

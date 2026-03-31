@@ -291,12 +291,19 @@ async def online_test(
                 Application.source == 'online_test',
             ).first()
             if not online_test_app:
+                # Assign to global workspace so it inherits workspace-level configs
+                from database.models import Workspace
+                global_ws = db.query(Workspace).filter(
+                    Workspace.tenant_id == tenant_uuid,
+                    Workspace.is_global == True,
+                ).first()
                 online_test_app = Application(
                     tenant_id=tenant_uuid,
                     name="Online Test",
                     description="Auto-created application for online testing",
                     source="online_test",
                     is_active=True,
+                    workspace_id=global_ws.id if global_ws else None,
                 )
                 db.add(online_test_app)
                 db.commit()

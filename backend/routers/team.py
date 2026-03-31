@@ -143,7 +143,30 @@ async def create_member(
         ).first()
         if existing_membership:
             raise HTTPException(status_code=400, detail="User is already a member of this team")
-        raise HTTPException(status_code=400, detail="Email already registered")
+
+        # Check if user belongs to another organization
+        other_membership = db.query(TenantMember).filter(
+            TenantMember.user_id == existing_user.id,
+        ).first()
+        if other_membership:
+            raise HTTPException(status_code=400, detail="User already belongs to another organization")
+
+        # User exists but not in any team - re-add as member (e.g. previously removed)
+        inviter_user_id = auth_data.get('user_id') or auth_data.get('tenant_id')
+        membership = TenantMember(
+            tenant_id=tenant_id,
+            user_id=existing_user.id,
+            email=existing_user.email,
+            role=member_data.role,
+            invite_status='accepted',
+            invited_by=inviter_user_id,
+            accepted_at=datetime.now(timezone.utc),
+        )
+        db.add(membership)
+        db.commit()
+
+        logger.info(f"User {member_data.email} re-added by {auth_data.get('email')} with role {member_data.role}")
+        return {"message": "User added successfully", "user_id": str(existing_user.id)}
 
     # Validate password
     from utils.validators import validate_password_strength

@@ -129,7 +129,7 @@ const OnlineTest: React.FC = () => {
   const loadWorkspaces = useCallback(async () => {
     try {
       const response = await api.get('/api/v1/workspaces')
-      setWorkspaces(response.data.map((ws: any) => ({ id: ws.id, name: ws.name })))
+      setWorkspaces(response.data.filter((ws: any) => !ws.is_global).map((ws: any) => ({ id: ws.id, name: ws.name })))
     } catch (error) {
       console.error('Failed to load workspaces:', error)
     }

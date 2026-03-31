@@ -278,7 +278,7 @@ async def list_applications(
             # Count total available scanners for this workspace
             total_scanners_count = db.query(ApplicationScannerConfig).filter(
                 ApplicationScannerConfig.workspace_id == ws_id
-            ).count()
+            ).count() if ws_id else 0
 
             protection_summary = {
                 "risk_types_enabled": enabled_scanners_count,  # Renamed to scanners_enabled for clarity

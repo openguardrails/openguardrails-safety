@@ -651,12 +651,17 @@ class AppealService:
         db: Session
     ) -> Tuple[int, str]:
         """
-        Add approved content to the appeal whitelist
+        Add approved content to the appeal whitelist (workspace-level)
 
         Returns: (whitelist_id, added_keyword)
         """
         app_uuid = uuid.UUID(application_id)
         tenant_uuid = uuid.UUID(tenant_id)
+
+        # Resolve workspace_id from application
+        from services.workspace_resolver import get_workspace_id_for_app
+        workspace_id_str = get_workspace_id_for_app(db, application_id)
+        workspace_uuid = uuid.UUID(workspace_id_str) if workspace_id_str else None
 
         # Extract a meaningful keyword from content (first 100 chars or less)
         keyword = content[:100].strip()
@@ -666,15 +671,25 @@ class AppealService:
             if last_space > 50:
                 keyword = keyword[:last_space]
 
-        # Find existing appeal whitelist (check both English and Chinese names for backwards compatibility)
+        # Find existing appeal whitelist in the workspace (check both English and Chinese names for backwards compatibility)
         from sqlalchemy import or_
-        whitelist = db.query(Whitelist).filter(
-            Whitelist.application_id == app_uuid,
-            or_(
-                Whitelist.name == self.APPEAL_WHITELIST_NAME_EN,
-                Whitelist.name == self.APPEAL_WHITELIST_NAME_ZH
-            )
-        ).first()
+        if workspace_uuid:
+            whitelist = db.query(Whitelist).filter(
+                Whitelist.workspace_id == workspace_uuid,
+                or_(
+                    Whitelist.name == self.APPEAL_WHITELIST_NAME_EN,
+                    Whitelist.name == self.APPEAL_WHITELIST_NAME_ZH
+                )
+            ).first()
+        else:
+            # Fallback: query by application_id if no workspace
+            whitelist = db.query(Whitelist).filter(
+                Whitelist.application_id == app_uuid,
+                or_(
+                    Whitelist.name == self.APPEAL_WHITELIST_NAME_EN,
+                    Whitelist.name == self.APPEAL_WHITELIST_NAME_ZH
+                )
+            ).first()
 
         if whitelist:
             # Append to existing whitelist
@@ -684,6 +699,9 @@ class AppealService:
                 whitelist.keywords = existing_keywords
                 # Mark JSON field as modified so SQLAlchemy detects the change
                 flag_modified(whitelist, 'keywords')
+            # Migrate legacy app-level whitelist to workspace-level if needed
+            if workspace_uuid and not whitelist.workspace_id:
+                whitelist.workspace_id = workspace_uuid
         else:
             # Create new whitelist with localized name and description
             whitelist_name = t(language, 'whitelistName')
@@ -691,6 +709,7 @@ class AppealService:
             whitelist = Whitelist(
                 tenant_id=tenant_uuid,
                 application_id=app_uuid,
+                workspace_id=workspace_uuid,
                 name=whitelist_name,
                 keywords=[keyword],
                 description=whitelist_description,
