@@ -25,7 +25,6 @@ import {
 import { confirmDialog } from '@/utils/confirm-dialog'
 import { teamApi } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
-import { isEnterpriseMode } from '../../config'
 import { format } from 'date-fns'
 
 interface Member {
@@ -35,24 +34,10 @@ interface Member {
   joined_at: string | null
 }
 
-interface Invitation {
-  id: string
-  email: string
-  role: string
-  status: string
-  invited_by_email: string | null
-  expires_at: string
-  created_at: string
-}
-
 const TeamManagement: React.FC = () => {
   const { t } = useTranslation()
   const { user, canEdit } = useAuth()
   const [members, setMembers] = useState<Member[]>([])
-  const [invitations, setInvitations] = useState<Invitation[]>([])
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState('member')
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [createEmail, setCreateEmail] = useState('')
   const [createPassword, setCreatePassword] = useState('')
@@ -64,12 +49,8 @@ const TeamManagement: React.FC = () => {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [membersData, invitationsData] = await Promise.all([
-        teamApi.listMembers(),
-        canEdit ? teamApi.listInvitations().catch(() => []) : Promise.resolve([]),
-      ])
+      const membersData = await teamApi.listMembers()
       setMembers(membersData)
-      setInvitations(invitationsData)
     } catch (error) {
       console.error('Failed to load team data:', error)
     } finally {
@@ -80,20 +61,6 @@ const TeamManagement: React.FC = () => {
   useEffect(() => {
     fetchData()
   }, [])
-
-  const handleInvite = async () => {
-    if (!inviteEmail.trim()) return
-    try {
-      await teamApi.inviteMember({ email: inviteEmail.trim(), role: inviteRole })
-      toast.success(t('team.invitationSent'))
-      setInviteDialogOpen(false)
-      setInviteEmail('')
-      setInviteRole('member')
-      fetchData()
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to send invitation')
-    }
-  }
 
   const handleCreateMember = async () => {
     if (!createEmail.trim() || !createPassword.trim()) return
@@ -135,21 +102,6 @@ const TeamManagement: React.FC = () => {
     }
   }
 
-  const handleCancelInvitation = async (invitation: Invitation) => {
-    const confirmed = await confirmDialog({
-      title: t('team.cancelInvitation'),
-      description: t('team.confirmCancel'),
-    })
-    if (!confirmed) return
-    try {
-      await teamApi.cancelInvitation(invitation.id)
-      toast.success(t('team.invitationCancelled'))
-      fetchData()
-    } catch (error: any) {
-      toast.error(error.response?.data?.detail || 'Failed to cancel invitation')
-    }
-  }
-
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'owner':
@@ -167,19 +119,11 @@ const TeamManagement: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-3xl font-bold tracking-tight">{t('team.title')}</h2>
-        {canEdit && (
-          <div className="flex gap-2">
-            {isEnterpriseMode() && isOwner && (
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                {t('team.addUser') || 'Add User'}
-              </Button>
-            )}
-            <Button variant={isEnterpriseMode() ? "outline" : "default"} onClick={() => setInviteDialogOpen(true)}>
-              <UserPlus className="mr-2 h-4 w-4" />
-              {t('team.inviteMember')}
-            </Button>
-          </div>
+        {canEdit && isOwner && (
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            {t('team.addUser') || 'Add User'}
+          </Button>
         )}
       </div>
 
@@ -251,45 +195,7 @@ const TeamManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Pending Invitations */}
-      {canEdit && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('team.invitations')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {invitations.length === 0 ? (
-              <p className="text-sm text-muted-foreground">{t('team.noInvitations')}</p>
-            ) : (
-              <div className="space-y-3">
-                {invitations.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{inv.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {t('team.role')}: {t(`team.roles.${inv.role}`)} &bull; {t('team.expiresAt')}: {format(new Date(inv.expires_at), 'yyyy-MM-dd HH:mm')}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCancelInvitation(inv)}
-                      className="text-red-400 hover:text-red-300"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Create User Dialog (Enterprise mode) */}
+      {/* Create User Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -338,45 +244,6 @@ const TeamManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Invite Dialog */}
-      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('team.inviteMember')}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>{t('team.email')}</Label>
-              <Input
-                type="email"
-                placeholder="user@company.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('team.role')}</Label>
-              <Select value={inviteRole} onValueChange={setInviteRole}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">{t('team.roles.admin')}</SelectItem>
-                  <SelectItem value="member">{t('team.roles.member')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
-              {t('common.cancel')}
-            </Button>
-            <Button onClick={handleInvite} disabled={!inviteEmail.trim()}>
-              {t('team.inviteMember')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

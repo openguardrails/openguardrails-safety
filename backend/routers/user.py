@@ -69,20 +69,21 @@ def get_current_user_from_token(credentials: HTTPAuthorizationCredentials, db: S
     """Get current tenant from JWT token"""
     try:
         tenant_data = verify_token(credentials.credentials)
-        tenant_id = tenant_data.get('tenant_id') or tenant_data.get('tenant_id') or tenant_data.get('sub')
+        # Use user_id (the logged-in person's ID), not tenant_id (the org ID)
+        user_id = tenant_data.get('user_id') or tenant_data.get('sub')
 
-        if not tenant_id:
-            raise HTTPException(status_code=401, detail="Invalid token: tenant ID not found")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token: user ID not found")
 
-        # Ensure tenant_id is a UUID object or string
-        if isinstance(tenant_id, str):
+        # Ensure user_id is a UUID object or string
+        if isinstance(user_id, str):
             try:
                 import uuid
-                tenant_id = uuid.UUID(tenant_id)
+                user_id = uuid.UUID(user_id)
             except ValueError:
-                raise HTTPException(status_code=401, detail="Invalid tenant ID format")
+                raise HTTPException(status_code=401, detail="Invalid user ID format")
 
-        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        tenant = db.query(Tenant).filter(Tenant.id == user_id).first()
         if not tenant or not tenant.is_active or not tenant.is_verified:
             raise HTTPException(status_code=401, detail="Tenant not found, inactive, or not verified")
 
@@ -318,6 +319,11 @@ async def get_current_user_info(
     """Get current tenant information"""
     tenant = get_current_user_from_token(credentials, db)
 
+    # Look up team membership
+    membership = db.query(TenantMember).filter(TenantMember.user_id == tenant.id).first()
+    member_role = membership.role if membership else "owner"
+    org_tenant_id = str(membership.tenant_id) if membership else str(tenant.id)
+
     # Get tenant speed limit configuration (skip in enterprise mode)
     rate_limit = 0
     if not settings.is_enterprise_mode:
@@ -327,7 +333,7 @@ async def get_current_user_info(
             logger = setup_logger()
 
             rate_limit_service = RateLimitService(db)
-            rate_limit_config = rate_limit_service.get_user_rate_limit(str(tenant.id))
+            rate_limit_config = rate_limit_service.get_user_rate_limit(org_tenant_id)
             rate_limit = rate_limit_config.requests_per_second if rate_limit_config and rate_limit_config.is_active else 10
             logger.info(f"Tenant {tenant.email} speed limit: {rate_limit} (configuration exists: {rate_limit_config is not None})")
         except Exception as e:
@@ -335,11 +341,6 @@ async def get_current_user_info(
             logger = setup_logger()
             logger.error(f"Get tenant speed limit failed: {e}")
             rate_limit = 10
-
-    # Look up team membership
-    membership = db.query(TenantMember).filter(TenantMember.user_id == tenant.id).first()
-    member_role = membership.role if membership else "owner"
-    org_tenant_id = str(membership.tenant_id) if membership else str(tenant.id)
 
     return UserInfo(
         id=str(tenant.id),  # Convert to string format

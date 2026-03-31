@@ -142,7 +142,16 @@ async def create_member(
             TenantMember.tenant_id == tenant_id,
         ).first()
         if existing_membership:
-            raise HTTPException(status_code=400, detail="User is already a member of this team")
+            # Protect the owner - cannot modify owner via add user
+            if existing_membership.role == 'owner':
+                raise HTTPException(status_code=400, detail="Cannot modify the owner account")
+            # User already a member - update password and role
+            from utils.auth import get_password_hash
+            existing_user.password_hash = get_password_hash(member_data.password)
+            existing_membership.role = member_data.role
+            db.commit()
+            logger.info(f"User {member_data.email} password/role updated by {auth_data.get('email')}")
+            return {"message": "User already exists, password and role updated", "user_id": str(existing_user.id)}
 
         # Check if user belongs to another organization
         other_membership = db.query(TenantMember).filter(
@@ -152,6 +161,12 @@ async def create_member(
             raise HTTPException(status_code=400, detail="User already belongs to another organization")
 
         # User exists but not in any team - re-add as member (e.g. previously removed)
+        # Update password to the one provided by admin
+        from utils.auth import get_password_hash
+        existing_user.password_hash = get_password_hash(member_data.password)
+        existing_user.is_active = True
+        existing_user.is_verified = True
+
         inviter_user_id = auth_data.get('user_id') or auth_data.get('tenant_id')
         membership = TenantMember(
             tenant_id=tenant_id,
