@@ -102,10 +102,9 @@ export function DataTable<TData, TValue>({
 
   const handlePageSizeChange = (newPageSize: string) => {
     const size = parseInt(newPageSize)
-    if (isClientSidePagination) {
-      // Client-side pagination - update local state and reset to first page
-      setPaginationState({ pageIndex: 0, pageSize: size })
-    } else {
+    // Always update local state immediately so the Select reflects the change
+    setPaginationState({ pageIndex: 0, pageSize: size })
+    if (!isClientSidePagination) {
       if (onPageSizeChange) {
         onPageSizeChange(size)
       }

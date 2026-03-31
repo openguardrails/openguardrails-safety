@@ -613,6 +613,7 @@ const Results: React.FC = () => {
             {/* Application Filter */}
             <div className="relative">
               <Select
+                key={`app-${filters.application_id || 'empty'}`}
                 value={filters.application_id}
                 onValueChange={(value) => handleFilterChange('application_id', value)}
               >
@@ -641,6 +642,7 @@ const Results: React.FC = () => {
             {workspaceOptions.length > 0 && (
               <div className="relative">
                 <Select
+                  key={`ws-${filters.workspace_id || 'empty'}`}
                   value={filters.workspace_id}
                   onValueChange={(value) => handleFilterChange('workspace_id', value)}
                 >
@@ -669,6 +671,7 @@ const Results: React.FC = () => {
             {/* Risk Level */}
             <div className="relative">
               <Select
+                key={`risk-${filters.risk_level || 'empty'}`}
                 value={filters.risk_level}
                 onValueChange={(value) => handleFilterChange('risk_level', value)}
               >
@@ -696,6 +699,7 @@ const Results: React.FC = () => {
             {/* Security Risk */}
             <div className="relative">
               <Select
+                key={`sec-${filters.security_risk_level || 'empty'}`}
                 value={filters.security_risk_level}
                 onValueChange={(value) => handleFilterChange('security_risk_level', value)}
               >
@@ -723,6 +727,7 @@ const Results: React.FC = () => {
             {/* Compliance Risk */}
             <div className="relative">
               <Select
+                key={`comp-${filters.compliance_risk_level || 'empty'}`}
                 value={filters.compliance_risk_level}
                 onValueChange={(value) => handleFilterChange('compliance_risk_level', value)}
               >
@@ -750,6 +755,7 @@ const Results: React.FC = () => {
             {/* Data Leak Risk */}
             <div className="relative">
               <Select
+                key={`data-${filters.data_risk_level || 'empty'}`}
                 value={filters.data_risk_level}
                 onValueChange={(value) => handleFilterChange('data_risk_level', value)}
               >
@@ -777,6 +783,7 @@ const Results: React.FC = () => {
             {/* Category */}
             <div className="relative">
               <Select
+                key={`cat-${filters.category || 'empty'}`}
                 value={filters.category}
                 onValueChange={(value) => handleFilterChange('category', value)}
               >
@@ -804,6 +811,7 @@ const Results: React.FC = () => {
             {/* Data Entity Type */}
             <div className="relative">
               <Select
+                key={`entity-${filters.data_entity_type || 'empty'}`}
                 value={filters.data_entity_type}
                 onValueChange={(value) => handleFilterChange('data_entity_type', value)}
               >
