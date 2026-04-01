@@ -1971,7 +1971,9 @@ async def export_workspace(
     response = JSONResponse(content=data)
     safe_name = workspace.name.replace(' ', '_').replace('/', '_')
     filename = f"workspace_config_{safe_name}.json"
-    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
+    response.headers["Content-Disposition"] = f"attachment; filename=\"workspace_config.json\"; filename*=UTF-8''{encoded_filename}"
     return response
 
 
