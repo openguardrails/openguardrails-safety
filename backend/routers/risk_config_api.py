@@ -11,6 +11,7 @@ from services.workspace_resolver import get_workspace_id_for_app
 from utils.logger import setup_logger
 from utils.auth import verify_token
 from pydantic import BaseModel, Field
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 router = APIRouter(prefix="/api/v1/config", tags=["Risk type configuration"])
@@ -239,6 +240,13 @@ async def update_risk_config(
         config_dict = risk_service.get_risk_config_dict(workspace_id=workspace_id)
         logger.info(f"Updated risk config for workspace {workspace_id} (application {application_id})")
 
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="risk_config",
+            resource_id=workspace_id,
+            resource_name=f"workspace_{workspace_id}",
+        )
+
         return RiskConfigResponse(**config_dict)
     except HTTPException:
         raise
@@ -291,6 +299,15 @@ async def reset_risk_config(
         await risk_config_cache.invalidate_user_cache(workspace_id=workspace_id)
 
         logger.info(f"Reset risk config to default for workspace {workspace_id} (application {application_id})")
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="risk_config",
+            resource_id=workspace_id,
+            resource_name=f"workspace_{workspace_id}",
+            changes={"action": "reset_to_defaults"},
+        )
+
         return {"message": "Risk config has been reset to default"}
     except HTTPException:
         raise
@@ -340,6 +357,14 @@ async def update_sensitivity_thresholds(
         config_dict = risk_service.get_sensitivity_threshold_dict(workspace_id=workspace_id)
         logger.info(f"Updated sensitivity thresholds for workspace {workspace_id} (application {application_id})")
 
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="sensitivity_config",
+            resource_id=workspace_id,
+            resource_name=f"workspace_{workspace_id}",
+            changes=threshold_data,
+        )
+
         return SensitivityThresholdResponse(**config_dict)
     except HTTPException:
         raise
@@ -372,6 +397,15 @@ async def reset_sensitivity_thresholds(
         await risk_config_cache.invalidate_sensitivity_cache(workspace_id=workspace_id)
 
         logger.info(f"Reset sensitivity thresholds to default for workspace {workspace_id} (application {application_id})")
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="sensitivity_config",
+            resource_id=workspace_id,
+            resource_name=f"workspace_{workspace_id}",
+            changes={"action": "reset_to_defaults"},
+        )
+
         return {"message": "Sensitivity thresholds have been reset to default"}
     except HTTPException:
         raise

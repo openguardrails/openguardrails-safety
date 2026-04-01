@@ -10,6 +10,7 @@ from database.connection import get_admin_db
 from database.models import Tenant, TenantMember, TenantInvitation
 from config import settings
 from utils.logger import setup_logger
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 
@@ -147,10 +148,12 @@ async def create_member(
                 raise HTTPException(status_code=400, detail="Cannot modify the owner account")
             # User already a member - update password and role
             from utils.auth import get_password_hash
+            old_role = existing_membership.role
             existing_user.password_hash = get_password_hash(member_data.password)
             existing_membership.role = member_data.role
             db.commit()
             logger.info(f"User {member_data.email} password/role updated by {auth_data.get('email')}")
+            await log_operation(db, request, "update", "team_member", resource_id=str(existing_user.id), resource_name=member_data.email, changes={"role": {"old": old_role, "new": member_data.role}, "password": {"old": "***", "new": "***"}})
             return {"message": "User already exists, password and role updated", "user_id": str(existing_user.id)}
 
         # Check if user belongs to another organization
@@ -181,6 +184,7 @@ async def create_member(
         db.commit()
 
         logger.info(f"User {member_data.email} re-added by {auth_data.get('email')} with role {member_data.role}")
+        await log_operation(db, request, "create", "team_member", resource_id=str(existing_user.id), resource_name=member_data.email)
         return {"message": "User added successfully", "user_id": str(existing_user.id)}
 
     # Validate password
@@ -219,6 +223,7 @@ async def create_member(
     db.commit()
 
     logger.info(f"User {member_data.email} created directly by {auth_data.get('email')} with role {member_data.role}")
+    await log_operation(db, request, "create", "team_member", resource_id=str(user.id), resource_name=member_data.email)
     return {"message": "User created successfully", "user_id": str(user.id)}
 
 
@@ -301,6 +306,7 @@ async def send_invitation(
         logger.warning(f"Failed to send invitation email to {invite_data.email}: {e}")
         # Don't fail the invitation creation if email fails
 
+    await log_operation(db, request, "create", "team_invitation", resource_id=str(invitation.id), resource_name=invite_data.email)
     return {"message": "Invitation sent successfully", "invitation_id": str(invitation.id)}
 
 
@@ -358,8 +364,10 @@ async def cancel_invitation(
     if not invitation:
         raise HTTPException(status_code=404, detail="Invitation not found")
 
+    invitation_email = invitation.email
     invitation.status = 'cancelled'
     db.commit()
+    await log_operation(db, request, "delete", "team_invitation", resource_id=str(invitation.id), resource_name=invitation_email)
     return {"message": "Invitation cancelled"}
 
 
@@ -500,9 +508,15 @@ async def change_member_role(
     if membership.role == 'owner':
         raise HTTPException(status_code=400, detail="Cannot change the owner's role")
 
+    old_role = membership.role
     membership.role = role_data.role
     membership.updated_at = datetime.now(timezone.utc)
     db.commit()
+
+    # Look up member email for audit log
+    member_user = db.query(Tenant).filter(Tenant.id == user_id).first()
+    member_email = member_user.email if member_user else user_id
+    await log_operation(db, request, "update", "team_member", resource_id=user_id, resource_name=member_email, changes={"role": {"old": old_role, "new": role_data.role}})
 
     # Invalidate auth cache for this user
     try:
@@ -540,8 +554,11 @@ async def remove_member(
     if membership.role == 'admin' and auth_data.get('member_role') != 'owner' and not auth_data.get('is_super_admin'):
         raise HTTPException(status_code=403, detail="Only the owner can remove admins")
 
+    member_email = membership.email or user_id
     db.delete(membership)
     db.commit()
+
+    await log_operation(db, request, "delete", "team_member", resource_id=user_id, resource_name=member_email)
 
     # Invalidate auth cache
     try:

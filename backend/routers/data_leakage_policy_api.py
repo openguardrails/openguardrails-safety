@@ -28,6 +28,7 @@ from utils.subscription_check import (
     is_enterprise_mode
 )
 from config import settings
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 
@@ -346,6 +347,13 @@ async def update_tenant_default_policy(
         db.commit()
         db.refresh(tenant_policy)
 
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="data_leakage_policy",
+            resource_id=str(tenant_policy.id),
+            resource_name="tenant_defaults",
+        )
+
         # Get default private model (marked as is_default_private_model=True)
         default_private_model = db.query(UpstreamApiConfig).filter(
             UpstreamApiConfig.tenant_id == tenant_id,
@@ -611,6 +619,13 @@ async def update_application_policy(
 
         db.commit()
         db.refresh(app_policy)
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="data_leakage_policy",
+            resource_id=str(app_policy.id),
+            resource_name=f"app_{application_id}",
+        )
 
         # Get tenant policy for resolved values
         tenant_policy = db.query(TenantDataLeakagePolicy).filter(

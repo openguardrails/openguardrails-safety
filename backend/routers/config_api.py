@@ -17,6 +17,7 @@ from models.responses import (
 from utils.logger import setup_logger
 from utils.auth import verify_token
 from config import settings
+from services.audit_log_service import log_operation, compute_changes
 from services.keyword_cache import keyword_cache
 from services.template_cache import template_cache
 from services.enhanced_template_service import enhanced_template_service
@@ -206,6 +207,7 @@ async def create_blacklist(blacklist_request: BlacklistRequest, request: Request
             logger.error(f"Failed to create response template for blacklist {blacklist.name}: {e}")
 
         logger.info(f"Blacklist created: {blacklist_request.name} for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="create", resource_type="blacklist", resource_id=str(blacklist.id), resource_name=blacklist.name)
         return ApiResponse(success=True, message="Blacklist created successfully")
     except HTTPException:
         raise
@@ -223,6 +225,8 @@ async def update_blacklist(blacklist_id: int, blacklist_request: BlacklistReques
         if not blacklist:
             raise HTTPException(status_code=404, detail="Blacklist not found")
 
+        old_data = {"name": blacklist.name, "keywords": blacklist.keywords, "description": blacklist.description, "is_active": blacklist.is_active}
+
         blacklist.name = blacklist_request.name
         blacklist.keywords = blacklist_request.keywords
         blacklist.description = blacklist_request.description
@@ -233,7 +237,10 @@ async def update_blacklist(blacklist_id: int, blacklist_request: BlacklistReques
         # Invalidate keyword cache immediately
         await keyword_cache.invalidate_cache()
 
+        new_data = {"name": blacklist.name, "keywords": blacklist.keywords, "description": blacklist.description, "is_active": blacklist.is_active}
+        changes = compute_changes(old_data, new_data)
         logger.info(f"Blacklist updated: {blacklist_id} for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="update", resource_type="blacklist", resource_id=str(blacklist_id), resource_name=blacklist.name, changes=changes)
         return ApiResponse(success=True, message="Blacklist updated successfully")
     except HTTPException:
         raise
@@ -271,6 +278,7 @@ async def delete_blacklist(blacklist_id: int, request: Request, db: Session = De
         await keyword_cache.invalidate_cache()
 
         logger.info(f"Blacklist deleted: {blacklist_id} for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="delete", resource_type="blacklist", resource_id=str(blacklist_id), resource_name=blacklist_name)
         return ApiResponse(success=True, message="Blacklist deleted successfully")
     except HTTPException:
         raise
@@ -322,6 +330,7 @@ async def create_whitelist(whitelist_request: WhitelistRequest, request: Request
         await keyword_cache.invalidate_cache()
 
         logger.info(f"Whitelist created: {whitelist_request.name} for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="create", resource_type="whitelist", resource_id=str(whitelist.id), resource_name=whitelist.name)
         return ApiResponse(success=True, message="Whitelist created successfully")
     except HTTPException:
         raise
@@ -339,6 +348,8 @@ async def update_whitelist(whitelist_id: int, whitelist_request: WhitelistReques
         if not whitelist:
             raise HTTPException(status_code=404, detail="Whitelist not found")
 
+        old_data = {"name": whitelist.name, "keywords": whitelist.keywords, "description": whitelist.description, "is_active": whitelist.is_active}
+
         whitelist.name = whitelist_request.name
         whitelist.keywords = whitelist_request.keywords
         whitelist.description = whitelist_request.description
@@ -349,7 +360,10 @@ async def update_whitelist(whitelist_id: int, whitelist_request: WhitelistReques
         # Invalidate keyword cache immediately
         await keyword_cache.invalidate_cache()
 
+        new_data = {"name": whitelist.name, "keywords": whitelist.keywords, "description": whitelist.description, "is_active": whitelist.is_active}
+        changes = compute_changes(old_data, new_data)
         logger.info(f"Whitelist updated: {whitelist_id} for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="update", resource_type="whitelist", resource_id=str(whitelist_id), resource_name=whitelist.name, changes=changes)
         return ApiResponse(success=True, message="Whitelist updated successfully")
     except HTTPException:
         raise
@@ -367,6 +381,7 @@ async def delete_whitelist(whitelist_id: int, request: Request, db: Session = De
         if not whitelist:
             raise HTTPException(status_code=404, detail="Whitelist not found")
 
+        whitelist_name = whitelist.name
         db.delete(whitelist)
         db.commit()
 
@@ -374,6 +389,7 @@ async def delete_whitelist(whitelist_id: int, request: Request, db: Session = De
         await keyword_cache.invalidate_cache()
 
         logger.info(f"Whitelist deleted: {whitelist_id} for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="delete", resource_type="whitelist", resource_id=str(whitelist_id), resource_name=whitelist_name)
         return ApiResponse(success=True, message="Whitelist deleted successfully")
     except HTTPException:
         raise
@@ -480,6 +496,7 @@ async def create_response_template(template_request: ResponseTemplateRequest, re
         # Log with appropriate identifier
         identifier = template_request.scanner_identifier or template_request.category
         logger.info(f"Response template created: {identifier} (type: {template_request.scanner_type}) for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="create", resource_type="response_template", resource_id=str(template.id), resource_name=identifier)
         return ApiResponse(success=True, message="Response template created successfully")
     except HTTPException:
         raise
@@ -496,6 +513,8 @@ async def update_response_template(template_id: int, template_request: ResponseT
         if not template:
             raise HTTPException(status_code=404, detail="Response template not found")
 
+        old_data = {"template_content": template.template_content, "risk_level": template.risk_level, "is_active": template.is_active}
+
         template.category = template_request.category
         template.scanner_type = template_request.scanner_type
         template.scanner_identifier = template_request.scanner_identifier
@@ -511,7 +530,10 @@ async def update_response_template(template_id: int, template_request: ResponseT
         await enhanced_template_service.invalidate_cache()
 
         identifier = template_request.scanner_identifier or template_request.category
+        new_data = {"template_content": template.template_content, "risk_level": template.risk_level, "is_active": template.is_active}
+        changes = compute_changes(old_data, new_data)
         logger.info(f"Response template updated: {template_id} ({identifier}) for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="update", resource_type="response_template", resource_id=str(template_id), resource_name=identifier, changes=changes)
         return ApiResponse(success=True, message="Response template updated successfully")
     except HTTPException:
         raise
@@ -528,6 +550,7 @@ async def delete_response_template(template_id: int, request: Request, db: Sessi
         if not template:
             raise HTTPException(status_code=404, detail="Response template not found")
 
+        template_name = template.scanner_identifier or template.category
         db.delete(template)
         db.commit()
 
@@ -536,6 +559,7 @@ async def delete_response_template(template_id: int, request: Request, db: Sessi
         await enhanced_template_service.invalidate_cache()
 
         logger.info(f"Response template deleted: {template_id} for user: {current_user.email}, app: {application_id}")
+        await log_operation(db=db, request=request, action="delete", resource_type="response_template", resource_id=str(template_id), resource_name=template_name)
         return ApiResponse(success=True, message="Response template deleted successfully")
     except HTTPException:
         raise
@@ -583,12 +607,13 @@ async def get_cache_info():
         raise HTTPException(status_code=500, detail="Failed to get cache info")
 
 @router.post("/config/cache/refresh")
-async def refresh_cache():
+async def refresh_cache(request: Request, db: Session = Depends(get_admin_db)):
     """Manually refresh cache"""
     try:
         await keyword_cache.invalidate_cache()
         await template_cache.invalidate_cache()
         await enhanced_template_service.invalidate_cache()
+        await log_operation(db=db, request=request, action="update", resource_type="cache", resource_name="all_caches")
         return {
             "status": "success",
             "message": "All caches refreshed successfully"
@@ -809,6 +834,7 @@ async def create_knowledge_base(
         await enhanced_template_service.invalidate_cache()
 
         logger.info(f"Knowledge base created: {name} for scanner {scanner_type}:{scanner_identifier}, user: {current_user.email}, app: {application_id}, global: {is_global}")
+        await log_operation(db=db, request=request, action="create", resource_type="knowledge_base", resource_id=str(knowledge_base.id), resource_name=name)
         return ApiResponse(success=True, message="Knowledge base created successfully")
 
     except HTTPException:
@@ -989,6 +1015,7 @@ async def update_knowledge_base(
         await enhanced_template_service.invalidate_cache()
 
         logger.info(f"Knowledge base updated: {kb_id} for user: {current_user.email}")
+        await log_operation(db=db, request=request, action="update", resource_type="knowledge_base", resource_id=str(kb_id), resource_name=knowledge_base.name)
         return ApiResponse(success=True, message="Knowledge base updated successfully")
 
     except HTTPException:
@@ -1027,6 +1054,8 @@ async def delete_knowledge_base(
                     detail="Permission denied. You can only delete your own knowledge bases, or administrators can delete system-level knowledge bases."
                 )
 
+        kb_name = knowledge_base.name
+
         # Delete related files
         knowledge_base_service.delete_knowledge_base_files(kb_id)
 
@@ -1038,6 +1067,7 @@ async def delete_knowledge_base(
         await enhanced_template_service.invalidate_cache()
 
         logger.info(f"Knowledge base deleted: {kb_id} for user: {current_user.email}")
+        await log_operation(db=db, request=request, action="delete", resource_type="knowledge_base", resource_id=str(kb_id), resource_name=kb_name)
         return ApiResponse(success=True, message="Knowledge base deleted successfully")
 
     except HTTPException:
@@ -1096,6 +1126,7 @@ async def replace_knowledge_base_file(
         await enhanced_template_service.invalidate_cache()
 
         logger.info(f"Knowledge base file replaced: {kb_id} for user: {current_user.email}")
+        await log_operation(db=db, request=request, action="update", resource_type="knowledge_base", resource_id=str(kb_id), resource_name=knowledge_base.name)
         return ApiResponse(success=True, message="Knowledge base file replaced successfully")
 
     except HTTPException:
@@ -1257,6 +1288,7 @@ async def toggle_global_knowledge_base_disable(
             await enhanced_template_service.invalidate_cache()
 
             logger.info(f"Global knowledge base {kb_id} re-enabled for tenant: {current_user.email}")
+            await log_operation(db=db, request=request, action="update", resource_type="knowledge_base_disable", resource_id=str(kb_id), resource_name=knowledge_base.name, changes={"enabled": True})
             return ApiResponse(success=True, message="Global knowledge base enabled successfully")
         else:
             # Disable: create a disable record
@@ -1271,6 +1303,7 @@ async def toggle_global_knowledge_base_disable(
             await enhanced_template_service.invalidate_cache()
 
             logger.info(f"Global knowledge base {kb_id} disabled for tenant: {current_user.email}")
+            await log_operation(db=db, request=request, action="update", resource_type="knowledge_base_disable", resource_id=str(kb_id), resource_name=knowledge_base.name, changes={"enabled": False})
             return ApiResponse(success=True, message="Global knowledge base disabled successfully")
 
     except HTTPException:
@@ -1440,6 +1473,7 @@ async def update_fixed_answer_templates(
         await enhanced_template_service.invalidate_cache()
 
         logger.info(f"Fixed answer templates updated for application: {application_id}, user: {current_user.email}")
+        await log_operation(db=db, request=request, action="update", resource_type="application_settings", resource_name="fixed_answer_templates")
         return ApiResponse(success=True, message="Fixed answer templates updated successfully")
 
     except HTTPException:

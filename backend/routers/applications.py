@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from datetime import datetime
 import uuid
 from utils.logger import setup_logger
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 
@@ -355,6 +356,11 @@ async def create_application(
     db.refresh(app)
     logger.info(f"Created application {app.name} ({app.id}) in workspace {workspace_id}")
 
+    await log_operation(
+        db=db, request=request, action="create",
+        resource_type="application", resource_id=str(app.id), resource_name=app.name,
+    )
+
     return ApplicationResponse(
         id=str(app.id),
         tenant_id=str(app.tenant_id),
@@ -387,6 +393,9 @@ async def update_application(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    old_data = {"name": app.name, "description": app.description, "is_active": app.is_active,
+                "workspace_id": str(app.workspace_id) if app.workspace_id else None}
+
     if data.name is not None:
         app.name = data.name
     if data.description is not None:
@@ -410,6 +419,15 @@ async def update_application(
 
     db.commit()
     db.refresh(app)
+
+    new_data = {"name": app.name, "description": app.description, "is_active": app.is_active,
+                "workspace_id": str(app.workspace_id) if app.workspace_id else None}
+    changes = compute_changes(old_data, new_data)
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="application", resource_id=str(app.id), resource_name=app.name,
+        changes=changes,
+    )
 
     key_count = db.query(ApiKey).filter(ApiKey.application_id == app.id).count()
 
@@ -458,8 +476,15 @@ async def delete_application(
     if app_count <= 1:
         raise HTTPException(status_code=400, detail="Cannot delete the last application")
 
+    app_name = app.name
+    app_id_str = str(app.id)
     db.delete(app)
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="delete",
+        resource_type="application", resource_id=app_id_str, resource_name=app_name,
+    )
 
     return {"message": "Application deleted successfully"}
 
@@ -529,6 +554,11 @@ async def create_api_key(
     db.commit()
     db.refresh(api_key)
 
+    await log_operation(
+        db=db, request=request, action="create",
+        resource_type="api_key", resource_id=str(api_key.id), resource_name=api_key.name or f"Key for {app.name}",
+    )
+
     return ApiKeyResponse(
         id=str(api_key.id),
         application_id=str(api_key.application_id),
@@ -559,8 +589,15 @@ async def delete_api_key(
     if not key:
         raise HTTPException(status_code=404, detail="API key not found")
 
+    key_name = key.name or str(key.id)
+    key_id_str = str(key.id)
     db.delete(key)
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="delete",
+        resource_type="api_key", resource_id=key_id_str, resource_name=key_name,
+    )
 
     return {"message": "API key deleted successfully"}
 
@@ -583,7 +620,14 @@ async def toggle_api_key(
     if not key:
         raise HTTPException(status_code=404, detail="API key not found")
 
+    old_active = key.is_active
     key.is_active = not key.is_active
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="api_key", resource_id=str(key.id), resource_name=key.name or str(key.id),
+        changes=compute_changes({"is_active": old_active}, {"is_active": key.is_active}),
+    )
 
     return {"is_active": key.is_active}

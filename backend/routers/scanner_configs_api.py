@@ -16,6 +16,7 @@ from models.requests import (
 )
 from models.responses import ScannerConfigResponse, ApiResponse
 from utils.logger import setup_logger
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 
@@ -202,6 +203,14 @@ async def update_scanner_config(
         f"updates={list(update_dict.keys())}"
     )
 
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="scanner_config",
+        resource_id=scanner_id,
+        resource_name=f"scanner_{scanner_id}",
+        changes=update_dict,
+    )
+
     return ApiResponse(
         success=True,
         message="Scanner configuration updated successfully",
@@ -254,6 +263,14 @@ async def bulk_update_scanner_configs(
         f"for app={application_id}"
     )
 
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="scanner_config",
+        resource_id=str(application_id),
+        resource_name=f"bulk_update_{len(configs)}_scanners",
+        changes={"updated_count": len(configs)},
+    )
+
     return ApiResponse(
         success=True,
         message=f"Successfully updated {len(configs)} scanner configurations",
@@ -300,6 +317,14 @@ async def reset_scanner_config(
         f"app={application_id}, scanner={scanner_id}"
     )
 
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="scanner_config",
+        resource_id=scanner_id,
+        resource_name=f"reset_{scanner_id}",
+        changes={"action": "reset_to_defaults"},
+    )
+
     return ApiResponse(
         success=True,
         message="Scanner configuration reset to defaults"
@@ -325,6 +350,14 @@ async def reset_all_configs(
     logger.warning(
         f"User {current_user['email']} reset ALL {count} scanner configs "
         f"to defaults for app={application_id}"
+    )
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="scanner_config",
+        resource_id=str(application_id),
+        resource_name=f"reset_all_{count}_scanners",
+        changes={"action": "reset_all_to_defaults", "reset_count": count},
     )
 
     return ApiResponse(
@@ -358,6 +391,14 @@ async def initialize_default_configs(
     logger.info(
         f"User {current_user['email']} initialized {count} default scanner configs "
         f"for app={application_id}"
+    )
+
+    await log_operation(
+        db=db, request=request, action="create",
+        resource_type="scanner_config",
+        resource_id=str(application_id),
+        resource_name=f"initialize_{count}_scanners",
+        changes={"action": "initialize_defaults", "initialized_count": count},
     )
 
     return ApiResponse(

@@ -1307,6 +1307,24 @@ class TenantMember(Base):
         UniqueConstraint('tenant_id', 'email', name='uq_tenant_member_email'),
     )
 
+class AuditLog(Base):
+    """Audit log table - tracks all admin operations"""
+    __tablename__ = "audit_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), nullable=True)
+    user_email = Column(String(255), nullable=True)
+    action = Column(String(50), nullable=False, index=True)  # create/update/delete/login/logout/export/import
+    resource_type = Column(String(100), nullable=False, index=True)  # blacklist/whitelist/application/workspace/...
+    resource_id = Column(String(255), nullable=True)
+    resource_name = Column(String(255), nullable=True)
+    changes = Column(JSON, nullable=True)  # {"field": {"old": x, "new": y}}
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class TenantInvitation(Base):
     """Tenant invitation table - pending team invitations"""
     __tablename__ = "tenant_invitations"

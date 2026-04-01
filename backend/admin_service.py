@@ -109,7 +109,18 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                             }
                         }
                 else:
-                    raw_tenant_id = user_data.get('tenant_id') or user_data.get('sub')
+                    # Resolve the actual logged-in user from 'sub' (user's own ID)
+                    # and the org tenant from 'tenant_id' (org owner's ID, may differ for team members)
+                    raw_sub = user_data.get('sub')
+                    raw_tenant_id = user_data.get('tenant_id') or raw_sub
+
+                    sub_uuid = None
+                    if isinstance(raw_sub, str):
+                        try:
+                            sub_uuid = uuid.UUID(raw_sub)
+                        except ValueError:
+                            pass
+
                     tenant_uuid = None
                     if isinstance(raw_tenant_id, str):
                         try:
@@ -117,7 +128,15 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                         except ValueError:
                             pass
 
-                    user = db.query(Tenant).filter(Tenant.id == tenant_uuid).first() if tenant_uuid else None
+                    # Look up the actual logged-in user (from 'sub')
+                    actual_user = db.query(Tenant).filter(Tenant.id == sub_uuid).first() if sub_uuid else None
+                    # Look up the org owner tenant (from 'tenant_id') - may be same as actual_user for owners
+                    if tenant_uuid and tenant_uuid != sub_uuid:
+                        org_tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).first()
+                    else:
+                        org_tenant = actual_user
+
+                    user = actual_user or (db.query(Tenant).filter(Tenant.id == tenant_uuid).first() if tenant_uuid else None)
                     if user:
                         # Check user switch
                         if switch_session and admin_service.is_super_admin(user):
@@ -154,12 +173,14 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
                                 Application.is_active == True
                             ).first()
 
+                            # Use actual logged-in user's info for email/user_id (for audit),
+                            # but org tenant_id for data scoping
                             auth_context = {
                                 "type": "jwt",
                                 "data": {
                                     "tenant_id": jwt_tenant_id,
-                                    "user_id": str(user.id),
-                                    "email": user.email,
+                                    "user_id": str(actual_user.id) if actual_user else str(user.id),
+                                    "email": actual_user.email if actual_user else user.email,
                                     "is_super_admin": admin_service.is_super_admin(user),
                                     "member_role": jwt_member_role,
                                     "application_id": str(first_app.id) if first_app else None,
@@ -465,6 +486,10 @@ app.include_router(ban_policy_api.router, dependencies=[Depends(verify_user_auth
 # Import and register appeal configuration routes
 from routers import appeal_api
 app.include_router(appeal_api.router, dependencies=[Depends(verify_user_auth)])
+
+# Audit log routes
+from routers import audit_log
+app.include_router(audit_log.router, prefix="/api/v1", dependencies=[Depends(verify_user_auth)])
 
 # Risk configuration routes
 app.include_router(risk_config_api.router, dependencies=[Depends(verify_user_auth)])

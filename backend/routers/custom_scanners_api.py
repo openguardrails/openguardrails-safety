@@ -14,6 +14,7 @@ from services.custom_scanner_service import CustomScannerService
 from models.requests import CustomScannerCreateRequest, CustomScannerUpdateRequest
 from models.responses import CustomScannerResponse, ApiResponse
 from utils.logger import setup_logger
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 
@@ -225,6 +226,13 @@ async def create_custom_scanner(
         f"for app={application_id}"
     )
 
+    await log_operation(
+        db=db, request=request, action="create",
+        resource_type="custom_scanner",
+        resource_id=scanner.get('id', ''),
+        resource_name=scanner.get('name', ''),
+    )
+
     return CustomScannerResponse(**scanner)
 
 
@@ -276,6 +284,14 @@ async def update_custom_scanner(
         f"fields: {list(update_dict.keys())}"
     )
 
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="custom_scanner",
+        resource_id=scanner_id,
+        resource_name=scanner.get('name', ''),
+        changes={"updated_fields": list(update_dict.keys())},
+    )
+
     return CustomScannerResponse(**scanner)
 
 
@@ -321,6 +337,13 @@ async def delete_custom_scanner(
     logger.warning(
         f"User {current_user['email']} deleted custom scanner {scanner_id} "
         f"from app={application_id}"
+    )
+
+    await log_operation(
+        db=db, request=request, action="delete",
+        resource_type="custom_scanner",
+        resource_id=scanner_id,
+        resource_name=f"scanner_{scanner_id}",
     )
 
     return ApiResponse(

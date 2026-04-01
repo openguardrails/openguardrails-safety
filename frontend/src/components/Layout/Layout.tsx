@@ -25,6 +25,7 @@ import {
   MessageSquareText,
   Cable,
   Network,
+  ClipboardList,
   type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -119,6 +120,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       items: [
         { key: '/results', icon: FileSearch, label: t('nav.logs') },
         { key: '/reports', icon: BarChart3, label: t('nav.reports') },
+        { key: '/audit-log', icon: ClipboardList, label: t('nav.auditLog') },
       ],
     },
     {

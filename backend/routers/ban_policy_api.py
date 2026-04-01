@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Tuple
 from services.ban_policy_service import BanPolicyService
 from services.workspace_resolver import get_workspace_id_for_app
+from services.audit_log_service import log_operation, compute_changes
 from database.connection import get_admin_db
 from database.models import Application
 from sqlalchemy.orm import Session
@@ -114,7 +115,9 @@ async def get_ban_policy(ids: Tuple[str, str] = Depends(get_current_application_
 @router.put("")
 async def update_ban_policy(
     policy_data: BanPolicyUpdate,
-    ids: Tuple[str, str] = Depends(get_current_application_and_workspace)
+    request: Request,
+    ids: Tuple[str, str] = Depends(get_current_application_and_workspace),
+    db: Session = Depends(get_admin_db)
 ):
     """Update workspace ban policy configuration"""
     try:
@@ -123,6 +126,14 @@ async def update_ban_policy(
             application_id,
             policy_data.dict(),
             workspace_id=workspace_id
+        )
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="ban_policy",
+            resource_id=workspace_id,
+            resource_name=f"workspace_{workspace_id}",
+            changes=policy_data.dict(),
         )
 
         return {
@@ -205,23 +216,32 @@ async def get_banned_users(
 
 @router.post("/unban")
 async def unban_user(
-    request: UnbanUserRequest,
-    ids: Tuple[str, str] = Depends(get_current_application_and_workspace)
+    unban_request: UnbanUserRequest,
+    request: Request,
+    ids: Tuple[str, str] = Depends(get_current_application_and_workspace),
+    db: Session = Depends(get_admin_db)
 ):
     """Manually unban user"""
     try:
         application_id, workspace_id = ids
-        success = await BanPolicyService.unban_user(application_id, request.user_id)
+        success = await BanPolicyService.unban_user(application_id, unban_request.user_id)
 
         if success:
+            await log_operation(
+                db=db, request=request, action="update",
+                resource_type="user_ban",
+                resource_id=unban_request.user_id,
+                resource_name=f"unban_{unban_request.user_id}",
+                changes={"action": "unban"},
+            )
             return {
                 "success": True,
-                "message": f"User {request.user_id} has been unbanned"
+                "message": f"User {unban_request.user_id} has been unbanned"
             }
         else:
             return {
                 "success": False,
-                "message": f"User {request.user_id} is not banned or has already been unbanned"
+                "message": f"User {unban_request.user_id} is not banned or has already been unbanned"
             }
 
     except Exception as e:

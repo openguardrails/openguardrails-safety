@@ -26,6 +26,7 @@ import Workspaces from './pages/Config/Workspaces';
 import { AccessControl } from './pages/AccessControl';
 import TeamManagement from './pages/Team/TeamManagement';
 import AcceptInvitation from './pages/Auth/AcceptInvitation';
+import AuditLog from './pages/AuditLog/AuditLog';
 import { initSystemConfig, features } from './config';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import { useWorkspace } from './contexts/WorkspaceContext';
@@ -89,6 +90,7 @@ function App() {
               <Route path="/online-test" element={<OnlineTest />} />
               <Route path="/results" element={<Results />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/audit-log" element={<AuditLog />} />
               <Route path="/applications" element={<ApplicationManagement />} />
               <Route path="/applications/list" element={<ApplicationManagement />} />
               <Route path="/applications/workspaces" element={<Workspaces />} />

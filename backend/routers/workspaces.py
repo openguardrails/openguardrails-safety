@@ -18,6 +18,7 @@ import uuid
 import json
 from utils.logger import setup_logger
 from services.keyword_cache import keyword_cache
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 
@@ -300,6 +301,11 @@ async def create_workspace(
     db.commit()
     db.refresh(workspace)
 
+    await log_operation(
+        db=db, request=request, action="create",
+        resource_type="workspace", resource_id=str(workspace.id), resource_name=workspace.name,
+    )
+
     return WorkspaceResponse(
         id=str(workspace.id),
         tenant_id=str(workspace.tenant_id),
@@ -330,6 +336,8 @@ async def update_workspace(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
+    old_data = {"name": workspace.name, "description": workspace.description, "owner": workspace.owner}
+
     if body.name is not None:
         # Protect Global workspace name
         if getattr(workspace, 'is_global', False) and body.name != workspace.name:
@@ -352,6 +360,14 @@ async def update_workspace(
 
     db.commit()
     db.refresh(workspace)
+
+    new_data = {"name": workspace.name, "description": workspace.description, "owner": workspace.owner}
+    changes = compute_changes(old_data, new_data)
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="workspace", resource_id=str(workspace.id), resource_name=workspace.name,
+        changes=changes,
+    )
 
     app_count = db.query(func.count(Application.id)).filter(
         Application.workspace_id == workspace.id
@@ -403,8 +419,15 @@ async def delete_workspace(
             Application.workspace_id == workspace.id
         ).update({Application.workspace_id: None})
 
+    ws_name = workspace.name
+    ws_id_str = str(workspace.id)
     db.delete(workspace)
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="delete",
+        resource_type="workspace", resource_id=ws_id_str, resource_name=ws_name,
+    )
 
     return {"message": "Workspace deleted successfully"}
 
@@ -437,6 +460,12 @@ async def assign_applications(
 
     db.commit()
     db.refresh(workspace)
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="workspace", resource_id=str(workspace.id), resource_name=workspace.name,
+        changes={"assigned_applications": body.application_ids},
+    )
 
     app_count = db.query(func.count(Application.id)).filter(
         Application.workspace_id == workspace.id
@@ -486,6 +515,12 @@ async def unassign_applications(
             app.workspace_id = uuid.UUID(global_ws_id)
 
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="workspace", resource_id=str(workspace.id), resource_name=workspace.name,
+        changes={"unassigned_applications": body.application_ids},
+    )
 
     return {"message": "Applications moved to Global workspace"}
 
@@ -671,7 +706,7 @@ async def update_workspace_risk_config(
 ):
     """Update workspace-level risk type configuration"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     config = db.query(RiskTypeConfig).filter(
         RiskTypeConfig.workspace_id == workspace_id
@@ -691,6 +726,12 @@ async def update_workspace_risk_config(
 
     db.commit()
     db.refresh(config)
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="risk_config", resource_id=workspace_id, resource_name=workspace.name,
+        changes=updates,
+    )
 
     result = {}
     for i in range(1, 22):
@@ -751,7 +792,7 @@ async def create_workspace_blacklist(
 ):
     """Create a workspace-level blacklist"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     item = Blacklist(
         tenant_id=uuid.UUID(tenant_id),
@@ -765,6 +806,11 @@ async def create_workspace_blacklist(
     db.commit()
     db.refresh(item)
     await keyword_cache.invalidate_cache()
+
+    await log_operation(
+        db=db, request=request, action="create",
+        resource_type="blacklist", resource_id=str(item.id), resource_name=item.name,
+    )
 
     return {
         "id": item.id,
@@ -787,7 +833,7 @@ async def update_workspace_blacklist(
 ):
     """Update a workspace-level blacklist"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     item = db.query(Blacklist).filter(
         Blacklist.id == item_id,
@@ -796,6 +842,7 @@ async def update_workspace_blacklist(
     if not item:
         raise HTTPException(status_code=404, detail="Blacklist not found")
 
+    old_data = {"name": item.name, "keywords": item.keywords, "is_active": item.is_active}
     updates = body.dict(exclude_none=True)
     for field, value in updates.items():
         if hasattr(item, field):
@@ -803,6 +850,14 @@ async def update_workspace_blacklist(
 
     db.commit()
     await keyword_cache.invalidate_cache()
+
+    new_data = {"name": item.name, "keywords": item.keywords, "is_active": item.is_active}
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="blacklist", resource_id=str(item.id), resource_name=item.name,
+        changes=compute_changes(old_data, new_data),
+    )
+
     return {"message": "Updated successfully"}
 
 
@@ -815,7 +870,7 @@ async def delete_workspace_blacklist(
 ):
     """Delete a workspace-level blacklist"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     item = db.query(Blacklist).filter(
         Blacklist.id == item_id,
@@ -824,9 +879,16 @@ async def delete_workspace_blacklist(
     if not item:
         raise HTTPException(status_code=404, detail="Blacklist not found")
 
+    bl_name = item.name
     item.is_active = False
     db.commit()
     await keyword_cache.invalidate_cache()
+
+    await log_operation(
+        db=db, request=request, action="delete",
+        resource_type="blacklist", resource_id=str(item.id), resource_name=bl_name,
+    )
+
     return {"message": "Deleted successfully"}
 
 
@@ -864,7 +926,7 @@ async def create_workspace_whitelist(
 ):
     """Create a workspace-level whitelist"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     item = Whitelist(
         tenant_id=uuid.UUID(tenant_id),
@@ -878,6 +940,11 @@ async def create_workspace_whitelist(
     db.commit()
     db.refresh(item)
     await keyword_cache.invalidate_cache()
+
+    await log_operation(
+        db=db, request=request, action="create",
+        resource_type="whitelist", resource_id=str(item.id), resource_name=item.name,
+    )
 
     return {
         "id": item.id,
@@ -900,7 +967,7 @@ async def update_workspace_whitelist(
 ):
     """Update a workspace-level whitelist"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     item = db.query(Whitelist).filter(
         Whitelist.id == item_id,
@@ -909,6 +976,7 @@ async def update_workspace_whitelist(
     if not item:
         raise HTTPException(status_code=404, detail="Whitelist not found")
 
+    old_data = {"name": item.name, "keywords": item.keywords, "is_active": item.is_active}
     updates = body.dict(exclude_none=True)
     for field, value in updates.items():
         if hasattr(item, field):
@@ -916,6 +984,14 @@ async def update_workspace_whitelist(
 
     db.commit()
     await keyword_cache.invalidate_cache()
+
+    new_data = {"name": item.name, "keywords": item.keywords, "is_active": item.is_active}
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="whitelist", resource_id=str(item.id), resource_name=item.name,
+        changes=compute_changes(old_data, new_data),
+    )
+
     return {"message": "Updated successfully"}
 
 
@@ -928,7 +1004,7 @@ async def delete_workspace_whitelist(
 ):
     """Delete a workspace-level whitelist"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     item = db.query(Whitelist).filter(
         Whitelist.id == item_id,
@@ -937,9 +1013,16 @@ async def delete_workspace_whitelist(
     if not item:
         raise HTTPException(status_code=404, detail="Whitelist not found")
 
+    wl_name = item.name
     item.is_active = False
     db.commit()
     await keyword_cache.invalidate_cache()
+
+    await log_operation(
+        db=db, request=request, action="delete",
+        resource_type="whitelist", resource_id=str(item.id), resource_name=wl_name,
+    )
+
     return {"message": "Deleted successfully"}
 
 
@@ -996,7 +1079,7 @@ async def update_workspace_ban_policy(
 ):
     """Update workspace-level ban policy"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     policy = db.query(BanPolicy).filter(
         BanPolicy.workspace_id == workspace_id
@@ -1021,6 +1104,13 @@ async def update_workspace_ban_policy(
         policy.ban_duration_minutes = body.ban_duration_minutes
 
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="ban_policy", resource_id=workspace_id, resource_name=workspace.name,
+        changes=body.dict(),
+    )
+
     return {
         "enabled": policy.enabled,
         "risk_level": policy.risk_level,
@@ -1119,7 +1209,7 @@ async def update_workspace_data_leakage_policy(
 ):
     """Update workspace-level data masking policy"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     policy = db.query(ApplicationDataLeakagePolicy).filter(
         ApplicationDataLeakagePolicy.workspace_id == workspace_id,
@@ -1142,6 +1232,13 @@ async def update_workspace_data_leakage_policy(
             setattr(policy, field, value)
 
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="data_leakage_policy", resource_id=workspace_id, resource_name=workspace.name,
+        changes=body.dict(exclude_none=True),
+    )
+
     return {"message": "Updated successfully"}
 
 
@@ -1223,7 +1320,7 @@ async def update_workspace_scanner_configs(
 ):
     """Bulk update workspace-level scanner configurations"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     ws_uuid = uuid.UUID(workspace_id)
     for item in body.configs:
@@ -1252,6 +1349,13 @@ async def update_workspace_scanner_configs(
             config.scan_response_override = item.scan_response
 
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="scanner_config", resource_id=workspace_id, resource_name=workspace.name,
+        changes={"scanners_updated": len(body.configs)},
+    )
+
     return {"message": "Updated successfully"}
 
 
@@ -1300,7 +1404,7 @@ async def update_workspace_fixed_answer_templates(
 ):
     """Update workspace-level fixed answer templates"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     body = await request.json()
 
@@ -1335,6 +1439,13 @@ async def update_workspace_fixed_answer_templates(
         settings.data_leakage_template = existing
 
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="response_template", resource_id=workspace_id, resource_name=workspace.name,
+        changes={"templates_updated": list(body.keys())},
+    )
+
     return {"success": True, "message": "Fixed answer templates updated successfully"}
 
 
@@ -1386,7 +1497,7 @@ async def update_workspace_appeal_config(
 ):
     """Update workspace-level appeal configuration"""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     body = await request.json()
 
@@ -1415,6 +1526,13 @@ async def update_workspace_appeal_config(
         config.final_reviewer_email = body["final_reviewer_email"] or None
 
     db.commit()
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="appeal_config", resource_id=workspace_id, resource_name=workspace.name,
+        changes={k: v for k, v in body.items() if k in ("enabled", "message_template", "appeal_base_url", "final_reviewer_email")},
+    )
+
     return {
         "id": str(config.id),
         "enabled": config.enabled,
@@ -1866,7 +1984,7 @@ async def import_workspace(
 ):
     """Import workspace configuration from JSON. Overwrites existing config."""
     tenant_id = get_current_tenant_id(request)
-    _verify_workspace_ownership(db, workspace_id, tenant_id)
+    workspace = _verify_workspace_ownership(db, workspace_id, tenant_id)
 
     try:
         import_workspace_config(db, workspace_id, tenant_id, body.config)
@@ -1876,5 +1994,11 @@ async def import_workspace(
         db.rollback()
         logger.error(f"Failed to import workspace config: {e}", exc_info=True)
         raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+    await log_operation(
+        db=db, request=request, action="update",
+        resource_type="workspace", resource_id=workspace_id, resource_name=workspace.name,
+        changes={"action": "config_import"},
+    )
 
     return {"success": True, "message": "Workspace configuration imported successfully"}

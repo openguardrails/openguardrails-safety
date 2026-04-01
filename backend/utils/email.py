@@ -342,7 +342,8 @@ def get_appeal_review_email_template(
     platform_name = get_translation(language, 'email', 'appealReview', 'platformName')
     greeting = get_translation(language, 'email', 'appealReview', 'greeting')
     request_id_label = get_translation(language, 'email', 'appealReview', 'requestIdLabel')
-    appeal_user_label = get_translation(language, 'email', 'appealReview', 'appealUserLabel')
+    application_name_label = get_translation(language, 'email', 'appealReview', 'applicationNameLabel')
+    workspace_name_label = get_translation(language, 'email', 'appealReview', 'workspaceNameLabel')
     original_content_label = get_translation(language, 'email', 'appealReview', 'originalContentLabel')
     risk_level_label = get_translation(language, 'email', 'appealReview', 'riskLevelLabel')
     risk_categories_label = get_translation(language, 'email', 'appealReview', 'riskCategoriesLabel')
@@ -420,8 +421,12 @@ def get_appeal_review_email_template(
                                 <td style="padding: 8px 0; color: #333;"><code style="background: #f5f5f5; padding: 2px 6px; border-radius: 3px;">{appeal_data.get('request_id', 'N/A')}</code></td>
                             </tr>
                             <tr>
-                                <td style="padding: 8px 0; color: #666; vertical-align: top;"><strong>{appeal_user_label}:</strong></td>
-                                <td style="padding: 8px 0; color: #333;">{appeal_data.get('user_id', 'Anonymous')}</td>
+                                <td style="padding: 8px 0; color: #666; vertical-align: top;"><strong>{application_name_label}:</strong></td>
+                                <td style="padding: 8px 0; color: #333;">{appeal_data.get('application_name', 'N/A')}</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; color: #666; vertical-align: top;"><strong>{workspace_name_label}:</strong></td>
+                                <td style="padding: 8px 0; color: #333;">{appeal_data.get('workspace_name', 'N/A')}</td>
                             </tr>
                             <tr>
                                 <td style="padding: 8px 0; color: #666; vertical-align: top;"><strong>{risk_level_label}:</strong></td>

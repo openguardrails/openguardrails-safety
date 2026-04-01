@@ -11,7 +11,7 @@ from sqlalchemy import desc
 
 from database.models import (
     AppealConfig, AppealRecord, DetectionResult,
-    Whitelist, UserBanRecord, Application
+    Whitelist, UserBanRecord, Application, Workspace
 )
 from database.connection import get_db_session
 from services.model_service import ModelService
@@ -439,10 +439,19 @@ class AppealService:
                     # Send to final reviewer for human review
                     appeal_record.status = 'pending_review'
 
+                    # Look up application name and workspace name
+                    app = db.query(Application).filter(Application.id == uuid.UUID(application_id)).first()
+                    app_name = app.name if app else 'N/A'
+                    workspace_name = 'N/A'
+                    if app and app.workspace_id:
+                        ws = db.query(Workspace).filter(Workspace.id == app.workspace_id).first()
+                        workspace_name = ws.name if ws else 'N/A'
+
                     # Prepare appeal data for email
                     appeal_data = {
                         "request_id": request_id,
-                        "user_id": detection.user_id if hasattr(detection, 'user_id') else None,
+                        "application_name": app_name,
+                        "workspace_name": workspace_name,
                         "original_content": detection.content,
                         "original_risk_level": overall_risk,
                         "original_categories": original_categories,

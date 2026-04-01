@@ -16,6 +16,7 @@ from utils.subscription_check import (
 )
 from config import settings
 from services.workspace_resolver import get_workspace_id_for_app
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 router = APIRouter(tags=["Data Security"])
@@ -249,12 +250,19 @@ async def create_entity_type(
 
         logger.info(f"Entity type created: {data.get('entity_type')} for user: {current_user.email}, workspace: {workspace_id}")
 
+        await log_operation(
+            db=db, request=request, action="create",
+            resource_type="data_security_entity",
+            resource_id=str(entity_type.id),
+            resource_name=data.get("entity_type_name") or data.get("entity_type"),
+        )
+
         return {
             "success": True,
             "message": "Entity type created successfully",
             "id": str(entity_type.id)
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -374,12 +382,20 @@ async def update_entity_type(
             raise HTTPException(status_code=404, detail="Entity type not found or update failed")
 
         logger.info(f"Entity type updated: {entity_type_id} for user: {current_user.email}, workspace: {workspace_id}")
-        
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="data_security_entity",
+            resource_id=entity_type_id,
+            resource_name=data.get("entity_type_name") or data.get("entity_type"),
+            changes={"updated_fields": list(update_kwargs.keys())},
+        )
+
         return {
             "success": True,
             "message": "Entity type updated successfully"
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -453,12 +469,19 @@ async def delete_entity_type(
             raise HTTPException(status_code=404, detail="Entity type not found or delete failed")
 
         logger.info(f"Entity type deleted: {entity_type_id} (type: {source_type}) for user: {current_user.email}, workspace: {workspace_id}")
-        
+
+        await log_operation(
+            db=db, request=request, action="delete",
+            resource_type="data_security_entity",
+            resource_id=entity_type_id,
+            resource_name=entity_type.entity_type_name or entity_type.entity_type,
+        )
+
         return {
             "success": True,
             "message": "Entity type deleted successfully"
         }
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -511,7 +534,15 @@ async def create_global_entity_type(
         )
         
         logger.info(f"Global entity type created: {data.get('entity_type')} by admin: {current_user.email}")
-        
+
+        await log_operation(
+            db=db, request=request, action="create",
+            resource_type="data_security_entity",
+            resource_id=str(entity_type.id),
+            resource_name=data.get("entity_type_name") or data.get("entity_type"),
+            changes={"source_type": "system_template"},
+        )
+
         return {
             "success": True,
             "message": "Global entity type created successfully",

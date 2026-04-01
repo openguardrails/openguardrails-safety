@@ -21,6 +21,7 @@ from database.models import (
 )
 from services.data_leakage_disposal_service import DataLeakageDisposalService
 from utils.logger import setup_logger
+from services.audit_log_service import log_operation, compute_changes
 
 logger = setup_logger()
 
@@ -357,6 +358,13 @@ async def update_tenant_gateway_policy(
         db.commit()
         db.refresh(tenant_policy)
 
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="gateway_policy",
+            resource_id=str(tenant_policy.id),
+            resource_name="tenant_defaults",
+        )
+
         # Get models for response
         default_private_model = db.query(UpstreamApiConfig).filter(
             UpstreamApiConfig.tenant_id == tenant_id,
@@ -605,6 +613,13 @@ async def update_gateway_policy(
 
         db.commit()
         db.refresh(app_policy)
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="gateway_policy",
+            resource_id=str(app_policy.id),
+            resource_name=f"app_{application_id}",
+        )
 
         # Re-fetch with resolved values
         return await get_gateway_policy(request, db, application_id)

@@ -13,6 +13,7 @@ from database.models import (
     DataSecurityEntityType, TenantSwitch, TenantSubscription
 )
 from services.admin_service import admin_service
+from services.audit_log_service import log_operation, compute_changes
 from utils.logger import setup_logger
 
 logger = setup_logger()
@@ -362,7 +363,15 @@ async def set_user_rate_limit(
             request_data.tenant_id,
             request_data.requests_per_second
         )
-        
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="rate_limit",
+            resource_id=request_data.tenant_id,
+            resource_name=f"tenant_{request_data.tenant_id}",
+            changes={"requests_per_second": request_data.requests_per_second},
+        )
+
         return {
             "status": "success",
             "message": f"Rate limit set for user {request_data.tenant_id}: {request_data.requests_per_second} rps",
@@ -397,7 +406,14 @@ async def remove_user_rate_limit(
         
         rate_limit_service = RateLimitService(db)
         rate_limit_service.disable_user_rate_limit(tenant_id)
-        
+
+        await log_operation(
+            db=db, request=request, action="delete",
+            resource_type="rate_limit",
+            resource_id=tenant_id,
+            resource_name=f"tenant_{tenant_id}",
+        )
+
         return {
             "status": "success",
             "message": f"Rate limit removed for user {tenant_id}"
@@ -462,6 +478,13 @@ async def create_user(
         db.commit()
         db.refresh(new_tenant)
 
+        await log_operation(
+            db=db, request=request, action="create",
+            resource_type="admin_user",
+            resource_id=str(new_tenant.id),
+            resource_name=new_tenant.email,
+        )
+
         logger.info(f"Tenant created: {request_data.email}")
         return {
             "status": "success",
@@ -516,6 +539,14 @@ async def update_user(
             setattr(tenant, field, value)
 
         db.commit()
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="admin_user",
+            resource_id=tenant_id,
+            resource_name=tenant.email,
+            changes={"updated_fields": list(update_data.keys())},
+        )
 
         logger.info(f"Tenant updated: {tenant.email}")
         return {
@@ -608,13 +639,21 @@ async def delete_user(
         db.query(TenantSubscription).filter(TenantSubscription.tenant_id == tenant_uuid).delete()
         
         # Finally delete the tenant
+        deleted_email = tenant.email
         db.delete(tenant)
         db.commit()
 
-        logger.info(f"Tenant deleted: {tenant.email}")
+        await log_operation(
+            db=db, request=request, action="delete",
+            resource_type="admin_user",
+            resource_id=tenant_id,
+            resource_name=deleted_email,
+        )
+
+        logger.info(f"Tenant deleted: {deleted_email}")
         return {
             "status": "success",
-            "message": f"Tenant {tenant.email} deleted successfully"
+            "message": f"Tenant {deleted_email} deleted successfully"
         }
         
     except HTTPException:
@@ -652,6 +691,14 @@ async def reset_user_api_key(
         from utils.auth import generate_api_key
         tenant.api_key = generate_api_key()
         db.commit()
+
+        await log_operation(
+            db=db, request=request, action="update",
+            resource_type="admin_user",
+            resource_id=tenant_id,
+            resource_name=tenant.email,
+            changes={"action": "reset_api_key"},
+        )
 
         logger.info(f"API key reset for tenant: {tenant.email}")
         return {

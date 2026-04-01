@@ -12,6 +12,7 @@ from database.connection import get_admin_db_session
 from database.models import UpstreamApiConfig, ProxyRequestLog, OnlineTestModelSelection, Tenant
 from sqlalchemy.orm import Session
 from utils.logger import setup_logger
+from services.audit_log_service import log_operation, compute_changes
 from cryptography.fernet import Fernet
 import os
 import base64
@@ -206,20 +207,25 @@ async def create_upstream_api(request: Request):
             db.add(api_config)
             db.commit()
             db.refresh(api_config)
+
+            # Build response data before closing session
+            response_data = {
+                "success": True,
+                "data": {
+                    "id": str(api_config.id),
+                    "config_name": api_config.config_name,
+                    "api_base_url": api_config.api_base_url,
+                    "provider": api_config.provider,
+                    "is_active": api_config.is_active,
+                    "gateway_url": f"http://localhost:5002/v1/gateway/{api_config.id}/"
+                }
+            }
+
+            await log_operation(db, request, "create", "upstream_model", resource_id=str(api_config.id), resource_name=api_config.config_name)
         finally:
             db.close()
 
-        return {
-            "success": True,
-            "data": {
-                "id": str(api_config.id),
-                "config_name": api_config.config_name,
-                "api_base_url": api_config.api_base_url,
-                "provider": api_config.provider,
-                "is_active": api_config.is_active,
-                "gateway_url": f"http://localhost:5002/v1/gateway/{api_config.id}/"
-            }
-        }
+        return response_data
     except Exception as e:
         logger.error(f"Create upstream API error: {e}")
         return JSONResponse(
@@ -316,6 +322,10 @@ async def update_upstream_api(api_id: str, request: Request):
                 if existing:
                     raise ValueError(f"Upstream API configuration '{request_data['config_name']}' already exists")
 
+            # Capture old values for audit log
+            tracked_fields = ['config_name', 'api_base_url', 'provider', 'is_active', 'is_data_safe', 'is_default_private_model']
+            old_data = {f: getattr(api_config, f, None) for f in tracked_fields}
+
             # If setting as default private model, clear other defaults for this tenant first
             if request_data.get('is_default_private_model'):
                 db.query(UpstreamApiConfig).filter(
@@ -347,6 +357,10 @@ async def update_upstream_api(api_id: str, request: Request):
 
             db.commit()
             db.refresh(api_config)
+
+            new_data = {f: getattr(api_config, f, None) for f in tracked_fields}
+            changes = compute_changes(old_data, new_data)
+            await log_operation(db, request, "update", "upstream_model", resource_id=str(api_config.id), resource_name=api_config.config_name, changes=changes)
 
             return {
                 "success": True,
@@ -396,11 +410,14 @@ async def delete_upstream_api(api_id: str, request: Request):
 
             # Delete upstream API configuration
             config_name = api_config.config_name
+            config_id = str(api_config.id)
             db.delete(api_config)
             db.commit()
 
             logger.info(f"Deleted upstream API config '{config_name}' for tenant {current_user.id}. "
                        f"Also deleted {deleted_selections_count} model selections.")
+
+            await log_operation(db, request, "delete", "upstream_model", resource_id=config_id, resource_name=config_name)
         finally:
             db.close()
 

@@ -1,5 +1,5 @@
 from datetime import timedelta, datetime
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -10,6 +10,7 @@ from utils.email import send_password_reset_email, get_reset_token_expiry
 from database.connection import get_admin_db
 from database.models import Tenant, PasswordResetToken
 from config import settings
+from services.audit_log_service import log_operation
 
 router = APIRouter(tags=["Authentication"])
 security = HTTPBearer()
@@ -40,7 +41,7 @@ async def get_default_language():
     return DefaultLanguageResponse(default_language=settings.default_language)
 
 @router.post("/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest, db: Session = Depends(get_admin_db)):
+async def login(login_data: LoginRequest, request: Request, db: Session = Depends(get_admin_db)):
     """Admin login"""
     if not authenticate_admin(login_data.username, login_data.password):
         raise HTTPException(
@@ -70,6 +71,11 @@ async def login(login_data: LoginRequest, db: Session = Depends(get_admin_db)):
         expires_delta=access_token_expires
     )
 
+    try:
+        await log_operation(db, request, "login", "auth", resource_name=login_data.username, tenant_id=str(admin_user.id), user_id=str(admin_user.id), user_email=login_data.username)
+    except Exception:
+        pass  # Don't fail login if audit logging fails
+
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
@@ -86,8 +92,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     return UserInfo(username=username, role=role)
 
 @router.post("/logout")
-async def logout():
+async def logout(request: Request, db: Session = Depends(get_admin_db)):
     """User logout (frontend handles token clearance)"""
+    try:
+        await log_operation(db, request, "logout", "auth")
+    except Exception:
+        pass  # Don't fail logout if audit logging fails
     return {"message": "Successfully logged out"}
 
 async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -103,7 +113,7 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
 
 @router.post("/forgot-password")
-async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_admin_db)):
+async def forgot_password(request: ForgotPasswordRequest, http_request: Request, db: Session = Depends(get_admin_db)):
     """Request password reset - send reset email"""
     # Check if user exists
     user = db.query(Tenant).filter(Tenant.email == request.email).first()
@@ -138,10 +148,11 @@ async def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(
         print(f"Failed to send password reset email: {e}")
         # Still return success to prevent email enumeration
 
+    await log_operation(db, http_request, "update", "auth", resource_name=request.email, tenant_id=str(user.id), user_id=str(user.id), user_email=request.email)
     return {"message": "If the email exists, a password reset link will be sent"}
 
 @router.post("/reset-password")
-async def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_admin_db)):
+async def reset_password(request: ResetPasswordRequest, http_request: Request, db: Session = Depends(get_admin_db)):
     """Reset password using token"""
     # Find valid reset token
     reset_record = db.query(PasswordResetToken).filter(
@@ -183,6 +194,7 @@ async def reset_password(request: ResetPasswordRequest, db: Session = Depends(ge
 
     db.commit()
 
+    await log_operation(db, http_request, "update", "auth", resource_name=reset_record.email, tenant_id=str(user.id), user_id=str(user.id), user_email=reset_record.email)
     return {"message": "Password reset successful"}
 
 @router.post("/verify-reset-token")

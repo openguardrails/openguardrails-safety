@@ -1164,4 +1164,15 @@ export const workspacesApi = {
     api.post(`/api/v1/workspaces/${workspaceId}/import`, { config }).then(res => res.data),
 };
 
+export const auditLogApi = {
+  getLogs: (params?: any): Promise<any> =>
+    api.get('/api/v1/audit-logs', { params }).then(res => res.data),
+
+  exportLogs: (params?: any): Promise<Blob> =>
+    api.get('/api/v1/audit-logs/export', {
+      params,
+      responseType: 'blob',
+    }).then(res => res.data),
+};
+
 export default api;
