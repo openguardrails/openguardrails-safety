@@ -302,6 +302,17 @@ class PackageUpdateRequest(BaseModel):
     display_order: Optional[int] = Field(None, description="Display order")
 
 
+class ScannerDefaultRiskLevelRequest(BaseModel):
+    """Update scanner default risk level (super admin only, affects all workspaces)"""
+    risk_level: str = Field(..., description="Default risk level: high_risk, medium_risk, low_risk")
+
+    @validator('risk_level')
+    def validate_risk_level(cls, v):
+        if v not in ['high_risk', 'medium_risk', 'low_risk']:
+            raise ValueError('risk_level must be one of: high_risk, medium_risk, low_risk')
+        return v
+
+
 class ScannerConfigUpdateRequest(BaseModel):
     """Scanner configuration update request"""
     is_enabled: Optional[bool] = Field(None, description="Whether scanner is enabled")

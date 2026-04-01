@@ -2744,6 +2744,9 @@
     "resetAllToDefault": "Reset All to Default",
     "saveConfiguration": "Save Configuration",
     "configurationSaved": "Configuration saved successfully",
+    "defaultRiskLevelUpdated": "Default risk level updated successfully (affects all workspaces)",
+    "allScannersRiskConfig": "Scanner Risk Level Configuration",
+    "allScannersRiskConfigDesc": "Configure the default risk level for each scanner. Changes affect all workspaces.",
     "resetSuccess": "Reset to default successfully",
     "resetAllSuccess": "All configurations reset successfully",
     "loadFailed": "Failed to load scanner packages",
@@ -3017,7 +3020,8 @@
     "unarchiveSuccess": "Package unarchived successfully",
     "unarchiveFailed": "Failed to unarchive package",
     "archive": "Archive",
-    "archived": "Archived"
+    "archived": "Archived",
+    "loadDetailsFailed": "Failed to load package details"
   },
   "gatewayConnection": {
     "title": "Third-Party Gateways",

@@ -20,6 +20,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { toast } from 'sonner'
 import { confirmDialog } from '@/utils/confirm-dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ColumnDef } from '@tanstack/react-table'
 
 interface ScannerConfig {
@@ -270,6 +271,30 @@ const OfficialScannersManagement: React.FC<OfficialScannersManagementProps> = ({
     } catch (error) {
       toast.error(t('scannerPackages.updateFailed'))
       console.error('Failed to update scanner:', error)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleChangeDefaultRiskLevel = async (scannerId: string, riskLevel: string) => {
+    try {
+      setSaving(true)
+      await scannerPackagesApi.updateScannerDefaultRiskLevel(scannerId, riskLevel)
+      toast.success(t('scannerPackages.defaultRiskLevelUpdated'))
+      setScannerConfigs((prev) =>
+        prev.map((s) =>
+          s.id === scannerId
+            ? {
+                ...s,
+                default_risk_level: riskLevel,
+                risk_level: s.has_risk_level_override ? s.risk_level : riskLevel,
+              }
+            : s
+        )
+      )
+    } catch (error) {
+      toast.error(t('scannerPackages.updateFailed'))
+      console.error('Failed to update default risk level:', error)
     } finally {
       setSaving(false)
     }
@@ -530,6 +555,10 @@ const OfficialScannersManagement: React.FC<OfficialScannersManagementProps> = ({
       ),
     },
     {
+      accessorKey: 'package_name',
+      header: t('scannerPackages.packageName'),
+    },
+    {
       accessorKey: 'name',
       header: t('scannerPackages.scannerName'),
       cell: ({ row }) => <div className="truncate max-w-xs">{row.original.name}</div>,
@@ -544,9 +573,38 @@ const OfficialScannersManagement: React.FC<OfficialScannersManagementProps> = ({
       header: t('scannerPackages.riskLevel'),
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Badge variant={getRiskLevelColor(row.original.risk_level) as any} className={getRiskLevelClassName(row.original.risk_level)}>
-            {t(`risk.level.${row.original.risk_level}`)}
-          </Badge>
+          {user?.is_super_admin ? (
+            <Select
+              value={row.original.default_risk_level}
+              onValueChange={(value) => handleChangeDefaultRiskLevel(row.original.id, value)}
+              disabled={saving}
+            >
+              <SelectTrigger className="w-[140px] h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="high_risk">
+                  <Badge variant="destructive" className="pointer-events-none">
+                    {t('risk.level.high_risk')}
+                  </Badge>
+                </SelectItem>
+                <SelectItem value="medium_risk">
+                  <Badge variant="secondary" className="bg-orange-500/15 text-orange-300 border-orange-500/20 pointer-events-none">
+                    {t('risk.level.medium_risk')}
+                  </Badge>
+                </SelectItem>
+                <SelectItem value="low_risk">
+                  <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 pointer-events-none">
+                    {t('risk.level.low_risk')}
+                  </Badge>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <Badge variant={getRiskLevelColor(row.original.risk_level) as any} className={getRiskLevelClassName(row.original.risk_level)}>
+              {t(`risk.level.${row.original.risk_level}`)}
+            </Badge>
+          )}
           {row.original.has_risk_level_override && (
             <TooltipProvider>
               <Tooltip>

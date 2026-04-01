@@ -893,6 +893,10 @@ export const scannerPackagesApi = {
   // Admin: Get package statistics
   getStatistics: (packageId: string): Promise<any> =>
     api.get(`/api/v1/scanner-packages/admin/${packageId}/statistics`).then(res => res.data),
+
+  // Admin: Update scanner default risk level (affects all workspaces)
+  updateScannerDefaultRiskLevel: (scannerId: string, riskLevel: string): Promise<{ success: boolean; message: string; data: any }> =>
+    api.put(`/api/v1/scanner-packages/admin/scanners/${scannerId}/default-risk-level`, { risk_level: riskLevel }).then(res => res.data),
 };
 
 export const scannerConfigsApi = {

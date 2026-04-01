@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Upload, RefreshCw, Trash2, RotateCcw } from 'lucide-react'
+import { Upload, RefreshCw, Trash2, RotateCcw, ChevronDown, ChevronRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -14,6 +14,21 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { DataTable } from '@/components/data-table/DataTable'
 import { confirmDialog } from '@/utils/confirm-dialog'
 import { scannerPackagesApi } from '../../services/api'
@@ -34,6 +49,16 @@ interface Package {
   archive_reason?: string
 }
 
+interface ScannerInfo {
+  id: string
+  tag: string
+  name: string
+  scanner_type: string
+  default_risk_level: string
+  default_scan_prompt: boolean
+  default_scan_response: boolean
+}
+
 const GuardrailUpload: React.FC = () => {
   const { t } = useTranslation()
 
@@ -43,6 +68,12 @@ const GuardrailUpload: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadBundle, setUploadBundle] = useState<string>('')
   const [uploading, setUploading] = useState(false)
+
+  // Expanded package scanners
+  const [expandedPackageId, setExpandedPackageId] = useState<string | null>(null)
+  const [packageScanners, setPackageScanners] = useState<ScannerInfo[]>([])
+  const [scannersLoading, setScannersLoading] = useState(false)
+  const [savingScannerId, setSavingScannerId] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -58,6 +89,58 @@ const GuardrailUpload: React.FC = () => {
       console.error('Failed to load packages:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleToggleExpand = async (pkg: Package) => {
+    if (expandedPackageId === pkg.id) {
+      setExpandedPackageId(null)
+      setPackageScanners([])
+      return
+    }
+
+    setExpandedPackageId(pkg.id)
+    setScannersLoading(true)
+    try {
+      const detail = await scannerPackagesApi.getDetail(pkg.id)
+      const scanners = (detail.scanners || []).map((s: any) => ({
+        id: s.id,
+        tag: s.tag || s.scanner_tag,
+        name: s.name || s.guardrail_name,
+        scanner_type: s.scanner_type,
+        default_risk_level: s.default_risk_level,
+        default_scan_prompt: s.default_scan_prompt,
+        default_scan_response: s.default_scan_response,
+      }))
+      // Sort by tag number
+      scanners.sort((a: ScannerInfo, b: ScannerInfo) => {
+        const aNum = parseInt(a.tag.replace('S', ''))
+        const bNum = parseInt(b.tag.replace('S', ''))
+        return aNum - bNum
+      })
+      setPackageScanners(scanners)
+    } catch (error) {
+      toast.error(t('guardrailUpload.loadDetailsFailed'))
+      console.error('Failed to load package scanners:', error)
+      setExpandedPackageId(null)
+    } finally {
+      setScannersLoading(false)
+    }
+  }
+
+  const handleChangeDefaultRiskLevel = async (scannerId: string, riskLevel: string) => {
+    setSavingScannerId(scannerId)
+    try {
+      await scannerPackagesApi.updateScannerDefaultRiskLevel(scannerId, riskLevel)
+      toast.success(t('scannerPackages.defaultRiskLevelUpdated'))
+      setPackageScanners((prev) =>
+        prev.map((s) => (s.id === scannerId ? { ...s, default_risk_level: riskLevel } : s))
+      )
+    } catch (error) {
+      toast.error(t('scannerPackages.updateFailed'))
+      console.error('Failed to update default risk level:', error)
+    } finally {
+      setSavingScannerId(null)
     }
   }
 
@@ -132,6 +215,10 @@ const GuardrailUpload: React.FC = () => {
     try {
       await scannerPackagesApi.archivePackage(pkg.id)
       toast.success(t('guardrailUpload.archiveSuccess'))
+      if (expandedPackageId === pkg.id) {
+        setExpandedPackageId(null)
+        setPackageScanners([])
+      }
       await loadData()
     } catch {
       toast.error(t('guardrailUpload.archiveFailed'))
@@ -148,7 +235,35 @@ const GuardrailUpload: React.FC = () => {
     }
   }
 
+  const getRiskLevelBadge = (level: string) => {
+    if (level === 'high_risk') {
+      return <Badge variant="destructive">{t('risk.level.high_risk')}</Badge>
+    }
+    if (level === 'medium_risk') {
+      return <Badge variant="secondary" className="bg-orange-500/15 text-orange-300 border-orange-500/20">{t('risk.level.medium_risk')}</Badge>
+    }
+    return <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20">{t('risk.level.low_risk')}</Badge>
+  }
+
   const columns: ColumnDef<Package>[] = [
+    {
+      id: 'expand',
+      header: '',
+      cell: ({ row }) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => handleToggleExpand(row.original)}
+        >
+          {expandedPackageId === row.original.id ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </Button>
+      ),
+    },
     {
       accessorKey: 'package_name',
       header: t('guardrailUpload.packageName'),
@@ -242,6 +357,90 @@ const GuardrailUpload: React.FC = () => {
           />
         </CardContent>
       </Card>
+
+      {/* Expanded Scanner Risk Level Configuration */}
+      {expandedPackageId && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {packages.find(p => p.id === expandedPackageId)?.package_name} - {t('scannerPackages.allScannersRiskConfig')}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">{t('scannerPackages.allScannersRiskConfigDesc')}</p>
+          </CardHeader>
+          <CardContent>
+            {scannersLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-sky-400"></div>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{t('scannerPackages.scannerTag')}</TableHead>
+                    <TableHead>{t('scannerPackages.scannerName')}</TableHead>
+                    <TableHead>{t('scannerPackages.scannerType')}</TableHead>
+                    <TableHead>{t('scannerPackages.riskLevel')}</TableHead>
+                    <TableHead>{t('scannerPackages.scanPrompt')}</TableHead>
+                    <TableHead>{t('scannerPackages.scanResponse')}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {packageScanners.map((scanner) => (
+                    <TableRow key={scanner.id}>
+                      <TableCell>
+                        <Badge variant="secondary" className="bg-sky-500/15 text-sky-300 border-sky-500/20">
+                          {scanner.tag}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{scanner.name}</TableCell>
+                      <TableCell>{scanner.scanner_type}</TableCell>
+                      <TableCell>
+                        <Select
+                          value={scanner.default_risk_level}
+                          onValueChange={(value) => handleChangeDefaultRiskLevel(scanner.id, value)}
+                          disabled={savingScannerId === scanner.id}
+                        >
+                          <SelectTrigger className="w-[140px] h-8">
+                            <SelectValue>
+                              {getRiskLevelBadge(scanner.default_risk_level)}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="high_risk">
+                              <Badge variant="destructive" className="pointer-events-none">
+                                {t('risk.level.high_risk')}
+                              </Badge>
+                            </SelectItem>
+                            <SelectItem value="medium_risk">
+                              <Badge variant="secondary" className="bg-orange-500/15 text-orange-300 border-orange-500/20 pointer-events-none">
+                                {t('risk.level.medium_risk')}
+                              </Badge>
+                            </SelectItem>
+                            <SelectItem value="low_risk">
+                              <Badge variant="secondary" className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 pointer-events-none">
+                                {t('risk.level.low_risk')}
+                              </Badge>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>{scanner.default_scan_prompt ? '✓' : '-'}</TableCell>
+                      <TableCell>{scanner.default_scan_response ? '✓' : '-'}</TableCell>
+                    </TableRow>
+                  ))}
+                  {packageScanners.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        {t('scannerPackages.noScannersFound')}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Upload Modal */}
       <Dialog open={uploadModalVisible} onOpenChange={setUploadModalVisible}>

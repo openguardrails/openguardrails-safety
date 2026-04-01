@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_admin_db
 from database.models import ScannerPackage
 from services.scanner_package_service import ScannerPackageService
-from models.requests import PackageUploadRequest, PackageUpdateRequest
+from models.requests import PackageUploadRequest, PackageUpdateRequest, ScannerDefaultRiskLevelRequest
 from models.responses import (
     PackageResponse, PackageDetailResponse, MarketplacePackageResponse,
     PackageStatisticsResponse, ApiResponse
@@ -528,6 +528,53 @@ async def update_package(
         bundle=package.bundle,
         created_at=package.created_at.isoformat() if package.created_at else None,
         updated_at=package.updated_at.isoformat() if package.updated_at else None
+    )
+
+
+@router.put("/admin/scanners/{scanner_id}/default-risk-level", response_model=ApiResponse)
+async def update_scanner_default_risk_level(
+    scanner_id: str,
+    body: ScannerDefaultRiskLevelRequest,
+    request: Request,
+    db: Session = Depends(get_admin_db),
+    current_user: dict = Depends(require_super_admin)
+):
+    """
+    Update a scanner's default risk level (super admin only).
+
+    This changes the scanner's default_risk_level which affects ALL workspaces
+    that haven't set a workspace-level override.
+    """
+    from database.models import Scanner
+
+    try:
+        scanner_uuid = UUID(scanner_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid scanner ID format"
+        )
+
+    scanner = db.query(Scanner).filter(Scanner.id == scanner_uuid).first()
+    if not scanner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scanner not found"
+        )
+
+    old_level = scanner.default_risk_level
+    scanner.default_risk_level = body.risk_level
+    db.commit()
+
+    logger.warning(
+        f"Admin {current_user['email']} changed default risk level for scanner "
+        f"{scanner.tag} ({scanner.name}): {old_level} -> {body.risk_level}"
+    )
+
+    return ApiResponse(
+        success=True,
+        message=f"Scanner {scanner.tag} default risk level updated to {body.risk_level}",
+        data={"scanner_id": str(scanner.id), "tag": scanner.tag, "risk_level": body.risk_level}
     )
 
 

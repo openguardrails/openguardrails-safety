@@ -2741,6 +2741,9 @@
     "resetAllToDefault": "重置全部为默认",
     "saveConfiguration": "保存配置",
     "configurationSaved": "配置保存成功",
+    "defaultRiskLevelUpdated": "默认风险等级已更新（影响所有工作空间）",
+    "allScannersRiskConfig": "防护规则风险等级配置",
+    "allScannersRiskConfigDesc": "配置每条防护规则的默认风险等级，修改将影响所有工作空间。",
     "resetSuccess": "重置为默认成功",
     "resetAllSuccess": "全部配置重置成功",
     "loadFailed": "加载扫描器包失败",
@@ -3014,7 +3017,8 @@
     "unarchiveSuccess": "取消归档成功",
     "unarchiveFailed": "取消归档失败",
     "archive": "归档",
-    "archived": "已归档"
+    "archived": "已归档",
+    "loadDetailsFailed": "加载规则包详情失败"
   },
   "gatewayConnection": {
     "title": "第三方网关",

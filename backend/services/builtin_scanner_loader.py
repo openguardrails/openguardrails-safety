@@ -132,47 +132,39 @@ def _create_or_update_scanners(
 def _initialize_scanner_configs_for_applications(
     db: Session, scanners: List[Scanner]
 ) -> None:
-    """Ensure all applications have config rows for the provided scanners."""
-    applications = db.query(Application).filter(Application.is_active == True).all()  # noqa: E712
-    logger.info("Initializing scanner configs for %d applications", len(applications))
+    """Ensure all workspaces have config rows for the provided scanners.
 
-    for app in applications:
-        logger.info("Ensuring configs for application %s", app.name)
+    Config lives at workspace level (application_id IS NULL, workspace_id set).
+    This is consistent with the read path in ScannerConfigService.get_application_scanners.
+    """
+    from database.models import Workspace
+
+    workspaces = db.query(Workspace).all()
+    logger.info("Initializing scanner configs for %d workspaces", len(workspaces))
+
+    for ws in workspaces:
+        # Get workspace-level risk config for enabled_map
         risk_config = (
-            db.query(RiskTypeConfig).filter(RiskTypeConfig.application_id == app.id).first()
+            db.query(RiskTypeConfig)
+            .filter(
+                RiskTypeConfig.workspace_id == ws.id,
+                RiskTypeConfig.application_id.is_(None),
+            )
+            .first()
         )
 
         enabled_map = {}
         if risk_config:
-            enabled_map = {
-                "S1": getattr(risk_config, "s1_enabled", True),
-                "S2": getattr(risk_config, "s2_enabled", True),
-                "S3": getattr(risk_config, "s3_enabled", True),
-                "S4": getattr(risk_config, "s4_enabled", True),
-                "S5": getattr(risk_config, "s5_enabled", True),
-                "S6": getattr(risk_config, "s6_enabled", True),
-                "S7": getattr(risk_config, "s7_enabled", True),
-                "S8": getattr(risk_config, "s8_enabled", True),
-                "S9": getattr(risk_config, "s9_enabled", True),
-                "S10": getattr(risk_config, "s10_enabled", True),
-                "S11": getattr(risk_config, "s11_enabled", True),
-                "S12": getattr(risk_config, "s12_enabled", True),
-                "S13": getattr(risk_config, "s13_enabled", True),
-                "S14": getattr(risk_config, "s14_enabled", True),
-                "S15": getattr(risk_config, "s15_enabled", True),
-                "S16": getattr(risk_config, "s16_enabled", True),
-                "S17": getattr(risk_config, "s17_enabled", True),
-                "S18": getattr(risk_config, "s18_enabled", True),
-                "S19": getattr(risk_config, "s19_enabled", True),
-                "S20": getattr(risk_config, "s20_enabled", True),
-                "S21": getattr(risk_config, "s21_enabled", True),
-            }
+            for i in range(1, 22):
+                tag = f"S{i}"
+                enabled_map[tag] = getattr(risk_config, f"s{i}_enabled", True)
 
         for scanner in scanners:
             existing_config = (
                 db.query(ApplicationScannerConfig)
                 .filter(
-                    ApplicationScannerConfig.application_id == app.id,
+                    ApplicationScannerConfig.workspace_id == ws.id,
+                    ApplicationScannerConfig.application_id.is_(None),
                     ApplicationScannerConfig.scanner_id == scanner.id,
                 )
                 .first()
@@ -184,7 +176,7 @@ def _initialize_scanner_configs_for_applications(
             is_enabled = enabled_map.get(scanner.tag, True) if enabled_map else True
             db.add(
                 ApplicationScannerConfig(
-                    application_id=app.id,
+                    workspace_id=ws.id,
                     scanner_id=scanner.id,
                     is_enabled=is_enabled,
                     risk_level_override=None,

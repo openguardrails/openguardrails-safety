@@ -708,7 +708,6 @@ class AppealService:
             whitelist_description = t(language, 'whitelistDescription')
             whitelist = Whitelist(
                 tenant_id=tenant_uuid,
-                application_id=app_uuid,
                 workspace_id=workspace_uuid,
                 name=whitelist_name,
                 keywords=[keyword],

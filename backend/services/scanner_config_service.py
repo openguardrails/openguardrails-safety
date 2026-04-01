@@ -164,24 +164,30 @@ class ScannerConfigService:
         updates: Dict[str, Any]
     ) -> ApplicationScannerConfig:
         """
-        Update or create scanner config for application.
+        Update or create scanner config at workspace level.
 
         Args:
-            application_id: Application UUID
+            application_id: Application UUID (resolved to workspace_id)
             scanner_id: Scanner UUID
             updates: Config updates (is_enabled, risk_level, scan_prompt, scan_response)
 
         Returns:
             Updated config
         """
-        config = self.db.query(ApplicationScannerConfig).filter(
-            ApplicationScannerConfig.application_id == application_id,
-            ApplicationScannerConfig.scanner_id == scanner_id
-        ).first()
+        # Resolve to workspace level (consistent with read path)
+        workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
+        config = None
+        if workspace_id:
+            config = self.db.query(ApplicationScannerConfig).filter(
+                ApplicationScannerConfig.workspace_id == workspace_id,
+                ApplicationScannerConfig.application_id.is_(None),
+                ApplicationScannerConfig.scanner_id == scanner_id
+            ).first()
 
         if not config:
             config = ApplicationScannerConfig(
-                application_id=application_id,
+                workspace_id=workspace_id,
                 scanner_id=scanner_id
             )
             self.db.add(config)
@@ -200,7 +206,7 @@ class ScannerConfigService:
         self.db.refresh(config)
 
         logger.info(
-            f"Updated scanner config: app={application_id}, "
+            f"Updated scanner config: workspace={workspace_id}, app={application_id}, "
             f"scanner={scanner_id}, updates={list(updates.keys())}"
         )
 
@@ -250,16 +256,21 @@ class ScannerConfigService:
         Reset scanner config to package defaults.
 
         Args:
-            application_id: Application UUID
+            application_id: Application UUID (resolved to workspace_id)
             scanner_id: Scanner UUID
 
         Returns:
             True if reset, False if not found
         """
-        config = self.db.query(ApplicationScannerConfig).filter(
-            ApplicationScannerConfig.application_id == application_id,
-            ApplicationScannerConfig.scanner_id == scanner_id
-        ).first()
+        workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
+        config = None
+        if workspace_id:
+            config = self.db.query(ApplicationScannerConfig).filter(
+                ApplicationScannerConfig.workspace_id == workspace_id,
+                ApplicationScannerConfig.application_id.is_(None),
+                ApplicationScannerConfig.scanner_id == scanner_id
+            ).first()
 
         if not config:
             return False
@@ -273,7 +284,7 @@ class ScannerConfigService:
         self.db.commit()
 
         logger.info(
-            f"Reset scanner config to defaults: app={application_id}, scanner={scanner_id}"
+            f"Reset scanner config to defaults: workspace={workspace_id}, app={application_id}, scanner={scanner_id}"
         )
 
         return True
@@ -286,14 +297,19 @@ class ScannerConfigService:
         Reset all scanner configs to package defaults.
 
         Args:
-            application_id: Application UUID
+            application_id: Application UUID (resolved to workspace_id)
 
         Returns:
             Number of configs reset
         """
-        configs = self.db.query(ApplicationScannerConfig).filter(
-            ApplicationScannerConfig.application_id == application_id
-        ).all()
+        workspace_id = get_workspace_id_for_app(self.db, str(application_id))
+
+        configs = []
+        if workspace_id:
+            configs = self.db.query(ApplicationScannerConfig).filter(
+                ApplicationScannerConfig.workspace_id == workspace_id,
+                ApplicationScannerConfig.application_id.is_(None)
+            ).all()
 
         count = 0
         for config in configs:
