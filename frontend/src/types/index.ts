@@ -69,6 +69,13 @@ export interface DetectionResult {
   is_direct_model_access?: boolean;  // Whether this is a direct model access call
   // Detection source: guardrail_api, proxy, gateway, direct_model, content_scan
   source?: string;
+  // Unsafe content segments identified by second-pass detection
+  unsafe_segments?: Array<{
+    text: string;
+    start: number;
+    end: number;
+    categories: string[];
+  }>;
   // Application and workspace info (for global results view)
   application_id?: string;
   application_name?: string;

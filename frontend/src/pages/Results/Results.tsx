@@ -123,6 +123,7 @@ const Results: React.FC = () => {
   const [selectedResult, setSelectedResult] = useState<DetectionResult | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [segmentsLoading, setSegmentsLoading] = useState(false)
   const [dataEntityTypes, setDataEntityTypes] = useState<DataSecurityEntityType[]>([])
   const [applicationOptions, setApplicationOptions] = useState<AppOption[]>([])
   const [workspaceOptions, setWorkspaceOptions] = useState<WorkspaceOption[]>([])
@@ -357,17 +358,78 @@ const Results: React.FC = () => {
 
   const showDetail = async (record: DetectionResult) => {
     setDetailLoading(true)
+    setSegmentsLoading(false)
     setDrawerVisible(true)
     try {
       const fullRecord = await resultsApi.getResult(record.id)
       console.log('Full record from API:', fullRecord)
       setSelectedResult(fullRecord)
+
+      // On-demand extraction: if compliance/security risk exists and no segments cached yet
+      const hasComplianceRisk = fullRecord.compliance_risk_level && fullRecord.compliance_risk_level !== 'no_risk'
+      const hasSecurityRisk = fullRecord.security_risk_level && fullRecord.security_risk_level !== 'no_risk'
+      const noSegments = !fullRecord.unsafe_segments || fullRecord.unsafe_segments.length === 0
+
+      if ((hasComplianceRisk || hasSecurityRisk) && noSegments) {
+        setSegmentsLoading(true)
+        try {
+          const segResult = await resultsApi.extractUnsafeSegments(fullRecord.id)
+          if (segResult.unsafe_segments && segResult.unsafe_segments.length > 0) {
+            setSelectedResult((prev: DetectionResult | null) =>
+              prev ? { ...prev, unsafe_segments: segResult.unsafe_segments } : prev
+            )
+          }
+        } catch (err) {
+          console.warn('Failed to extract unsafe segments:', err)
+        } finally {
+          setSegmentsLoading(false)
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch full record:', error)
       setSelectedResult(record)
     } finally {
       setDetailLoading(false)
     }
+  }
+
+  // Render content with highlighted unsafe segments
+  const renderHighlightedContent = (
+    content: string,
+    segments: Array<{ text: string; start: number; end: number; categories: string[] }>
+  ): React.ReactNode => {
+    if (!segments || segments.length === 0) return content
+
+    // Sort segments by start position
+    const sorted = [...segments].sort((a, b) => a.start - b.start)
+
+    const parts: React.ReactNode[] = []
+    let lastEnd = 0
+
+    sorted.forEach((seg, idx) => {
+      // Add text before this segment
+      if (seg.start > lastEnd) {
+        parts.push(content.slice(lastEnd, seg.start))
+      }
+      // Add highlighted segment
+      parts.push(
+        <mark
+          key={idx}
+          className="bg-red-500/20 text-red-400 border-b-2 border-red-500 rounded-sm px-0.5"
+          title={seg.categories.join(', ')}
+        >
+          {content.slice(seg.start, seg.end)}
+        </mark>
+      )
+      lastEnd = Math.max(lastEnd, seg.end)
+    })
+
+    // Add remaining text
+    if (lastEnd < content.length) {
+      parts.push(content.slice(lastEnd))
+    }
+
+    return <>{parts}</>
   }
 
   // Risk level colors: high -> red, medium -> orange, low -> yellow
@@ -1047,7 +1109,17 @@ const Results: React.FC = () => {
                   </div>
                   <div className="mt-2 p-4 bg-secondary rounded-md">
                     {selectedResult.content && (
-                      <p className="mb-3 whitespace-pre-wrap text-sm">{selectedResult.content}</p>
+                      <p className="mb-3 whitespace-pre-wrap text-sm">
+                        {selectedResult.unsafe_segments && selectedResult.unsafe_segments.length > 0
+                          ? renderHighlightedContent(selectedResult.content, selectedResult.unsafe_segments)
+                          : selectedResult.content}
+                      </p>
+                    )}
+                    {segmentsLoading && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2 mb-1">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        {t('results.analyzingUnsafeSegments')}
+                      </div>
                     )}
 
                     {selectedResult.has_image &&
@@ -1081,6 +1153,8 @@ const Results: React.FC = () => {
                     {t('results.contentLengthChars', { length: selectedResult.content.length })}
                     {selectedResult.has_image &&
                       ` | ${t('results.includesImages', { count: selectedResult.image_count })}`}
+                    {selectedResult.unsafe_segments && selectedResult.unsafe_segments.length > 0 &&
+                      ` | ${t('results.unsafeSegments', { count: selectedResult.unsafe_segments.length })}`}
                   </div>
                 </div>
 

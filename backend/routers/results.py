@@ -92,6 +92,7 @@ def _enrich_result(result, app_map: dict, image_urls: list, truncate_content: bo
         image_urls=image_urls,
         is_direct_model_access=result.is_direct_model_access if hasattr(result, 'is_direct_model_access') else False,
         source=result.source if hasattr(result, 'source') else None,
+        unsafe_segments=result.unsafe_segments if hasattr(result, 'unsafe_segments') and result.unsafe_segments else [],
         application_id=app_id_str,
         application_name=app_info.get("application_name"),
         workspace_id=app_info.get("workspace_id"),
@@ -444,3 +445,91 @@ async def get_detection_result(result_id: int, request: Request, db: Session = D
     except Exception as e:
         logger.error(f"Get detection result error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get detection result")
+
+
+@router.post("/results/{result_id}/extract-segments")
+async def extract_unsafe_segments(result_id: int, request: Request, db: Session = Depends(get_admin_db)):
+    """
+    On-demand extraction of unsafe content segments.
+    Called when user opens log detail for a result with compliance/security risk.
+    Only runs for results with compliance or security risk (not data-only or safe).
+    Results are cached in DB after first extraction.
+    """
+    try:
+        current_user = get_current_tenant(request, db)
+
+        result = db.query(DetectionResult).filter_by(id=result_id).first()
+        if not result:
+            raise HTTPException(status_code=404, detail="Detection result not found")
+
+        # Permission check
+        if str(result.tenant_id) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Forbidden")
+
+        # Return cached result if already extracted
+        if result.unsafe_segments and len(result.unsafe_segments) > 0:
+            return {"unsafe_segments": result.unsafe_segments}
+
+        # Only extract for compliance/security risks (not data-only or safe)
+        has_compliance_risk = result.compliance_risk_level and result.compliance_risk_level != "no_risk"
+        has_security_risk = result.security_risk_level and result.security_risk_level != "no_risk"
+
+        if not has_compliance_risk and not has_security_risk:
+            return {"unsafe_segments": []}
+
+        # Build matched categories from the stored result
+        matched_categories = []
+        # Extract scanner tags from compliance/security categories
+        # Try matched_scanner_tags from model_response or reconstruct from categories
+        if result.security_categories:
+            matched_categories.append("S9")  # Security = Prompt Attacks
+        if result.compliance_categories:
+            # Reverse-lookup category names to tags
+            from services.guardrail_service import CATEGORY_NAMES
+            name_to_tag = {v: k for k, v in CATEGORY_NAMES.items()}
+            for cat_name in result.compliance_categories:
+                tag = name_to_tag.get(cat_name)
+                if tag:
+                    matched_categories.append(tag)
+
+        if not matched_categories:
+            return {"unsafe_segments": []}
+
+        # Get scanner definitions for context if application_id is available
+        scanner_defs = None
+        if result.application_id:
+            try:
+                from services.scanner_config_service import ScannerConfigService
+                from services.scanner_detection_service import ScannerDetectionService
+                scs = ScannerConfigService(db)
+                all_scanners = scs.get_application_scanners(
+                    application_id=result.application_id,
+                    tenant_id=result.tenant_id,
+                    include_disabled=False
+                )
+                genai_scanners = [s for s in all_scanners if s['scanner_type'] == 'genai']
+                if genai_scanners:
+                    temp_sds = ScannerDetectionService(db)
+                    scanner_defs = temp_sds._prepare_scanner_definitions(genai_scanners)
+            except Exception as e:
+                logger.warning(f"Failed to get scanner definitions: {e}")
+
+        # Run extraction
+        from services.model_service import model_service
+        unsafe_segments = await model_service.extract_unsafe_segments(
+            content=result.content,
+            matched_categories=matched_categories,
+            scanner_definitions=scanner_defs
+        )
+
+        # Save to DB for caching
+        result.unsafe_segments = unsafe_segments
+        db.commit()
+
+        return {"unsafe_segments": unsafe_segments}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Extract unsafe segments error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to extract unsafe segments")

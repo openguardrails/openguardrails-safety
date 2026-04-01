@@ -166,6 +166,10 @@ export const resultsApi = {
   getResult: (id: number): Promise<DetectionResult> =>
     api.get(`/api/v1/results/${id}`).then(res => res.data),
 
+  // Extract unsafe segments on-demand (second-pass detection)
+  extractUnsafeSegments: (resultId: number): Promise<{ unsafe_segments: Array<{ text: string; start: number; end: number; categories: string[] }> }> =>
+    api.post(`/api/v1/results/${resultId}/extract-segments`).then(res => res.data),
+
   // Export detection results to Excel
   exportResults: (params?: {
     risk_level?: string;

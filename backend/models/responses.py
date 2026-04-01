@@ -64,6 +64,8 @@ class DetectionResultResponse(BaseModel):
     is_direct_model_access: bool = False  # Whether this is a direct model access call
     # Detection source: guardrail_api, proxy, gateway, direct_model, content_scan
     source: Optional[str] = None
+    # Unsafe content segments identified by second-pass detection
+    unsafe_segments: List[Dict[str, Any]] = []
     # Application and workspace info (for global results view)
     application_id: Optional[str] = None
     application_name: Optional[str] = None

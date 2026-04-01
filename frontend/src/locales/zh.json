@@ -457,6 +457,8 @@
     "loadingDetails": "加载详细内容中...",
     "contentLengthChars": "内容长度: {{length}} 字符",
     "includesImages": "包含 {{count}} 张图片",
+    "unsafeSegments": "已标注 {{count}} 处风险内容",
+    "analyzingUnsafeSegments": "正在分析风险内容片段...",
     "paginationText": "第 {{from}}-{{to}} 条，共 {{total}} 条",
     "application": "应用",
     "filterApplication": "筛选应用",

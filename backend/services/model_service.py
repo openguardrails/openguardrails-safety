@@ -2,7 +2,8 @@ import asyncio
 import httpx
 import json
 import math
-from typing import List, Tuple, Optional
+import re
+from typing import List, Tuple, Optional, Dict, Any
 from config import settings
 from utils.logger import setup_logger
 
@@ -272,6 +273,229 @@ class ModelService:
             logger.error(f"Model API error with scanner definitions: {e}")
             # Return safe default result
             return "safe", None
+
+    async def extract_unsafe_segments(
+        self,
+        content: str,
+        matched_categories: List[str],
+        scanner_definitions: Optional[List[str]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Second-pass detection: extract the specific unsafe text segments from content.
+
+        Called only when first-pass detection finds unsafe content.
+        Asks the model to identify which sentences/phrases triggered the violation,
+        then matches them back to the original content to get positions.
+
+        Args:
+            content: Original text content
+            matched_categories: List of matched category tags (e.g., ["S2", "S5"])
+            scanner_definitions: Optional scanner definitions for context
+
+        Returns:
+            List of dicts: [{"text": "...", "start": 0, "end": 10, "categories": ["S2"]}]
+            Returns empty list on any error (non-blocking).
+        """
+        if not content or not matched_categories:
+            return []
+
+        try:
+            # Build category description for the prompt
+            if scanner_definitions:
+                categories_desc = "\n".join(
+                    d for d in scanner_definitions
+                    if any(d.startswith(tag + ":") or d.startswith(tag + " ") for tag in matched_categories)
+                )
+            else:
+                categories_desc = ", ".join(matched_categories)
+
+            # Truncate content if too long (model has limited context)
+            max_content_len = 4000
+            truncated_content = content[:max_content_len] if len(content) > max_content_len else content
+
+            # Build the extraction prompt - use simple JSON format for the 3.3B model
+            instruction = f"""[INST] The following text was detected as unsafe, violating categories: {', '.join(matched_categories)}.
+
+<BEGIN TEXT>
+{truncated_content}
+<END TEXT>
+
+Identify the specific unsafe sentences or phrases in the text above.
+Return ONLY a JSON array of strings, where each string is an exact quote from the text.
+Example format: ["unsafe sentence one", "unsafe phrase two"]
+
+Return ONLY the JSON array, no other text. [/INST]"""
+
+            prepared_messages = [{"role": "user", "content": instruction}]
+
+            payload = {
+                "model": settings.guardrails_model_name,
+                "messages": prepared_messages,
+                "temperature": 0.0,
+                "max_tokens": 1024,
+            }
+
+            response = await self._client.post(
+                self._api_url,
+                json=payload,
+                headers=self._headers
+            )
+
+            if response.status_code != 200:
+                logger.warning(f"Unsafe segment extraction API error: {response.status_code}")
+                return []
+
+            result_data = response.json()
+            raw_response = result_data["choices"][0]["message"]["content"].strip()
+            logger.info(f"Unsafe segment extraction raw response: {raw_response[:500]}")
+
+            # Parse the model response - robust JSON extraction
+            segments = self._parse_unsafe_segments_response(raw_response)
+
+            if not segments:
+                return []
+
+            # Match segments back to original content to get positions
+            return self._match_segments_to_content(content, segments, matched_categories)
+
+        except Exception as e:
+            logger.warning(f"Unsafe segment extraction failed (non-blocking): {e}")
+            return []
+
+    def _parse_unsafe_segments_response(self, raw_response: str) -> List[str]:
+        """
+        Parse model response to extract unsafe segment strings.
+        Handles various imperfect formats the small model might produce.
+        """
+        # Try 1: Direct JSON parse
+        try:
+            parsed = json.loads(raw_response)
+            if isinstance(parsed, list):
+                return [str(s).strip() for s in parsed if s and str(s).strip()]
+        except json.JSONDecodeError:
+            pass
+
+        # Try 2: Extract JSON array from response (model may add extra text)
+        json_match = re.search(r'\[[\s\S]*?\]', raw_response)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group())
+                if isinstance(parsed, list):
+                    return [str(s).strip() for s in parsed if s and str(s).strip()]
+            except json.JSONDecodeError:
+                pass
+
+        # Try 3: Extract quoted strings
+        quoted = re.findall(r'"([^"]+)"', raw_response)
+        if quoted:
+            return [s.strip() for s in quoted if s.strip()]
+
+        logger.warning(f"Could not parse unsafe segments from model response")
+        return []
+
+    def _match_segments_to_content(
+        self,
+        content: str,
+        segments: List[str],
+        categories: List[str]
+    ) -> List[Dict[str, Any]]:
+        """
+        Match extracted segment strings back to original content to find positions.
+        Finds ALL occurrences of each segment (not just the first).
+        Uses exact substring match first, then fuzzy fallback.
+        """
+        results = []
+        used_ranges = []  # Avoid overlapping matches
+
+        def _is_overlapping(start: int, end: int) -> bool:
+            return any(s <= start < e or s < end <= e for s, e in used_ranges)
+
+        def _add_result(text: str, start: int, end: int):
+            if not _is_overlapping(start, end):
+                results.append({
+                    "text": text,
+                    "start": start,
+                    "end": end,
+                    "categories": categories
+                })
+                used_ranges.append((start, end))
+
+        for segment_text in segments:
+            if not segment_text or len(segment_text) < 4:
+                continue  # Skip very short segments (likely noise)
+
+            # Find ALL exact substring matches
+            found_any = False
+            search_start = 0
+            while True:
+                start = content.find(segment_text, search_start)
+                if start == -1:
+                    break
+                found_any = True
+                end = start + len(segment_text)
+                _add_result(segment_text, start, end)
+                search_start = end  # Continue searching after this match
+
+            if found_any:
+                continue
+
+            # Fuzzy fallback: normalize whitespace and find all matches
+            normalized_segment = ' '.join(segment_text.split())
+            normalized_content = ' '.join(content.split())
+
+            norm_search_start = 0
+            found_norm = False
+            while True:
+                norm_start = normalized_content.find(normalized_segment, norm_search_start)
+                if norm_start == -1:
+                    break
+                original_pos = self._map_normalized_pos_to_original(content, norm_start, normalized_segment)
+                if original_pos is not None:
+                    found_norm = True
+                    start, end = original_pos
+                    _add_result(content[start:end], start, end)
+                norm_search_start = norm_start + len(normalized_segment)
+
+            if found_norm:
+                continue
+
+            # Last resort: try shorter prefix (first 30 chars), find all
+            if len(segment_text) > 30:
+                short = segment_text[:30]
+                search_start = 0
+                while True:
+                    start = content.find(short, search_start)
+                    if start == -1:
+                        break
+                    end = min(start + len(segment_text), len(content))
+                    _add_result(content[start:end], start, end)
+                    search_start = start + len(short)
+
+        return results
+
+    def _map_normalized_pos_to_original(
+        self, original: str, norm_start: int, norm_segment: str
+    ) -> Optional[Tuple[int, int]]:
+        """Map a position in normalized (whitespace-collapsed) text back to original text."""
+        norm_idx = 0
+        orig_start = None
+
+        for orig_idx, ch in enumerate(original):
+            if norm_idx == norm_start and orig_start is None:
+                orig_start = orig_idx
+            if norm_idx == norm_start + len(norm_segment):
+                return (orig_start, orig_idx)
+
+            if ch in (' ', '\t', '\n', '\r'):
+                # In normalized text, consecutive whitespace is collapsed to single space
+                if orig_idx == 0 or original[orig_idx - 1] not in (' ', '\t', '\n', '\r'):
+                    norm_idx += 1
+            else:
+                norm_idx += 1
+
+        if orig_start is not None and norm_idx >= norm_start + len(norm_segment):
+            return (orig_start, len(original))
+        return None
 
     def _has_image_content(self, messages: List[dict]) -> bool:
         """Check if the message contains image content"""

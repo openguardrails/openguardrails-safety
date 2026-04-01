@@ -607,6 +607,17 @@ def clean_detection_data(data: dict) -> dict:
     else:
         return data
 
+def strip_openguardrails_tags(text: str) -> str:
+    """Strip <openguardrails>...</openguardrails> tags and their content from text.
+
+    These tags are injected by OpenGuardrails into conversations for security purposes
+    and should not be included in content safety detection to avoid false positives.
+    """
+    if not text or '<openguardrails>' not in text:
+        return text
+    return re.sub(r'<openguardrails>[\s\S]*?</openguardrails>', '', text).strip()
+
+
 def extract_keywords(text: str) -> List[str]:
     """Extract keywords from text"""
     # Simple keyword extraction, can be optimized later

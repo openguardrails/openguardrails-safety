@@ -206,6 +206,16 @@ class GuardrailService:
                 else:
                     messages_dict.append({"role": msg.role, "content": content})
 
+            # Strip <openguardrails> tags from messages before detection (avoid false positives)
+            from utils.validators import strip_openguardrails_tags
+            for msg_d in messages_dict:
+                if isinstance(msg_d.get("content"), str):
+                    msg_d["content"] = strip_openguardrails_tags(msg_d["content"])
+                elif isinstance(msg_d.get("content"), list):
+                    for part in msg_d["content"]:
+                        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
+                            part["text"] = strip_openguardrails_tags(part["text"])
+
             # Check subscription for image detection if images are present
             if has_image and tenant_id:
                 subscription = billing_service.get_subscription(tenant_id, self.db)
@@ -829,7 +839,7 @@ class GuardrailService:
             "has_image": has_image,
             "image_count": image_count,
             "image_paths": image_paths or [],
-            "source": source
+            "source": source,
         }
 
         # Only write log file, not write database (managed by admin service's log processor)

@@ -460,6 +460,8 @@
     "loadingDetails": "Loading detailed content...",
     "contentLengthChars": "Content length: {{length}} characters",
     "includesImages": "Includes {{count}} images",
+    "unsafeSegments": "{{count}} unsafe segment(s) highlighted",
+    "analyzingUnsafeSegments": "Analyzing unsafe content segments...",
     "paginationText": "Showing {{from}}-{{to}} of {{total}}",
     "application": "Application",
     "filterApplication": "Filter Application",

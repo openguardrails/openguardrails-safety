@@ -270,6 +270,16 @@ class DetectionGuardrailService:
                                 content_parts.append({"type": "image_url", "image_url": {"url": processed_url}})
                     messages_dict.append({"role": msg.role, "content": content_parts})
 
+            # Strip <openguardrails> tags from messages before detection (avoid false positives)
+            from utils.validators import strip_openguardrails_tags
+            for msg_d in messages_dict:
+                if isinstance(msg_d.get("content"), str):
+                    msg_d["content"] = strip_openguardrails_tags(msg_d["content"])
+                elif isinstance(msg_d.get("content"), list):
+                    for part in msg_d["content"]:
+                        if isinstance(part, dict) and part.get("type") == "text" and part.get("text"):
+                            part["text"] = strip_openguardrails_tags(part["text"])
+
             # 4. Execute scanner-based detection (new system) or fall back to legacy detection
             matched_scanner_tags = []  # Initialize for logging
 
@@ -1093,7 +1103,8 @@ class DetectionGuardrailService:
         tenant_id: Optional[str] = None, application_id: Optional[str] = None,
         sensitivity_score: Optional[float] = None,
         has_image: bool = False, image_count: int = 0, image_paths: List[str] = None,
-        matched_scanner_tags: List[str] = None, source: Optional[str] = None    ):
+        matched_scanner_tags: List[str] = None, source: Optional[str] = None
+    ):
         """Asynchronously record detection results to log file (not write to database)"""
 
         # Clean NUL characters from content

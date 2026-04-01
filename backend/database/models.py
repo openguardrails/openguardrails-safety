@@ -166,6 +166,9 @@ class DetectionResult(Base):
     has_image = Column(Boolean, default=False, index=True)  # Whether contains image
     image_count = Column(Integer, default=0)  # Image count
     image_paths = Column(JSON, default=list)  # Saved image file path list
+    # Unsafe content segments identified by second-pass detection
+    # JSON array: [{"text": "...", "start": 0, "end": 10, "categories": ["S2"]}]
+    unsafe_segments = Column(JSON, default=list)
     # Direct model access flag
     is_direct_model_access = Column(Boolean, default=False, index=True)  # Whether this is a direct model access call (not a guardrail check)
     # Detection source: guardrail_api, proxy, gateway, direct_model, content_scan
