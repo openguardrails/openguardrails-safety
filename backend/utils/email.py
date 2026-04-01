@@ -395,10 +395,7 @@ def get_appeal_review_email_template(
     # Format AI review result
     ai_result = "Rejected (Considered True Positive)" if not appeal_data.get('ai_approved') else "Approved"
 
-    # Truncate content if too long
     original_content = appeal_data.get('original_content', '')
-    if len(original_content) > 500:
-        original_content = original_content[:500] + '...'
 
     # Build HTML email template
     html_body = f"""

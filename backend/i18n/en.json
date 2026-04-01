@@ -69,6 +69,7 @@
       "noBanHistory": "No ban history",
       "recentRequestsLabel": "User's Recent 10 Requests",
       "noRecentRequests": "No request history",
+      "appealUserLabel": "Appeal User",
       "actionInstruction": "Please log in to the admin panel to review (approve or reject).",
       "footer": "OpenGuardrails - Securing AI Applications"
     }

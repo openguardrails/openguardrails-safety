@@ -69,6 +69,7 @@
       "noBanHistory": "无封禁记录",
       "recentRequestsLabel": "用户最近10条请求",
       "noRecentRequests": "无历史请求记录",
+      "appealUserLabel": "申诉用户",
       "actionInstruction": "请登录管理后台进行审核操作（加白名单或拒绝）。",
       "footer": "OpenGuardrails平台 - 保护AI应用安全"
     }

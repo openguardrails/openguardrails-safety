@@ -1,6 +1,8 @@
 """
 Appeal Service - Handles false positive appeal processing
 """
+import asyncio
+import re
 import uuid
 import hashlib
 from datetime import datetime, timezone
@@ -73,9 +75,22 @@ Review principles:
 4. Be cautious but fair - false positives should be approved
 5. If the content is actually risky, even if the user appeals, it should be rejected
 
-You must reply strictly in the following format:
-DECISION: [APPROVED/REJECTED]
-REASONING: [Detailed explanation of the reason, in {reasoning_language}]"""
+You MUST reply in EXACTLY the following format (two lines, no extra text before or after):
+
+DECISION: APPROVED
+REASONING: The content is a false positive because ...
+
+or
+
+DECISION: REJECTED
+REASONING: The content is actually risky because ...
+
+Rules:
+- The first line MUST start with "DECISION: " followed by ONLY "APPROVED" or "REJECTED" (no other words)
+- The second line MUST start with "REASONING: " followed by your explanation in {reasoning_language}
+- Do NOT output any other text, greeting, or preamble — only these two lines
+- APPROVED means the content is safe and was wrongly blocked (false positive)
+- REJECTED means the content is genuinely risky and should remain blocked"""
 
 APPEAL_REVIEW_USER_PROMPT = """Please review the false positive appeal for the following content:
 
@@ -93,7 +108,9 @@ The user's recent 10 requests:
 The user's ban history:
 {ban_history}
 
-Please determine if this is a false positive based on the above information and provide a detailed explanation of the reason."""
+Based on the above information, determine if this is a false positive. Reply with EXACTLY two lines:
+DECISION: APPROVED or REJECTED
+REASONING: Your explanation"""
 
 
 class AppealService:
@@ -242,9 +259,19 @@ class AppealService:
 
         try:
             # 1. Find original detection result
-            detection = db.query(DetectionResult).filter(
-                DetectionResult.request_id == request_id
-            ).first()
+            # Detection logs are written async (JSONL → DB sync every ~5s),
+            # so the record may not be in DB yet when user clicks the appeal link.
+            # Retry a few times with short delays to handle this race condition.
+            detection = None
+            for attempt in range(4):  # up to ~6 seconds total
+                detection = db.query(DetectionResult).filter(
+                    DetectionResult.request_id == request_id
+                ).first()
+                if detection:
+                    break
+                if attempt < 3:
+                    await asyncio.sleep(2)
+                    db.expire_all()  # Clear SQLAlchemy cache to see new data
 
             if not detection:
                 return {
@@ -648,8 +675,69 @@ class AppealService:
             # Fallback: check for Chinese approval keywords
             if "误报" in response and ("确认" in response or "通过" in response or "同意" in response):
                 ai_approved = True
+            # "无风险" means no risk detected - treat as false positive (approve)
+            elif "无风险" in response:
+                ai_approved = True
 
         return ai_approved, reasoning
+
+    @staticmethod
+    def _extract_whitelist_keyword(content: str) -> str:
+        """
+        Extract meaningful whitelist keyword from detection content.
+
+        For multi-turn conversations formatted as "[User]: ...\n[Assistant]: ...",
+        extracts the last message (User or Assistant) and strips metadata/timestamps
+        to get the actual text that will reliably match in future requests.
+
+        - If the last message is [User]: extracts the user's question
+        - If the last message is [Assistant]: extracts the assistant's response
+        """
+        keyword = content  # default for single message
+
+        # Check if this is multi-turn format
+        role_prefixes = ('\n[User]: ', '\n[Assistant]: ', '\n[Tool]: ')
+        is_multi_turn = any(p in content for p in role_prefixes) or \
+                        content.startswith('[User]: ') or content.startswith('[Assistant]: ')
+
+        if is_multi_turn:
+            # Find the last role-tagged message (User or Assistant)
+            last_idx = -1
+            last_prefix_len = 0
+            for prefix in ('\n[User]: ', '\n[Assistant]: '):
+                idx = content.rfind(prefix)
+                if idx > last_idx:
+                    last_idx = idx
+                    last_prefix_len = len(prefix)
+
+            if last_idx >= 0:
+                keyword = content[last_idx + last_prefix_len:]
+            elif content.startswith('[User]: '):
+                keyword = content[len('[User]: '):]
+            elif content.startswith('[Assistant]: '):
+                keyword = content[len('[Assistant]: '):]
+            keyword = keyword.strip()
+
+        # Extract the actual text from the last non-empty line
+        # Agent messages often have metadata/timestamps before the actual question:
+        #   Sender (untrusted metadata): ...
+        #   [Wed 2026-04-01 18:24 GMT+8] 如何造炸弹
+        # The last non-empty line typically contains the user's actual content
+        lines = keyword.split('\n')
+        last_meaningful_line = ''
+        for line in reversed(lines):
+            line = line.strip()
+            if line:
+                last_meaningful_line = line
+                break
+
+        if last_meaningful_line:
+            # Strip common timestamp prefixes: [Wed 2026-04-01 18:24 GMT+8]
+            cleaned = re.sub(r'^\[.*?\]\s*', '', last_meaningful_line).strip()
+            if cleaned:
+                keyword = cleaned
+
+        return keyword
 
     async def _add_to_appeal_whitelist(
         self,
@@ -672,12 +760,16 @@ class AppealService:
         workspace_id_str = get_workspace_id_for_app(db, application_id)
         workspace_uuid = uuid.UUID(workspace_id_str) if workspace_id_str else None
 
-        # Extract a meaningful keyword from content (first 100 chars or less)
-        keyword = content[:100].strip()
-        if len(content) > 100:
-            # Try to break at word boundary
+        # Extract the last user message as whitelist keyword
+        # Multi-turn content format: "[User]: msg1\n[Assistant]: msg2\n[User]: msg3"
+        # We want the last [User] message, which is the actual question that triggered detection
+        keyword = self._extract_whitelist_keyword(content)
+
+        # Final trim: keep reasonable length for whitelist display
+        if len(keyword) > 500:
+            keyword = keyword[:500].strip()
             last_space = keyword.rfind(" ")
-            if last_space > 50:
+            if last_space > 200:
                 keyword = keyword[:last_space]
 
         # Find existing appeal whitelist in the workspace (check both English and Chinese names for backwards compatibility)
