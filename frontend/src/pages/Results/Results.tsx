@@ -1116,6 +1116,48 @@ const Results: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Whitelist / Blacklist Hit Info */}
+                {selectedResult.model_response && (selectedResult.model_response === 'whitelist_hit' || selectedResult.model_response === 'blacklist_hit') && (
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge className={
+                        selectedResult.model_response === 'whitelist_hit'
+                          ? '!bg-green-500/10 !text-green-400 !border-green-300 text-xs'
+                          : '!bg-red-500/10 !text-red-400 !border-red-300 text-xs'
+                      }>
+                        {selectedResult.model_response === 'whitelist_hit'
+                          ? t('results.whitelistHit')
+                          : t('results.blacklistHit')}
+                      </Badge>
+                      {selectedResult.compliance_categories && selectedResult.compliance_categories.length > 0 && (
+                        <span className="text-sm text-muted-foreground">
+                          {t('results.hitListName')}: <span className="font-medium text-foreground">{selectedResult.compliance_categories[0]}</span>
+                        </span>
+                      )}
+                    </div>
+                    {selectedResult.hit_keywords && (() => {
+                      try {
+                        const keywords = JSON.parse(selectedResult.hit_keywords);
+                        if (Array.isArray(keywords) && keywords.length > 0) {
+                          return (
+                            <div>
+                              <div className="text-xs text-muted-foreground mb-1.5">{t('results.hitKeywords')}:</div>
+                              <div className="flex flex-wrap gap-1">
+                                {keywords.map((kw: string, i: number) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {kw}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      } catch { return null; }
+                    })()}
+                  </div>
+                )}
+
                 {/* Suggested Action */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
                   <div className="font-medium text-muted-foreground text-sm">{t('results.suggestedAction')}:</div>

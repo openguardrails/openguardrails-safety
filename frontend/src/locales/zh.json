@@ -480,7 +480,11 @@
     "copyContent": "复制",
     "contentCopied": "内容已复制到剪贴板",
     "copyFailed": "复制内容失败",
-    "dataMasked": "已脱敏"
+    "dataMasked": "已脱敏",
+    "whitelistHit": "命中白名单",
+    "blacklistHit": "命中黑名单",
+    "hitListName": "名单名称",
+    "hitKeywords": "匹配关键词"
   },
   "reports": {
     "title": "风险报表",
@@ -509,7 +513,7 @@
     "title": "防护配置",
     "blacklist": "黑名单",
     "whitelist": "白名单",
-    "keywordList": "关键词过滤",
+    "keywordList": "黑白名单",
     "riskType": "风险类型",
     "template": "拒答答案库",
     "knowledge": "知识库",
@@ -602,7 +606,7 @@
     "descriptionPlaceholder": "请输入描述"
   },
   "keywordList": {
-    "title": "关键词过滤",
+    "title": "黑白名单",
     "blacklistTab": "黑名单",
     "whitelistTab": "白名单"
   },
@@ -2638,7 +2642,7 @@
     "removeAppDesc": "将 {{name}} 从此工作区移除？应用不会被删除。",
     "tabGuardrails": "防护规则",
     "tabDataMasking": "数据脱敏",
-    "tabKeywords": "关键词过滤",
+    "tabKeywords": "黑白名单",
     "tabAnswers": "答案管理",
     "tabSecurity": "处置策略",
     "tabRiskTypes": "风险类型",

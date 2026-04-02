@@ -50,6 +50,7 @@ export interface DetectionResult {
   suggest_action?: string;
   suggest_answer?: string;
   hit_keywords?: string;
+  model_response?: string;  // e.g. blacklist_hit, whitelist_hit
   created_at: string;
   ip_address?: string;
   // Separated security and compliance detection results

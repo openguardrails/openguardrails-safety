@@ -891,13 +891,14 @@ async def delete_workspace_blacklist(
         raise HTTPException(status_code=404, detail="Blacklist not found")
 
     bl_name = item.name
-    item.is_active = False
+    bl_id = item.id
+    db.delete(item)
     db.commit()
     await keyword_cache.invalidate_cache()
 
     await log_operation(
         db=db, request=request, action="delete",
-        resource_type="blacklist", resource_id=str(item.id), resource_name=bl_name,
+        resource_type="blacklist", resource_id=str(bl_id), resource_name=bl_name,
     )
 
     return {"message": "Deleted successfully"}
@@ -1025,13 +1026,14 @@ async def delete_workspace_whitelist(
         raise HTTPException(status_code=404, detail="Whitelist not found")
 
     wl_name = item.name
-    item.is_active = False
+    wl_id = item.id
+    db.delete(item)
     db.commit()
     await keyword_cache.invalidate_cache()
 
     await log_operation(
         db=db, request=request, action="delete",
-        resource_type="whitelist", resource_id=str(item.id), resource_name=wl_name,
+        resource_type="whitelist", resource_id=str(wl_id), resource_name=wl_name,
     )
 
     return {"message": "Deleted successfully"}

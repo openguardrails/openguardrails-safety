@@ -1044,7 +1044,7 @@ class DetectionGuardrailService:
             "security_risk_level": "no_risk",
             "security_categories": [],
             "compliance_risk_level": "no_risk",
-            "compliance_categories": [],
+            "compliance_categories": [list_name],
             "data_risk_level": "no_risk",
             "data_categories": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1055,7 +1055,7 @@ class DetectionGuardrailService:
         return GuardrailResponse(
             id=request_id,
             result=GuardrailResult(
-                compliance=ComplianceResult(risk_level="no_risk", categories=[]),
+                compliance=ComplianceResult(risk_level="no_risk", categories=[list_name]),
                 security=SecurityResult(risk_level="no_risk", categories=[]),
                 data=DataSecurityResult(risk_level="no_risk", categories=[])
             ),

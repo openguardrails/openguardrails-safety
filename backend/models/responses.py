@@ -45,6 +45,7 @@ class DetectionResultResponse(BaseModel):
     suggest_action: Optional[str]
     suggest_answer: Optional[str]
     hit_keywords: Optional[str]
+    model_response: Optional[str] = None  # e.g. blacklist_hit, whitelist_hit
     created_at: datetime
     ip_address: Optional[str]
     # Separated security and compliance detection results

@@ -83,6 +83,7 @@ def _enrich_result(result, app_map: dict, image_urls: list, truncate_content: bo
         suggest_action=result.suggest_action,
         suggest_answer=result.suggest_answer,
         hit_keywords=result.hit_keywords,
+        model_response=result.model_response if hasattr(result, 'model_response') else None,
         created_at=result.created_at,
         ip_address=result.ip_address,
         security_risk_level=result.security_risk_level,

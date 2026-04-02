@@ -483,7 +483,11 @@
     "copyContent": "Copy",
     "contentCopied": "Content copied to clipboard",
     "copyFailed": "Failed to copy content",
-    "dataMasked": "Data Masked"
+    "dataMasked": "Data Masked",
+    "whitelistHit": "Whitelist Hit",
+    "blacklistHit": "Blacklist Hit",
+    "hitListName": "List Name",
+    "hitKeywords": "Matched Keywords"
   },
   "reports": {
     "title": "Risk Reports",
@@ -512,7 +516,7 @@
     "title": "Protection Configuration",
     "blacklist": "Blacklist",
     "whitelist": "Whitelist",
-    "keywordList": "Keyword Filter",
+    "keywordList": "Blacklist & Whitelist",
     "riskType": "Risk Types",
     "template": "Reject Answer Library",
     "knowledge": "Knowledge Base",
@@ -606,7 +610,7 @@
     "descriptionPlaceholder": "Enter description"
   },
   "keywordList": {
-    "title": "Keyword Filter",
+    "title": "Blacklist & Whitelist",
     "blacklistTab": "Blacklist",
     "whitelistTab": "Whitelist"
   },
@@ -2641,7 +2645,7 @@
     "removeAppDesc": "Remove {{name}} from this workspace? The application will not be deleted.",
     "tabGuardrails": "Guardrails",
     "tabDataMasking": "Data Masking",
-    "tabKeywords": "Keyword Filtering",
+    "tabKeywords": "Blacklist & Whitelist",
     "tabAnswers": "Answer Management",
     "tabSecurity": "Response Policy",
     "tabRiskTypes": "Risk Types",

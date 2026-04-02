@@ -481,6 +481,17 @@ const ApplicationManagement: React.FC = () => {
           <SortIcon field="name" />
         </Button>
       ),
+      cell: ({ row }) => (
+        <button
+          className="text-left text-primary hover:underline cursor-pointer bg-transparent border-none p-0 font-medium"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleViewDetails(row.original)
+          }}
+        >
+          {row.getValue('name')}
+        </button>
+      ),
     },
     {
       accessorKey: 'description',
@@ -1116,12 +1127,6 @@ const ApplicationManagement: React.FC = () => {
                         <span className="text-muted-foreground">{t('applicationManagement.sensitivityLevel')}:</span>
                         <Badge variant="secondary">
                           {t(`sensitivity.${selectedApp.protection_summary.sensitivity_level}`)}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-muted-foreground">{t('applicationManagement.banPolicy')}:</span>
-                        <Badge variant={selectedApp.protection_summary.ban_policy_enabled ? 'outline' : 'secondary'}>
-                          {selectedApp.protection_summary.ban_policy_enabled ? t('common.enabled') : t('common.disabled')}
                         </Badge>
                       </div>
                       <div
