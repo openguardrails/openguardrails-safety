@@ -198,12 +198,14 @@ class WorkspaceCreate(BaseModel):
     name: str
     description: Optional[str] = None
     owner: Optional[str] = None
+    enable_doublecheck: bool = False
     import_config: Optional[Dict[str, Any]] = None  # If provided, import this config instead of copying from Global
 
 class WorkspaceUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     owner: Optional[str] = None
+    enable_doublecheck: Optional[bool] = None
 
 class WorkspaceResponse(BaseModel):
     id: str
@@ -211,6 +213,7 @@ class WorkspaceResponse(BaseModel):
     name: str
     description: Optional[str]
     owner: Optional[str] = None
+    enable_doublecheck: bool = False
     is_global: bool = False
     created_at: datetime
     updated_at: datetime
@@ -246,6 +249,7 @@ async def list_workspaces(
             name=ws.name,
             description=ws.description,
             owner=ws.owner,
+            enable_doublecheck=getattr(ws, 'enable_doublecheck', False),
             is_global=getattr(ws, 'is_global', False),
             created_at=ws.created_at,
             updated_at=ws.updated_at,
@@ -277,6 +281,7 @@ async def create_workspace(
         name=body.name,
         description=body.description,
         owner=body.owner,
+        enable_doublecheck=body.enable_doublecheck,
     )
     db.add(workspace)
     db.flush()  # Get workspace.id before copying config
@@ -312,6 +317,7 @@ async def create_workspace(
         name=workspace.name,
         description=workspace.description,
         owner=workspace.owner,
+        enable_doublecheck=workspace.enable_doublecheck,
         is_global=False,
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
@@ -336,7 +342,7 @@ async def update_workspace(
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
 
-    old_data = {"name": workspace.name, "description": workspace.description, "owner": workspace.owner}
+    old_data = {"name": workspace.name, "description": workspace.description, "owner": workspace.owner, "enable_doublecheck": workspace.enable_doublecheck}
 
     if body.name is not None:
         # Protect Global workspace name
@@ -358,10 +364,13 @@ async def update_workspace(
     if body.owner is not None:
         workspace.owner = body.owner
 
+    if body.enable_doublecheck is not None:
+        workspace.enable_doublecheck = body.enable_doublecheck
+
     db.commit()
     db.refresh(workspace)
 
-    new_data = {"name": workspace.name, "description": workspace.description, "owner": workspace.owner}
+    new_data = {"name": workspace.name, "description": workspace.description, "owner": workspace.owner, "enable_doublecheck": workspace.enable_doublecheck}
     changes = compute_changes(old_data, new_data)
     await log_operation(
         db=db, request=request, action="update",
@@ -379,6 +388,7 @@ async def update_workspace(
         name=workspace.name,
         description=workspace.description,
         owner=workspace.owner,
+        enable_doublecheck=workspace.enable_doublecheck,
         is_global=getattr(workspace, 'is_global', False),
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,
@@ -477,6 +487,7 @@ async def assign_applications(
         name=workspace.name,
         description=workspace.description,
         owner=workspace.owner,
+        enable_doublecheck=getattr(workspace, 'enable_doublecheck', False),
         is_global=getattr(workspace, 'is_global', False),
         created_at=workspace.created_at,
         updated_at=workspace.updated_at,

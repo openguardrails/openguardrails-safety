@@ -360,6 +360,31 @@ class DetectionGuardrailService:
                 compliance_result, security_result, data_result, tenant_id, application_id, user_content, data_anonymized_text, matched_scanners
             )
 
+            # 5.0.1 Doublecheck: if workspace has doublecheck enabled and result is unsafe, verify with AI
+            doublecheck_result = None
+            doublecheck_categories = None
+            doublecheck_reasoning = None
+            if overall_risk_level != 'no_risk' and suggest_action in ['reject', 'replace']:
+                try:
+                    dc_result, dc_categories, dc_reasoning = await self._perform_doublecheck(
+                        application_id, user_content, compliance_result, security_result, overall_risk_level
+                    )
+                    if dc_result is not None:
+                        doublecheck_result = dc_result
+                        doublecheck_categories = dc_categories
+                        doublecheck_reasoning = dc_reasoning
+                        if dc_result == 'overturned_safe':
+                            # Override to safe
+                            compliance_result = ComplianceResult(risk_level="no_risk", categories=[])
+                            security_result = SecurityResult(risk_level="no_risk", categories=[])
+                            overall_risk_level = 'no_risk'
+                            suggest_action = 'pass'
+                            suggest_answer = None
+                            sensitivity_score = None
+                            logger.info(f"Doublecheck overturned unsafe detection to safe for request {request_id}")
+                except Exception as e:
+                    logger.warning(f"Doublecheck failed for request {request_id}: {e}")
+
             # 5.1 Append appeal link if applicable (any risk level with reject/replace action)
             if suggest_answer and suggest_action in ['reject', 'replace']:
                 try:
@@ -394,7 +419,10 @@ class DetectionGuardrailService:
                 suggest_action, suggest_answer, model_response,
                 ip_address, user_agent, tenant_id, application_id, sensitivity_score,
                 has_image=has_image, image_count=len(saved_image_paths), image_paths=saved_image_paths,
-                matched_scanner_tags=matched_scanner_tags, source=source
+                matched_scanner_tags=matched_scanner_tags, source=source,
+                doublecheck_result=doublecheck_result,
+                doublecheck_categories=doublecheck_categories,
+                doublecheck_reasoning=doublecheck_reasoning,
             )
 
             # 7. Construct response
@@ -1103,7 +1131,10 @@ class DetectionGuardrailService:
         tenant_id: Optional[str] = None, application_id: Optional[str] = None,
         sensitivity_score: Optional[float] = None,
         has_image: bool = False, image_count: int = 0, image_paths: List[str] = None,
-        matched_scanner_tags: List[str] = None, source: Optional[str] = None
+        matched_scanner_tags: List[str] = None, source: Optional[str] = None,
+        doublecheck_result: Optional[str] = None,
+        doublecheck_categories: Optional[List[str]] = None,
+        doublecheck_reasoning: Optional[str] = None,
     ):
         """Asynchronously record detection results to log file (not write to database)"""
 
@@ -1113,7 +1144,9 @@ class DetectionGuardrailService:
         # Mask sensitive entities detected by data masking before logging
         logged_content = clean_null_characters(content) if content else content
         logged_model_response = clean_null_characters(model_response) if model_response else model_response
+        original_content = None  # Only store when masking changes content
         if data_result.detected_entities:
+            original_content = logged_content  # Preserve original before masking
             logged_content = self._mask_sensitive_entities(logged_content, data_result.detected_entities)
             logged_model_response = self._mask_sensitive_entities(logged_model_response, data_result.detected_entities)
 
@@ -1122,6 +1155,7 @@ class DetectionGuardrailService:
             "tenant_id": tenant_id,
             "application_id": application_id,
             "content": logged_content,
+            "original_content": original_content,
             "suggest_action": suggest_action,
             "suggest_answer": clean_null_characters(suggest_answer) if suggest_answer else suggest_answer,
             "model_response": logged_model_response,
@@ -1141,8 +1175,129 @@ class DetectionGuardrailService:
             "image_paths": image_paths or [],
             "matched_scanner_tags": matched_scanner_tags or [],
             "source": source,
+            "doublecheck_result": doublecheck_result,
+            "doublecheck_categories": doublecheck_categories,
+            "doublecheck_reasoning": doublecheck_reasoning,
         }
         await async_detection_logger.log_detection(detection_data)
+
+    async def _perform_doublecheck(
+        self,
+        application_id: Optional[str],
+        user_content: str,
+        compliance_result: ComplianceResult,
+        security_result: SecurityResult,
+        overall_risk_level: str,
+    ) -> Tuple[Optional[str], Optional[List[str]], Optional[str]]:
+        """
+        Perform AI doublecheck on unsafe detection results to reduce false positives.
+
+        Returns: (doublecheck_result, original_categories, reasoning)
+            - doublecheck_result: 'confirmed_unsafe' or 'overturned_safe', or None if not applicable
+            - original_categories: the categories that were detected before doublecheck
+            - reasoning: AI reasoning
+        """
+        if not application_id:
+            return None, None, None
+
+        # Check if workspace has doublecheck enabled
+        try:
+            from database.models import Workspace
+            db = get_db_session()
+            try:
+                from services.workspace_resolver import get_workspace_id_for_app
+                workspace_id = get_workspace_id_for_app(db, application_id)
+                if not workspace_id:
+                    return None, None, None
+
+                workspace = db.query(Workspace).filter(Workspace.id == workspace_id).first()
+                if not workspace or not workspace.enable_doublecheck:
+                    return None, None, None
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Failed to check workspace doublecheck config: {e}")
+            return None, None, None
+
+        # Collect all unsafe categories
+        all_categories = []
+        if compliance_result.categories:
+            all_categories.extend(compliance_result.categories)
+        if security_result.categories:
+            all_categories.extend(security_result.categories)
+
+        if not all_categories:
+            return None, None, None
+
+        # Build category descriptions for the AI prompt
+        category_descriptions = []
+        for cat in all_categories:
+            name = CATEGORY_NAMES.get(cat, cat)
+            category_descriptions.append(f"{cat} ({name})")
+
+        categories_text = ", ".join(category_descriptions)
+
+        # Build the doublecheck prompt
+        system_prompt = """You are a content safety review supervisor. Your task is to verify whether the initial AI safety detection result is correct.
+
+The initial detection system flagged the following content as unsafe. Please carefully review if the detection is accurate.
+
+Review principles:
+1. Consider if the content may have been misjudged (e.g., academic discussions, historical references, literary citations, news reporting, etc.)
+2. Harmless content may trigger detection due to specific keywords appearing out of context
+3. Be fair - if the content is genuinely safe and was wrongly flagged, mark it as a false positive
+4. If the content is actually risky, confirm the detection is correct
+
+You MUST reply in EXACTLY the following JSON format (no extra text):
+{"is_correct": true, "reasoning": "explanation"}
+or
+{"is_correct": false, "reasoning": "explanation"}
+
+Rules:
+- is_correct=true means the detection IS correct (content is genuinely unsafe)
+- is_correct=false means the detection is WRONG (content is actually safe, false positive)
+- Do NOT output any text outside the JSON object"""
+
+        user_prompt = f"""Please verify the following detection result:
+
+Detected content:
+{user_content[:2000]}
+
+Detected risk categories: {categories_text}
+Detected risk level: {overall_risk_level}
+
+Is this detection correct? Reply with JSON only."""
+
+        try:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
+            response = await model_service.check_messages(messages)
+
+            # Parse JSON response
+            import re as _re
+            # Try to extract JSON from response
+            json_match = _re.search(r'\{[^}]+\}', response)
+            if json_match:
+                parsed = json.loads(json_match.group())
+                is_correct = parsed.get("is_correct", True)
+                reasoning = parsed.get("reasoning", "")
+
+                if is_correct:
+                    return "confirmed_unsafe", all_categories, reasoning
+                else:
+                    return "overturned_safe", all_categories, reasoning
+            else:
+                # Fallback: if response contains keywords
+                if "false" in response.lower() and ("incorrect" in response.lower() or "false positive" in response.lower() or "safe" in response.lower()):
+                    return "overturned_safe", all_categories, response
+                return "confirmed_unsafe", all_categories, response
+
+        except Exception as e:
+            logger.error(f"Doublecheck AI call failed: {e}")
+            # On error, don't change the result (fail-safe: keep unsafe)
+            return "confirmed_unsafe", all_categories, f"Doublecheck failed: {e}"
 
     async def _handle_error(self, request_id: str, content: str, error: str, tenant_id: Optional[str] = None, application_id: Optional[str] = None, source: Optional[str] = None) -> GuardrailResponse:
         """Handle error situation"""

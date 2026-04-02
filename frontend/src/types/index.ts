@@ -45,6 +45,8 @@ export interface DetectionResult {
   id: number;
   request_id: string;
   content: string;
+  original_content?: string;  // Original unmasked content (only when data masking applied)
+  has_data_masking?: boolean;  // Whether data masking was applied
   suggest_action?: string;
   suggest_answer?: string;
   hit_keywords?: string;
@@ -76,6 +78,10 @@ export interface DetectionResult {
     end: number;
     categories: string[];
   }>;
+  // Doublecheck fields
+  doublecheck_result?: string;  // confirmed_unsafe, overturned_safe, or null
+  doublecheck_categories?: string[];  // Original categories before doublecheck
+  doublecheck_reasoning?: string;  // AI reasoning from doublecheck
   // Application and workspace info (for global results view)
   application_id?: string;
   application_name?: string;

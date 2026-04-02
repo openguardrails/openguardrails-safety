@@ -4,12 +4,15 @@ import { useLocation } from 'react-router-dom'
 import { format, parse } from 'date-fns'
 import {
   Eye,
+  EyeOff,
   RefreshCw,
   Download,
   Image as ImageIcon,
   FileImage,
   X,
   RotateCcw,
+  Copy,
+  Shield,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -53,6 +56,7 @@ const extractFiltersFromState = (state: any) => {
     date_range: undefined,
     content_search: undefined,
     request_id_search: undefined,
+    application_name_search: undefined,
   }
 
   if (!state) return filters
@@ -124,6 +128,7 @@ const Results: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [detailLoading, setDetailLoading] = useState(false)
   const [segmentsLoading, setSegmentsLoading] = useState(false)
+  const [showOriginal, setShowOriginal] = useState(false)
   const [dataEntityTypes, setDataEntityTypes] = useState<DataSecurityEntityType[]>([])
   const [applicationOptions, setApplicationOptions] = useState<AppOption[]>([])
   const [workspaceOptions, setWorkspaceOptions] = useState<WorkspaceOption[]>([])
@@ -206,6 +211,9 @@ const Results: React.FC = () => {
       if (filters.request_id_search) {
         params.request_id_search = filters.request_id_search
       }
+      if (filters.application_name_search) {
+        params.application_name_search = filters.application_name_search
+      }
 
       const result = await resultsApi.getResults(params)
       setData(result)
@@ -272,6 +280,7 @@ const Results: React.FC = () => {
       date_range: undefined,
       content_search: undefined,
       request_id_search: undefined,
+      application_name_search: undefined,
     })
     setDateRange(undefined)
     setPagination((prev) => ({ ...prev, current: 1 }))
@@ -290,6 +299,7 @@ const Results: React.FC = () => {
       filters.data_entity_type ||
       filters.content_search ||
       filters.request_id_search ||
+      filters.application_name_search ||
       dateRange?.from ||
       dateRange?.to
     )
@@ -335,6 +345,9 @@ const Results: React.FC = () => {
       if (filters.request_id_search) {
         params.request_id_search = filters.request_id_search
       }
+      if (filters.application_name_search) {
+        params.application_name_search = filters.application_name_search
+      }
 
       const blob = await resultsApi.exportResults(params)
 
@@ -359,6 +372,7 @@ const Results: React.FC = () => {
   const showDetail = async (record: DetectionResult) => {
     setDetailLoading(true)
     setSegmentsLoading(false)
+    setShowOriginal(false)
     setDrawerVisible(true)
     try {
       const fullRecord = await resultsApi.getResult(record.id)
@@ -694,6 +708,24 @@ const Results: React.FC = () => {
                 <button
                   onClick={() => handleClearFilter('application_id')}
                   className="absolute -right-1 -top-1 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
+                >
+                  <X className="w-2.5 h-2.5 text-white" />
+                </button>
+              )}
+            </div>
+
+            {/* Application Name Search */}
+            <div className="relative">
+              <Input
+                placeholder={t('results.applicationNameSearch')}
+                value={filters.application_name_search || ''}
+                onChange={(e) => handleFilterChange('application_name_search', e.target.value || undefined)}
+                className="w-[140px] h-8 text-xs"
+              />
+              {filters.application_name_search && (
+                <button
+                  onClick={() => handleClearFilter('application_name_search')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-gray-400 hover:bg-card/50 rounded-full flex items-center justify-center"
                 >
                   <X className="w-2.5 h-2.5 text-white" />
                 </button>
@@ -1094,6 +1126,43 @@ const Results: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Doublecheck Result */}
+                {selectedResult.doublecheck_result && (
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <RotateCcw className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium text-sm">{t('results.doublecheckResult')}</span>
+                      <Badge className={
+                        selectedResult.doublecheck_result === 'overturned_safe'
+                          ? '!bg-green-500/10 !text-green-400 !border-green-300 text-xs'
+                          : '!bg-red-500/10 !text-red-400 !border-red-300 text-xs'
+                      }>
+                        {selectedResult.doublecheck_result === 'overturned_safe'
+                          ? t('results.doublecheckOverturnedSafe')
+                          : t('results.doublecheckConfirmedUnsafe')}
+                      </Badge>
+                    </div>
+                    {selectedResult.doublecheck_categories && selectedResult.doublecheck_categories.length > 0 && (
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="text-xs text-muted-foreground">{t('results.doublecheckOriginalCategories')}:</div>
+                        <div className="col-span-2 flex flex-wrap gap-1">
+                          {selectedResult.doublecheck_categories.map((cat, i) => (
+                            <Badge key={i} variant="outline" className="text-xs">{cat}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {selectedResult.doublecheck_reasoning && (
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">{t('results.doublecheckReasoning')}:</div>
+                        <div className="text-sm p-2 bg-secondary rounded-md whitespace-pre-wrap">
+                          {selectedResult.doublecheck_reasoning}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Detection Time */}
                 <div className="grid grid-cols-3 gap-4 border-b pb-3">
                   <div className="font-medium text-muted-foreground text-sm">{t('results.detectionTime')}:</div>
@@ -1104,17 +1173,70 @@ const Results: React.FC = () => {
 
                 {/* Detection Content */}
                 <div>
-                  <div className="font-medium text-muted-foreground mb-3 text-sm">
-                    {t('results.detectionContent')}:
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="font-medium text-muted-foreground text-sm flex items-center gap-2">
+                      {t('results.detectionContent')}:
+                      {selectedResult.has_data_masking && (
+                        <Badge variant="outline" className="!bg-amber-500/10 !text-amber-400 !border-amber-300 text-xs">
+                          <Shield className="h-3 w-3 mr-1" />
+                          {t('results.dataMasked')}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedResult.has_data_masking && selectedResult.original_content && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => setShowOriginal(!showOriginal)}
+                        >
+                          {showOriginal ? (
+                            <>
+                              <EyeOff className="h-3 w-3 mr-1" />
+                              {t('results.showMaskedContent')}
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="h-3 w-3 mr-1" />
+                              {t('results.showOriginalContent')}
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          const contentToCopy = showOriginal && selectedResult.original_content
+                            ? selectedResult.original_content
+                            : selectedResult.content
+                          navigator.clipboard.writeText(contentToCopy).then(() => {
+                            toast.success(t('results.contentCopied'))
+                          }).catch(() => {
+                            toast.error(t('results.copyFailed'))
+                          })
+                        }}
+                      >
+                        <Copy className="h-3 w-3 mr-1" />
+                        {t('results.copyContent')}
+                      </Button>
+                    </div>
                   </div>
                   <div className="mt-2 p-4 bg-secondary rounded-md">
-                    {selectedResult.content && (
-                      <p className="mb-3 whitespace-pre-wrap text-sm">
-                        {selectedResult.unsafe_segments && selectedResult.unsafe_segments.length > 0
-                          ? renderHighlightedContent(selectedResult.content, selectedResult.unsafe_segments)
-                          : selectedResult.content}
-                      </p>
-                    )}
+                    {(() => {
+                      const displayContent = showOriginal && selectedResult.original_content
+                        ? selectedResult.original_content
+                        : selectedResult.content
+                      return displayContent && (
+                        <p className="mb-3 whitespace-pre-wrap text-sm">
+                          {!showOriginal && selectedResult.unsafe_segments && selectedResult.unsafe_segments.length > 0
+                            ? renderHighlightedContent(displayContent, selectedResult.unsafe_segments)
+                            : displayContent}
+                        </p>
+                      )
+                    })()}
                     {segmentsLoading && (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2 mb-1">
                         <RefreshCw className="h-3 w-3 animate-spin" />

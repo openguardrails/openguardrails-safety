@@ -40,6 +40,8 @@ class DetectionResultResponse(BaseModel):
     id: int
     request_id: str
     content: str
+    original_content: Optional[str] = None  # Original unmasked content (only when data masking applied)
+    has_data_masking: bool = False  # Whether data masking was applied
     suggest_action: Optional[str]
     suggest_answer: Optional[str]
     hit_keywords: Optional[str]
@@ -66,6 +68,10 @@ class DetectionResultResponse(BaseModel):
     source: Optional[str] = None
     # Unsafe content segments identified by second-pass detection
     unsafe_segments: List[Dict[str, Any]] = []
+    # Doublecheck fields
+    doublecheck_result: Optional[str] = None  # confirmed_unsafe, overturned_safe, or None
+    doublecheck_categories: Optional[List[str]] = None  # Original categories before doublecheck
+    doublecheck_reasoning: Optional[str] = None  # AI reasoning from doublecheck
     # Application and workspace info (for global results view)
     application_id: Optional[str] = None
     application_name: Optional[str] = None

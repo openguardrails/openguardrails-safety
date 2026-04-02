@@ -71,10 +71,15 @@ def _enrich_result(result, app_map: dict, image_urls: list, truncate_content: bo
     if truncate_content and len(content) > 200:
         content = content[:200] + "..."
 
+    original_content = getattr(result, 'original_content', None)
+    has_data_masking = original_content is not None
+
     return DetectionResultResponse(
         id=result.id,
         request_id=result.request_id,
         content=content,
+        original_content=original_content if not truncate_content else None,
+        has_data_masking=has_data_masking,
         suggest_action=result.suggest_action,
         suggest_answer=result.suggest_answer,
         hit_keywords=result.hit_keywords,
@@ -93,6 +98,9 @@ def _enrich_result(result, app_map: dict, image_urls: list, truncate_content: bo
         is_direct_model_access=result.is_direct_model_access if hasattr(result, 'is_direct_model_access') else False,
         source=result.source if hasattr(result, 'source') else None,
         unsafe_segments=result.unsafe_segments if hasattr(result, 'unsafe_segments') and result.unsafe_segments else [],
+        doublecheck_result=result.doublecheck_result if hasattr(result, 'doublecheck_result') else None,
+        doublecheck_categories=result.doublecheck_categories if hasattr(result, 'doublecheck_categories') else None,
+        doublecheck_reasoning=result.doublecheck_reasoning if hasattr(result, 'doublecheck_reasoning') else None,
         application_id=app_id_str,
         application_name=app_info.get("application_name"),
         workspace_id=app_info.get("workspace_id"),
@@ -135,6 +143,7 @@ def _build_common_filters(
     content_search: Optional[str],
     request_id_search: Optional[str],
     db: Session,
+    application_name_search: Optional[str] = None,
 ) -> list:
     """Build common query filters for detection results"""
     filters = []
@@ -145,6 +154,19 @@ def _build_common_filters(
     # Optional application filter
     if application_id:
         filters.append(DetectionResult.application_id == application_id)
+
+    # Optional application name search: fuzzy match on application name
+    if application_name_search:
+        matching_app_ids = db.query(Application.id).filter(
+            Application.tenant_id == str(tenant_id),
+            Application.name.ilike(f'%{application_name_search}%')
+        ).all()
+        matching_ids = [str(a[0]) for a in matching_app_ids]
+        if matching_ids:
+            filters.append(DetectionResult.application_id.in_(matching_ids))
+        else:
+            # No matching apps, return empty
+            filters.append(DetectionResult.id == -1)
 
     # Optional workspace filter: find all apps in this workspace, filter by those app IDs
     if workspace_id:
@@ -241,6 +263,7 @@ async def get_detection_results(
     end_date: Optional[str] = Query(None),
     content_search: Optional[str] = Query(None),
     request_id_search: Optional[str] = Query(None),
+    application_name_search: Optional[str] = Query(None, description="Fuzzy search by application name"),
 ):
     """Get detection results (global view - all applications for current tenant)"""
     try:
@@ -261,6 +284,7 @@ async def get_detection_results(
             content_search=content_search,
             request_id_search=request_id_search,
             db=db,
+            application_name_search=application_name_search,
         )
 
         base_query = db.query(DetectionResult).filter(and_(*filters))
@@ -311,6 +335,7 @@ async def export_detection_results(
     end_date: Optional[str] = Query(None),
     content_search: Optional[str] = Query(None),
     request_id_search: Optional[str] = Query(None),
+    application_name_search: Optional[str] = Query(None, description="Fuzzy search by application name"),
 ):
     """Export detection results to Excel"""
     try:
@@ -331,6 +356,7 @@ async def export_detection_results(
             content_search=content_search,
             request_id_search=request_id_search,
             db=db,
+            application_name_search=application_name_search,
         )
 
         base_query = db.query(DetectionResult).filter(and_(*filters))

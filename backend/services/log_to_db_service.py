@@ -290,6 +290,7 @@ class LogToDbService:
                 tenant_id=tenant_id,
                 application_id=application_id,
                 content=log_data.get('content'),
+                original_content=log_data.get('original_content'),
                 suggest_action=log_data.get('suggest_action'),
                 suggest_answer=log_data.get('suggest_answer'),
                 model_response=log_data.get('model_response'),
@@ -306,6 +307,9 @@ class LogToDbService:
                 image_paths=log_data.get('image_paths', []),
                 source=log_data.get('source'),
                 unsafe_segments=log_data.get('unsafe_segments', []),
+                doublecheck_result=log_data.get('doublecheck_result'),
+                doublecheck_categories=log_data.get('doublecheck_categories'),
+                doublecheck_reasoning=log_data.get('doublecheck_reasoning'),
                 created_at=created_at
             )
             

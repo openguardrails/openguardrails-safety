@@ -42,6 +42,7 @@ class Workspace(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     owner = Column(String(255), nullable=True)
+    enable_doublecheck = Column(Boolean, default=False, nullable=False)
     is_global = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -147,6 +148,7 @@ class DetectionResult(Base):
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)  # Associated tenant
     application_id = Column(UUID(as_uuid=True), ForeignKey("applications.id", ondelete="SET NULL"), nullable=True, index=True)  # Associated application (nullable for historical data)
     content = Column(Text, nullable=False)
+    original_content = Column(Text, nullable=True)  # Original unmasked content (NULL when no masking applied)
     suggest_action = Column(String(20))  # 'pass', 'reject', 'replace'
     suggest_answer = Column(Text)  # Suggest answer content
     hit_keywords = Column(Text)  # Hit keywords (blacklist/whitelist)
@@ -173,6 +175,10 @@ class DetectionResult(Base):
     is_direct_model_access = Column(Boolean, default=False, index=True)  # Whether this is a direct model access call (not a guardrail check)
     # Detection source: guardrail_api, proxy, gateway, direct_model, content_scan
     source = Column(String(20), nullable=True, index=True)
+    # Doublecheck fields: AI verification of unsafe detections
+    doublecheck_result = Column(String(20), nullable=True)  # confirmed_unsafe, overturned_safe, or NULL
+    doublecheck_categories = Column(JSON, nullable=True)  # Original categories before doublecheck
+    doublecheck_reasoning = Column(Text, nullable=True)  # AI reasoning from doublecheck
 
     # Association relationships
     tenant = relationship("Tenant", back_populates="detection_results")

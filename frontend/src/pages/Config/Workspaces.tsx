@@ -62,6 +62,7 @@ const workspaceSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
   owner: z.string().optional(),
+  enable_doublecheck: z.boolean().optional().default(false),
 })
 
 type WorkspaceFormData = z.infer<typeof workspaceSchema>
@@ -72,6 +73,7 @@ interface Workspace {
   name: string
   description: string | null
   owner: string | null
+  enable_doublecheck: boolean
   is_global: boolean
   created_at: string
   updated_at: string
@@ -970,7 +972,7 @@ const Workspaces: React.FC = () => {
 
   const handleCreate = () => {
     setEditingWorkspace(null)
-    form.reset({ name: '', description: '', owner: '' })
+    form.reset({ name: '', description: '', owner: '', enable_doublecheck: false })
     setDialogOpen(true)
   }
 
@@ -980,6 +982,7 @@ const Workspaces: React.FC = () => {
       name: workspace.name,
       description: workspace.description || '',
       owner: workspace.owner || '',
+      enable_doublecheck: workspace.enable_doublecheck ?? false,
     })
     setDialogOpen(true)
   }
@@ -1129,6 +1132,19 @@ const Workspaces: React.FC = () => {
       ),
     },
     {
+      accessorKey: 'enable_doublecheck',
+      header: t('workspaces.enableDoublecheck'),
+      cell: ({ row }) => (
+        <Badge variant="outline" className={
+          row.original.enable_doublecheck
+            ? '!bg-green-500/10 !text-green-400 !border-green-300 text-xs'
+            : '!bg-zinc-500/10 !text-zinc-400 !border-zinc-300 text-xs'
+        }>
+          {row.original.enable_doublecheck ? t('common.enabled') : t('common.disabled')}
+        </Badge>
+      ),
+    },
+    {
       accessorKey: 'application_count',
       header: t('workspaces.appCount'),
       cell: ({ row }) => (
@@ -1269,6 +1285,26 @@ const Workspaces: React.FC = () => {
                       <Input {...field} placeholder={t('workspaces.ownerPlaceholder')} />
                     </FormControl>
                     <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="enable_doublecheck"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>{t('workspaces.enableDoublecheck')}</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        {t('workspaces.enableDoublecheckDesc')}
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
                   </FormItem>
                 )}
               />
