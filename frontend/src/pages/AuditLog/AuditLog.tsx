@@ -67,7 +67,13 @@ const ACTION_COLORS: Record<string, string> = {
   import: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
 }
 
-const ChangesCell: React.FC<{ changes: Record<string, { old: any; new: any }> | null }> = ({ changes }) => {
+const isOldNewFormat = (value: any): value is { old: any; new: any } =>
+  value !== null && typeof value === 'object' && !Array.isArray(value) && ('old' in value || 'new' in value)
+
+const formatValue = (v: any): string =>
+  v === null || v === undefined ? '-' : typeof v === 'object' ? JSON.stringify(v) : String(v)
+
+const ChangesCell: React.FC<{ changes: Record<string, any> | null }> = ({ changes }) => {
   const [expanded, setExpanded] = useState(false)
   const { t } = useTranslation()
 
@@ -76,7 +82,6 @@ const ChangesCell: React.FC<{ changes: Record<string, { old: any; new: any }> | 
   }
 
   const entries = Object.entries(changes)
-  const preview = entries.slice(0, 2)
 
   return (
     <div className="text-xs max-w-[300px]">
@@ -92,13 +97,19 @@ const ChangesCell: React.FC<{ changes: Record<string, { old: any; new: any }> | 
           {entries.map(([field, change]) => (
             <div key={field} className="break-all">
               <span className="font-medium text-foreground">{field}</span>:
-              <span className="text-red-400 line-through ml-1">
-                {typeof change.old === 'object' ? JSON.stringify(change.old) : String(change.old ?? '-')}
-              </span>
-              <span className="mx-1">&rarr;</span>
-              <span className="text-emerald-400">
-                {typeof change.new === 'object' ? JSON.stringify(change.new) : String(change.new ?? '-')}
-              </span>
+              {isOldNewFormat(change) ? (
+                <>
+                  <span className="text-red-400 line-through ml-1">
+                    {formatValue(change.old)}
+                  </span>
+                  <span className="mx-1">&rarr;</span>
+                  <span className="text-emerald-400">
+                    {formatValue(change.new)}
+                  </span>
+                </>
+              ) : (
+                <span className="text-sky-300 ml-1">{formatValue(change)}</span>
+              )}
             </div>
           ))}
         </div>

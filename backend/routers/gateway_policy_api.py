@@ -335,6 +335,15 @@ async def update_tenant_gateway_policy(
             tenant_policy = TenantDataLeakagePolicy(tenant_id=tenant_id)
             db.add(tenant_policy)
 
+        # Capture old values for audit log
+        tracked_fields = [
+            "default_general_input_high_risk_action", "default_general_input_medium_risk_action", "default_general_input_low_risk_action",
+            "default_general_output_high_risk_action", "default_general_output_medium_risk_action", "default_general_output_low_risk_action",
+            "default_input_high_risk_action", "default_input_medium_risk_action", "default_input_low_risk_action",
+            "default_output_high_risk_action", "default_output_medium_risk_action", "default_output_low_risk_action",
+        ]
+        old_data = {f: getattr(tenant_policy, f, None) for f in tracked_fields}
+
         # Update general risk policy - input
         tenant_policy.default_general_input_high_risk_action = policy_update.default_general_input_high_risk_action
         tenant_policy.default_general_input_medium_risk_action = policy_update.default_general_input_medium_risk_action
@@ -358,11 +367,15 @@ async def update_tenant_gateway_policy(
         db.commit()
         db.refresh(tenant_policy)
 
+        new_data = {f: getattr(tenant_policy, f, None) for f in tracked_fields}
+        changes = compute_changes(old_data, new_data)
+
         await log_operation(
             db=db, request=request, action="update",
             resource_type="gateway_policy",
             resource_id=str(tenant_policy.id),
             resource_name="tenant_defaults",
+            changes=changes,
         )
 
         # Get models for response
@@ -576,6 +589,16 @@ async def update_gateway_policy(
             )
             db.add(app_policy)
 
+        # Capture old values for audit log
+        tracked_fields = [
+            "general_input_high_risk_action", "general_input_medium_risk_action", "general_input_low_risk_action",
+            "general_output_high_risk_action", "general_output_medium_risk_action", "general_output_low_risk_action",
+            "input_high_risk_action", "input_medium_risk_action", "input_low_risk_action",
+            "output_high_risk_action", "output_medium_risk_action", "output_low_risk_action",
+            "private_model_id",
+        ]
+        old_data = {f: str(getattr(app_policy, f)) if f == "private_model_id" and getattr(app_policy, f, None) else getattr(app_policy, f, None) for f in tracked_fields if hasattr(app_policy, f)}
+
         # Update general risk policy - input
         if hasattr(app_policy, 'general_input_high_risk_action'):
             app_policy.general_input_high_risk_action = policy_update.general_input_high_risk_action
@@ -614,11 +637,15 @@ async def update_gateway_policy(
         db.commit()
         db.refresh(app_policy)
 
+        new_data = {f: str(getattr(app_policy, f)) if f == "private_model_id" and getattr(app_policy, f, None) else getattr(app_policy, f, None) for f in tracked_fields if hasattr(app_policy, f)}
+        changes = compute_changes(old_data, new_data)
+
         await log_operation(
             db=db, request=request, action="update",
             resource_type="gateway_policy",
             resource_id=str(app_policy.id),
             resource_name=f"app_{application_id}",
+            changes=changes,
         )
 
         # Re-fetch with resolved values

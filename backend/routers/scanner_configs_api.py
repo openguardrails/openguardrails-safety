@@ -185,6 +185,18 @@ async def update_scanner_config(
 
     update_dict = updates.model_dump(exclude_unset=True)
 
+    # Capture old values before update for audit log
+    field_map = {"is_enabled": "is_enabled", "risk_level": "risk_level_override", "scan_prompt": "scan_prompt_override", "scan_response": "scan_response_override"}
+    from database.models import ApplicationScannerConfig
+    from services.workspace_resolver import get_workspace_id_for_app
+    ws_id = get_workspace_id_for_app(db, str(application_id))
+    old_config = db.query(ApplicationScannerConfig).filter(
+        ApplicationScannerConfig.workspace_id == ws_id,
+        ApplicationScannerConfig.application_id.is_(None),
+        ApplicationScannerConfig.scanner_id == scanner_uuid
+    ).first() if ws_id else None
+    old_data = {k: getattr(old_config, field_map.get(k, k), None) for k in update_dict} if old_config else {k: None for k in update_dict}
+
     try:
         config = service.update_scanner_config(
             application_id=application_id,
@@ -203,12 +215,15 @@ async def update_scanner_config(
         f"updates={list(update_dict.keys())}"
     )
 
+    new_data = {k: getattr(config, field_map.get(k, k), None) for k in update_dict}
+    changes = compute_changes(old_data, new_data)
+
     await log_operation(
         db=db, request=request, action="update",
         resource_type="scanner_config",
         resource_id=scanner_id,
         resource_name=f"scanner_{scanner_id}",
-        changes=update_dict,
+        changes=changes,
     )
 
     return ApiResponse(

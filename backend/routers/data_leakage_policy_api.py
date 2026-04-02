@@ -334,6 +334,14 @@ async def update_tenant_default_policy(
             tenant_policy = TenantDataLeakagePolicy(tenant_id=tenant_id)
             db.add(tenant_policy)
 
+        # Capture old values for audit log
+        tracked_fields = [
+            "default_input_high_risk_action", "default_input_medium_risk_action", "default_input_low_risk_action",
+            "default_output_high_risk_anonymize", "default_output_medium_risk_anonymize", "default_output_low_risk_anonymize",
+            "default_enable_format_detection", "default_enable_smart_segmentation",
+        ]
+        old_data = {f: getattr(tenant_policy, f, None) for f in tracked_fields}
+
         # Update fields
         tenant_policy.default_input_high_risk_action = policy_update.default_input_high_risk_action
         tenant_policy.default_input_medium_risk_action = policy_update.default_input_medium_risk_action
@@ -347,11 +355,15 @@ async def update_tenant_default_policy(
         db.commit()
         db.refresh(tenant_policy)
 
+        new_data = {f: getattr(tenant_policy, f, None) for f in tracked_fields}
+        changes = compute_changes(old_data, new_data)
+
         await log_operation(
             db=db, request=request, action="update",
             resource_type="data_leakage_policy",
             resource_id=str(tenant_policy.id),
             resource_name="tenant_defaults",
+            changes=changes,
         )
 
         # Get default private model (marked as is_default_private_model=True)
@@ -604,6 +616,14 @@ async def update_application_policy(
             )
             db.add(app_policy)
 
+        # Capture old values for audit log
+        tracked_fields = [
+            "input_high_risk_action", "input_medium_risk_action", "input_low_risk_action",
+            "output_high_risk_anonymize", "output_medium_risk_anonymize", "output_low_risk_anonymize",
+            "private_model_id", "enable_format_detection", "enable_smart_segmentation",
+        ]
+        old_data = {f: str(getattr(app_policy, f)) if f == "private_model_id" and getattr(app_policy, f) else getattr(app_policy, f, None) for f in tracked_fields}
+
         # Update overrides
         app_policy.input_high_risk_action = policy_update.input_high_risk_action
         app_policy.input_medium_risk_action = policy_update.input_medium_risk_action
@@ -620,11 +640,15 @@ async def update_application_policy(
         db.commit()
         db.refresh(app_policy)
 
+        new_data = {f: str(getattr(app_policy, f)) if f == "private_model_id" and getattr(app_policy, f) else getattr(app_policy, f, None) for f in tracked_fields}
+        changes = compute_changes(old_data, new_data)
+
         await log_operation(
             db=db, request=request, action="update",
             resource_type="data_leakage_policy",
             resource_id=str(app_policy.id),
             resource_name=f"app_{application_id}",
+            changes=changes,
         )
 
         # Get tenant policy for resolved values

@@ -245,6 +245,7 @@ async def update_risk_config(
             resource_type="risk_config",
             resource_id=workspace_id,
             resource_name=f"workspace_{workspace_id}",
+            changes=config_data,
         )
 
         return RiskConfigResponse(**config_dict)
