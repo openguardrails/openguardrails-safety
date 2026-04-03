@@ -67,6 +67,7 @@ class OnlineTestRequest(BaseModel):
     models: Optional[List[ModelIdRequest]] = []
     images: Optional[List[str]] = []  # base64 encoded image data list
     workspace_id: Optional[str] = None  # workspace ID for testing with workspace-specific guardrail config
+    generate_response: bool = False  # If True, generate model response when detection passes (for chat mode)
 
 class ModelResponse(BaseModel):
     content: Optional[str] = None
@@ -76,6 +77,7 @@ class OnlineTestResponse(BaseModel):
     guardrail: Dict[str, Any]
     models: Dict[str, ModelResponse] = {}
     original_responses: Dict[str, ModelResponse] = {}
+    model_response: Optional[ModelResponse] = None  # Response from guardrail model when detection passes (chat mode)
 
 class OnlineTestModelInfo(BaseModel):
     id: str
@@ -498,12 +500,32 @@ async def online_test(
                     else:
                         model_results[model_id] = ModelResponse(content="Sorry, I cannot answer this question, because it may violate the security criteria.")
         
+        # Generate model response if requested and detection passed (chat mode)
+        model_response = None
+        if request_data.generate_response:
+            if (guardrail_dict.get('suggest_action', '') == 'pass' or
+                guardrail_dict.get('overall_risk_level', '') in ['no_risk', 'safe']):
+                # Detection passed, generate response from guardrail model
+                try:
+                    model_response = await call_guardrail_model_for_chat(messages)
+                except Exception as e:
+                    logger.error(f"Failed to generate model response: {e}")
+                    model_response = ModelResponse(error=f"Failed to generate response: {str(e)}")
+            else:
+                # Detection failed, use suggested answer
+                suggest_answer = guardrail_dict.get('suggest_answer', '')
+                if suggest_answer:
+                    model_response = ModelResponse(content=suggest_answer)
+                else:
+                    model_response = ModelResponse(content="Sorry, I cannot answer this question because it may violate security criteria.")
+
         return OnlineTestResponse(
             guardrail=guardrail_dict,
             models=model_results,
-            original_responses=original_responses
+            original_responses=original_responses,
+            model_response=model_response
         )
-        
+
     except HTTPException:
         # Re-throw HTTPException (including 429 rate limit error), do not convert to 500 error
         raise
@@ -687,6 +709,54 @@ async def test_model_api(model: ModelConfig, messages: List[Dict[str, Any]]) -> 
             error_message = f"Request failed: {error_message}"
             
         logger.error(f"Model API call failed for {model.name}: {error_message}")
+        return ModelResponse(
+            content=None,
+            error=error_message
+        )
+
+
+async def call_guardrail_model_for_chat(messages: List[Dict[str, Any]]) -> ModelResponse:
+    """
+    Call guardrail model to generate chat response.
+    Uses GUARDRAILS_MODEL_API_URL for model inference.
+    """
+    try:
+        # Create OpenAI client pointing to guardrail model
+        client = AsyncOpenAI(
+            api_key=settings.guardrails_model_api_key,
+            base_url=settings.guardrails_model_api_url.rstrip('/'),
+            timeout=120.0
+        )
+
+        # Call model API
+        response = await client.chat.completions.create(
+            model=settings.guardrails_model_name,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2048
+        )
+
+        # Extract response content
+        if response.choices and response.choices[0].message:
+            content = response.choices[0].message.content
+            return ModelResponse(content=content)
+        else:
+            return ModelResponse(content="No response generated")
+
+    except Exception as e:
+        error_message = str(e)
+        if "401" in error_message or "Unauthorized" in error_message:
+            error_message = "Model API authentication failed"
+        elif "404" in error_message or "Not Found" in error_message:
+            error_message = "Model API endpoint not found"
+        elif "timeout" in error_message.lower() or "timed out" in error_message.lower():
+            error_message = "Model response timeout"
+        elif "rate limit" in error_message.lower():
+            error_message = "Model API rate limit exceeded"
+        else:
+            error_message = f"Model API error: {error_message}"
+
+        logger.error(f"Guardrail model chat call failed: {error_message}")
         return ModelResponse(
             content=None,
             error=error_message

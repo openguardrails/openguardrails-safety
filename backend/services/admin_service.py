@@ -8,7 +8,7 @@ from sqlalchemy import func, desc as sql_desc, asc as sql_asc
 from passlib.context import CryptContext
 
 from database.models import Tenant, TenantSwitch, DetectionResult
-from utils.user import generate_api_key
+from utils.user import generate_api_key, create_default_application_and_key
 from config import settings
 from utils.logger import setup_logger
 
@@ -70,7 +70,22 @@ class AdminService:
                 except Exception as e:
                     logger.error(f"Failed to create default templates for existing super admin {admin_email}: {e}")
                     # Not affect super admin running, just record error
-                
+
+                # Check and create default application for super admin (if not exists)
+                try:
+                    from database.models import Application
+                    existing_app = db.query(Application).filter(
+                        Application.tenant_id == existing_admin.id,
+                        Application.is_active == True
+                    ).first()
+                    if not existing_app:
+                        result = create_default_application_and_key(db, existing_admin.id, admin_email)
+                        if result:
+                            logger.info(f"Created default application for existing super admin {admin_email}")
+                except Exception as e:
+                    logger.error(f"Failed to create default application for existing super admin {admin_email}: {e}")
+                    # Not affect super admin running, just record error
+
                 if not updated:
                     logger.info("Super admin already exists and up to date")
                 return existing_admin
@@ -101,7 +116,16 @@ class AdminService:
             except Exception as e:
                 logger.error(f"Failed to create default templates for super admin {admin_email_new}: {e}")
                 # Not affect super admin creation process, just record error
-            
+
+            # Create default application for super admin
+            try:
+                result = create_default_application_and_key(db, super_admin.id, admin_email_new)
+                if result:
+                    logger.info(f"Created default application for super admin {admin_email_new}")
+            except Exception as e:
+                logger.error(f"Failed to create default application for super admin {admin_email_new}: {e}")
+                # Not affect super admin creation process, just record error
+
             logger.info(f"Super admin created: {super_admin.email} (API Key: {api_key})")
             return super_admin
             

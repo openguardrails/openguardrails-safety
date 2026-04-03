@@ -17,17 +17,17 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0', // Allow access from any IP
-      port: 3000,
+      port: 30000,
       proxy: {
         // API proxy to backend service
         '/api': {
-          target: 'http://localhost:5000',
+          target: 'http://localhost:50000',
           changeOrigin: true,
           secure: false
         },
         // Guardrails detection proxy to backend service
         '/v1': {
-          target: 'http://localhost:5001',
+          target: 'http://localhost:50001',
           changeOrigin: true,
           secure: false
         }

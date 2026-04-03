@@ -1,38 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import api, { testModelsApi } from '../../services/api'
-import { PlayCircle, X, Settings, Upload, Download, FileSpreadsheet, Loader2, Globe, FolderOpen } from 'lucide-react'
+import api from '../../services/api'
+import { Send, Trash2, Upload, Download, FileSpreadsheet, Loader2, Globe, FolderOpen, AlertTriangle, CheckCircle, ShieldAlert, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Textarea } from '../../components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
-import { Switch } from '../../components/ui/switch'
-import { Input } from '../../components/ui/input'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../components/ui/collapsible'
 import { toast } from 'sonner'
-import { Separator } from '../../components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs'
 import * as XLSX from 'xlsx'
+import { cn } from '../../lib/utils'
 
-interface TestModel {
+interface ChatMessage {
   id: string
-  config_name: string
-  api_base_url: string
-  model_name: string
-  enabled: boolean
-  selected: boolean
-  user_model_name?: string
-}
-
-interface TestCase {
-  id: string
-  name: string
-  type: 'question' | 'qa_pair'
+  role: 'user' | 'assistant'
   content: string
-  expectedRisk?: string
-  description?: string
-  category?: string
+  timestamp: Date
+  detection?: GuardrailResult
+  isDetecting?: boolean
 }
 
 interface GuardrailResult {
@@ -54,17 +39,6 @@ interface GuardrailResult {
   error?: string
 }
 
-interface ModelResponse {
-  content: string
-  error?: string
-}
-
-interface TestResult {
-  guardrail: GuardrailResult
-  models: Record<string, ModelResponse>
-  original_responses: Record<string, ModelResponse>
-}
-
 // Batch test interfaces
 interface ReplayMessage {
   role: 'user' | 'assistant'
@@ -72,8 +46,9 @@ interface ReplayMessage {
 }
 
 interface ExcelRow {
-  detection_content: string  // Raw detection content from export
-  messages: ReplayMessage[]  // Parsed multi-turn messages
+  detection_content: string
+  messages: ReplayMessage[]
+  originalRow: Record<string, any>
 }
 
 interface BatchTestResult {
@@ -96,9 +71,17 @@ interface WorkspaceOption {
   name: string
 }
 
+interface PresetTestCase {
+  id: string
+  label: string
+  content: string
+  category: 'security' | 'data' | 'compliance'
+}
+
 const OnlineTest: React.FC = () => {
   const { t } = useTranslation()
-  const navigate = useNavigate()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const translateRiskLevel = (riskLevel: string) => {
     const riskLevelMap: { [key: string]: string } = {
@@ -110,12 +93,10 @@ const OnlineTest: React.FC = () => {
     return riskLevelMap[riskLevel] || riskLevel
   }
 
-  const [loading, setLoading] = useState(false)
-  const [testInput, setTestInput] = useState('')
-  const [inputType, setInputType] = useState<'question' | 'qa_pair'>('question')
-  const [testResult, setTestResult] = useState<TestResult | null>(null)
-  const [models, setModels] = useState<TestModel[]>([])
-  const [selectedCategory, setSelectedCategory] = useState('security')
+  // Chat states
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [inputValue, setInputValue] = useState('')
+  const [isDetecting, setIsDetecting] = useState(false)
 
   // Workspace selector states
   const [workspaces, setWorkspaces] = useState<WorkspaceOption[]>([])
@@ -127,8 +108,41 @@ const OnlineTest: React.FC = () => {
   const [batchData, setBatchData] = useState<ExcelRow[]>([])
   const [batchResults, setBatchResults] = useState<BatchTestResult[]>([])
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 })
-  const [batchError, setBatchError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Preset test cases
+  const presetTestCases: PresetTestCase[] = [
+    {
+      id: 'prompt-injection',
+      label: t('onlineTest.chat.presets.promptInjection'),
+      content: t('onlineTest.testCases.promptAttackContent'),
+      category: 'security'
+    },
+    {
+      id: 'violent-crime',
+      label: t('onlineTest.chat.presets.violentCrime'),
+      content: t('onlineTest.testCases.violentCrimeContent'),
+      category: 'security'
+    },
+    {
+      id: 'pornographic',
+      label: t('onlineTest.chat.presets.pornographic'),
+      content: t('onlineTest.testCases.pornographicContent'),
+      category: 'compliance'
+    },
+    {
+      id: 'discrimination',
+      label: t('onlineTest.chat.presets.discrimination'),
+      content: t('onlineTest.testCases.discriminatoryContent'),
+      category: 'compliance'
+    },
+    {
+      id: 'safe',
+      label: t('onlineTest.chat.presets.safe'),
+      content: t('onlineTest.chat.presets.safeContent'),
+      category: 'security'
+    }
+  ]
 
   const loadWorkspaces = useCallback(async () => {
     try {
@@ -139,308 +153,253 @@ const OnlineTest: React.FC = () => {
     }
   }, [])
 
-  const loadModels = async () => {
-    try {
-      const modelsData = await testModelsApi.getModels()
-      const mappedModels = modelsData.map((model: any) => ({
-        ...model,
-        user_model_name: model.model_name || '',
-      }))
-      setModels(mappedModels)
-    } catch (error) {
-      console.error('Failed to load models:', error)
-      toast.error(t('onlineTest.loadModelsFailed'))
-    }
-  }
-
-  const updateModelSelection = async (modelId: string, selected: boolean) => {
-    try {
-      const newModels = models.map((model) => (model.id === modelId ? { ...model, selected } : model))
-      setModels(newModels)
-
-      const selections = newModels.map((model) => ({
-        id: model.id,
-        selected: model.selected,
-        model_name: model.user_model_name || null,
-      }))
-
-      await testModelsApi.updateSelection(selections)
-      toast.success(t('onlineTest.modelSelectionUpdated'))
-    } catch (error) {
-      console.error('Failed to update model selection:', error)
-      toast.error(t('onlineTest.loadModelsFailed'))
-      loadModels()
-    }
-  }
-
-  const updateModelName = async (modelId: string, modelName: string) => {
-    try {
-      const newModels = models.map((model) => (model.id === modelId ? { ...model, user_model_name: modelName } : model))
-      setModels(newModels)
-
-      const selections = newModels.map((model) => ({
-        id: model.id,
-        selected: model.selected,
-        model_name: model.user_model_name || null,
-      }))
-
-      await testModelsApi.updateSelection(selections)
-    } catch (error) {
-      console.error('Failed to update model name:', error)
-      toast.error(t('onlineTest.updateModelNameFailed'))
-      loadModels()
-    }
-  }
-
   useEffect(() => {
-    loadModels()
     loadWorkspaces()
-  }, [])
+  }, [loadWorkspaces])
 
-  const testCasesByCategory = {
-    security: [
-      {
-        id: 's9-1',
-        name: t('onlineTest.promptAttackExample'),
-        type: 'question' as const,
-        content: t('onlineTest.testCases.promptAttackContent'),
-        expectedRisk: t('risk.level.high_risk'),
-        description: t('onlineTest.promptAttackExampleDesc'),
-        category: 'S9',
-      },
-      {
-        id: 's5-1',
-        name: t('onlineTest.violentCrimeContent'),
-        type: 'question' as const,
-        content: t('onlineTest.testCases.violentCrimeContent'),
-        expectedRisk: t('risk.level.high_risk'),
-        description: t('onlineTest.violentCrimeContentDesc'),
-        category: 'S5',
-      },
-      {
-        id: 's7-1',
-        name: t('onlineTest.pornographicContent'),
-        type: 'question' as const,
-        content: t('onlineTest.testCases.pornographicContent'),
-        expectedRisk: t('risk.level.medium_risk'),
-        description: t('onlineTest.pornographicContentDesc'),
-        category: 'S7',
-      },
-      {
-        id: 's8-1',
-        name: t('onlineTest.discriminatoryContent'),
-        type: 'question' as const,
-        content: t('onlineTest.testCases.discriminatoryContent'),
-        expectedRisk: t('risk.level.low_risk'),
-        description: t('onlineTest.discriminatoryContentDesc'),
-        category: 'S8',
-      },
-    ],
-    dataLeak: [
-      {
-        id: 'd-1',
-        name: t('onlineTest.dataLeakIdentity'),
-        type: 'qa_pair' as const,
-        content: t('onlineTest.testCases.dataLeakIdentityContent'),
-        expectedRisk: t('risk.level.high_risk'),
-        description: t('onlineTest.dataLeakIdentityDesc'),
-        category: 'Data',
-      },
-      {
-        id: 'd-2',
-        name: t('onlineTest.dataLeakBanking'),
-        type: 'qa_pair' as const,
-        content: t('onlineTest.testCases.dataLeakBankingContent'),
-        expectedRisk: t('risk.level.high_risk'),
-        description: t('onlineTest.dataLeakBankingDesc'),
-        category: 'Data',
-      },
-      {
-        id: 'd-3',
-        name: t('onlineTest.dataLeakEmail'),
-        type: 'qa_pair' as const,
-        content: t('onlineTest.testCases.dataLeakEmailContent'),
-        expectedRisk: t('risk.level.low_risk'),
-        description: t('onlineTest.dataLeakEmailDesc'),
-        category: 'Data',
-      },
-    ],
-    professional: [
-      {
-        id: 's19-1',
-        name: t('onlineTest.financialAdvice'),
-        type: 'question' as const,
-        content: t('onlineTest.testCases.financialAdviceContent'),
-        expectedRisk: t('risk.level.low_risk'),
-        description: t('onlineTest.financialAdviceDesc'),
-        category: 'S19',
-      },
-      {
-        id: 's20-1',
-        name: t('onlineTest.medicalAdvice'),
-        type: 'question' as const,
-        content: t('onlineTest.testCases.medicalAdviceContent'),
-        expectedRisk: t('risk.level.low_risk'),
-        description: t('onlineTest.medicalAdviceDesc'),
-        category: 'S20',
-      },
-      {
-        id: 's21-1',
-        name: t('onlineTest.legalAdvice'),
-        type: 'question' as const,
-        content: t('onlineTest.testCases.legalAdviceContent'),
-        expectedRisk: t('risk.level.low_risk'),
-        description: t('onlineTest.legalAdviceDesc'),
-        category: 'S21',
-      },
-    ],
-    safe: [
-      {
-        id: 'safe-1',
-        name: t('onlineTest.safeQaPair'),
-        type: 'qa_pair' as const,
-        content: t('onlineTest.testCases.safeQaPairContent'),
-        expectedRisk: t('risk.level.no_risk'),
-        description: t('onlineTest.safeQaPairDesc'),
-        category: 'Safe',
-      },
-    ],
-  }
+  // Auto scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
-  const testCases: TestCase[] = [...testCasesByCategory.security, ...testCasesByCategory.dataLeak, ...testCasesByCategory.professional, ...testCasesByCategory.safe]
+  const generateId = () => Math.random().toString(36).substring(2, 15)
 
-  const runTest = async () => {
-    if (!testInput.trim()) {
-      toast.warning(t('onlineTest.pleaseEnterTestContent'))
-      return
+  const sendMessage = async () => {
+    const content = inputValue.trim()
+    if (!content || isDetecting) return
+
+    // Add user message
+    const userMessage: ChatMessage = {
+      id: generateId(),
+      role: 'user',
+      content,
+      timestamp: new Date(),
+      isDetecting: true
     }
 
-    setLoading(true)
+    const newMessages = [...messages, userMessage]
+    setMessages(newMessages)
+    setInputValue('')
+    setIsDetecting(true)
+
     try {
-      if (inputType === 'qa_pair') {
-        const lines = testInput.split('\n')
-        const question = lines.find((line) => line.trim().startsWith('[User]:'))?.trim().substring('[User]:'.length).trim()
-        const answer = lines.find((line) => line.trim().startsWith('[Assistant]:'))?.trim().substring('[Assistant]:'.length).trim()
-
-        if (!question || !answer) {
-          toast.error(t('onlineTest.qaPairFormatError'))
-          return
-        }
-      }
-
-      const selectedModels = models.filter((m) => m.selected)
-      if (inputType === 'question' && selectedModels.length === 0) {
-        toast.info(t('onlineTest.proxyModelHint'))
-      }
+      // Build messages array for API (all messages in conversation)
+      const apiMessages = newMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
 
       const requestData: any = {
-        content: testInput,
-        input_type: inputType,
+        messages: apiMessages,
+        generate_response: true  // Request model to generate response
       }
       if (selectedWorkspaceId !== 'global') {
         requestData.workspace_id = selectedWorkspaceId
       }
 
       const response = await api.post('/api/v1/test/online', requestData)
+      const guardrailResult = response.data.guardrail
+      const modelResponse = response.data.model_response
 
-      setTestResult({
-        guardrail: response.data.guardrail,
-        models: response.data.models || {},
-        original_responses: response.data.original_responses || {},
-      })
-    } catch (error: any) {
-      console.error('Test failed:', error)
-      const errorMessage = error?.response?.data?.detail || error?.message || t('onlineTest.testExecutionFailed')
-      const status = error?.response?.status
+      // Update user message with detection result
+      setMessages(prev => prev.map(msg =>
+        msg.id === userMessage.id
+          ? { ...msg, detection: guardrailResult, isDetecting: false }
+          : msg
+      ))
 
-      if (status === 408 || status === 429 || status === 401 || status === 500) {
-        let displayMessage = errorMessage
-
-        if (status === 401) {
-          displayMessage = t('onlineTest.apiAuthFailed')
-        } else if (status === 408) {
-          displayMessage = errorMessage
-        } else if (status === 429) {
-          displayMessage = errorMessage
-        } else if (status === 500) {
-          displayMessage = t('onlineTest.serverError')
-        }
-
-        setTestResult({
-          guardrail: {
-            compliance: { risk_level: t('onlineTest.testFailed'), categories: [] },
-            security: { risk_level: t('onlineTest.testFailed'), categories: [] },
-            overall_risk_level: t('onlineTest.testFailed'),
-            suggest_action: t('onlineTest.testFailed'),
-            suggest_answer: '',
-            error: displayMessage,
-          },
-          models: {},
-          original_responses: {},
-        })
-      } else {
-        if (error.code === 'ECONNABORTED' || errorMessage.includes('timeout')) {
-          toast.error(t('onlineTest.requestTimeout'))
-        } else {
-          toast.error(`${t('onlineTest.testExecutionFailed')}: ${errorMessage}`)
+      // Add model response as assistant message
+      if (modelResponse) {
+        if (modelResponse.content) {
+          const assistantMessage: ChatMessage = {
+            id: generateId(),
+            role: 'assistant',
+            content: modelResponse.content,
+            timestamp: new Date()
+          }
+          setMessages(prev => [...prev, assistantMessage])
+        } else if (modelResponse.error) {
+          // Show error as assistant message
+          const assistantMessage: ChatMessage = {
+            id: generateId(),
+            role: 'assistant',
+            content: `⚠️ ${modelResponse.error}`,
+            timestamp: new Date()
+          }
+          setMessages(prev => [...prev, assistantMessage])
         }
       }
+
+    } catch (error: any) {
+      console.error('Detection failed:', error)
+      const errorMessage = error?.response?.data?.detail || error?.message || t('onlineTest.testExecutionFailed')
+
+      // Update user message with error
+      setMessages(prev => prev.map(msg =>
+        msg.id === userMessage.id
+          ? {
+              ...msg,
+              detection: {
+                compliance: { risk_level: 'error', categories: [] },
+                security: { risk_level: 'error', categories: [] },
+                overall_risk_level: 'error',
+                suggest_action: 'error',
+                suggest_answer: '',
+                error: errorMessage
+              },
+              isDetecting: false
+            }
+          : msg
+      ))
+
+      toast.error(errorMessage)
     } finally {
-      setLoading(false)
+      setIsDetecting(false)
+      inputRef.current?.focus()
     }
   }
 
-  const clearInput = () => {
-    setTestInput('')
-    setTestResult(null)
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
   }
 
-  const useTestCase = (testCase: TestCase) => {
-    setTestInput(testCase.content)
-    setInputType(testCase.type)
-    toast.success(t('onlineTest.testCaseLoaded', { name: testCase.name }))
+  const clearConversation = () => {
+    setMessages([])
+    toast.success(t('onlineTest.chat.conversationCleared'))
+  }
+
+  const usePresetCase = (preset: PresetTestCase) => {
+    setInputValue(preset.content)
+    inputRef.current?.focus()
   }
 
   const getRiskColor = (level: string) => {
     switch (level) {
       case 'high_risk':
-        return 'bg-red-500/15 text-red-300 border-red-500/20'
+        return 'text-red-400'
       case 'medium_risk':
-        return 'bg-orange-500/15 text-orange-300 border-orange-500/20'
+        return 'text-orange-400'
       case 'low_risk':
-        return 'bg-yellow-500/15 text-yellow-300 border-yellow-500/20'
+        return 'text-yellow-400'
       case 'no_risk':
       case 'safe':
-        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20'
-      case 'test_failed':
-      case 'detection_failed':
-      case 'error':
-        return 'bg-red-500/15 text-red-300 border-red-500/20'
+        return 'text-emerald-400'
       default:
-        return 'bg-muted text-foreground border-border'
+        return 'text-muted-foreground'
     }
   }
 
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case 'reject':
-        return 'bg-red-500/15 text-red-300 border-red-500/20'
-      case 'replace':
-        return 'bg-orange-500/15 text-orange-300 border-orange-500/20'
-      case 'pass':
-        return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20'
-      case 'test_failed':
-      case 'error':
-      case 'system_error':
-        return 'bg-red-500/15 text-red-300 border-red-500/20'
+  const getRiskBgColor = (level: string) => {
+    switch (level) {
+      case 'high_risk':
+        return 'bg-red-500/10 border-red-500/20'
+      case 'medium_risk':
+        return 'bg-orange-500/10 border-orange-500/20'
+      case 'low_risk':
+        return 'bg-yellow-500/10 border-yellow-500/20'
+      case 'no_risk':
+      case 'safe':
+        return 'bg-emerald-500/10 border-emerald-500/20'
       default:
-        return 'bg-muted text-foreground border-border'
+        return 'bg-muted border-border'
     }
+  }
+
+  const getRiskIcon = (level: string) => {
+    switch (level) {
+      case 'high_risk':
+      case 'medium_risk':
+        return <ShieldAlert className="h-4 w-4" />
+      case 'low_risk':
+        return <AlertTriangle className="h-4 w-4" />
+      case 'no_risk':
+      case 'safe':
+        return <ShieldCheck className="h-4 w-4" />
+      default:
+        return <ShieldCheck className="h-4 w-4" />
+    }
+  }
+
+  // Detection result badge component
+  const DetectionBadge: React.FC<{ detection: GuardrailResult }> = ({ detection }) => {
+    const [expanded, setExpanded] = useState(false)
+    const riskLevel = detection.overall_risk_level
+
+    if (detection.error) {
+      return (
+        <div className="mt-2 p-2 rounded-md bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+          {detection.error}
+        </div>
+      )
+    }
+
+    return (
+      <div className={cn("mt-2 rounded-md border text-xs", getRiskBgColor(riskLevel))}>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full px-3 py-2 flex items-center justify-between hover:bg-white/5 rounded-md transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span className={getRiskColor(riskLevel)}>{getRiskIcon(riskLevel)}</span>
+            <span className={cn("font-medium", getRiskColor(riskLevel))}>
+              {translateRiskLevel(riskLevel)}
+            </span>
+            {detection.suggest_action !== 'pass' && (
+              <span className="text-muted-foreground">• {detection.suggest_action}</span>
+            )}
+          </div>
+          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </button>
+
+        {expanded && (
+          <div className="px-3 pb-3 space-y-2 border-t border-white/5 pt-2">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <span className="text-muted-foreground">{t('onlineTest.securityRisk')}:</span>
+                <span className={cn("ml-1", getRiskColor(detection.security?.risk_level))}>
+                  {translateRiskLevel(detection.security?.risk_level || 'no_risk')}
+                </span>
+                {detection.security?.categories?.length > 0 && (
+                  <div className="text-muted-foreground mt-0.5">
+                    {detection.security.categories.join(', ')}
+                  </div>
+                )}
+              </div>
+              <div>
+                <span className="text-muted-foreground">{t('onlineTest.complianceRisk')}:</span>
+                <span className={cn("ml-1", getRiskColor(detection.compliance?.risk_level))}>
+                  {translateRiskLevel(detection.compliance?.risk_level || 'no_risk')}
+                </span>
+                {detection.compliance?.categories?.length > 0 && (
+                  <div className="text-muted-foreground mt-0.5">
+                    {detection.compliance.categories.join(', ')}
+                  </div>
+                )}
+              </div>
+              <div>
+                <span className="text-muted-foreground">{t('onlineTest.dataLeak')}:</span>
+                <span className={cn("ml-1", getRiskColor(detection.data?.risk_level || 'no_risk'))}>
+                  {translateRiskLevel(detection.data?.risk_level || 'no_risk')}
+                </span>
+                {detection.data?.categories && detection.data.categories.length > 0 && (
+                  <div className="text-muted-foreground mt-0.5">
+                    {detection.data.categories.join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   // Parse detection content format: [User]: ...\n[Assistant]: ...
   const parseDetectionContent = (content: string): ReplayMessage[] => {
-    const messages: ReplayMessage[] = []
+    const msgList: ReplayMessage[] = []
     const lines = content.split('\n')
     let currentRole: 'user' | 'assistant' | null = null
     let currentContent = ''
@@ -451,28 +410,26 @@ const OnlineTest: React.FC = () => {
 
       if (userMatch) {
         if (currentRole && currentContent.trim()) {
-          messages.push({ role: currentRole, content: currentContent.trim() })
+          msgList.push({ role: currentRole, content: currentContent.trim() })
         }
         currentRole = 'user'
         currentContent = userMatch[1]
       } else if (assistantMatch) {
         if (currentRole && currentContent.trim()) {
-          messages.push({ role: currentRole, content: currentContent.trim() })
+          msgList.push({ role: currentRole, content: currentContent.trim() })
         }
         currentRole = 'assistant'
         currentContent = assistantMatch[1]
       } else if (currentRole) {
-        // Continuation of current message
         currentContent += '\n' + line
       }
     }
 
-    // Push last message
     if (currentRole && currentContent.trim()) {
-      messages.push({ role: currentRole, content: currentContent.trim() })
+      msgList.push({ role: currentRole, content: currentContent.trim() })
     }
 
-    return messages
+    return msgList
   }
 
   // Batch test functions
@@ -482,7 +439,6 @@ const OnlineTest: React.FC = () => {
 
     setBatchFile(file)
     setBatchStatus('idle')
-    setBatchError(null)
     setBatchResults([])
 
     const reader = new FileReader()
@@ -492,7 +448,6 @@ const OnlineTest: React.FC = () => {
         const workbook = XLSX.read(data, { type: 'binary' })
         const sheetName = workbook.SheetNames[0]
         const sheet = workbook.Sheets[sheetName]
-        // Use defval to preserve empty cells, otherwise columns with empty values in first row are skipped
         const jsonData = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' })
 
         if (jsonData.length === 0) {
@@ -501,10 +456,8 @@ const OnlineTest: React.FC = () => {
           return
         }
 
-        // Check for columns - support detection log export format
         const firstRow = jsonData[0]
         const keys = Object.keys(firstRow)
-        // Detection log export format: "Detection Content" / "检测内容"
         const detectionContentKey = keys.find(k =>
           k === 'Detection Content' || k === '检测内容'
         )
@@ -515,23 +468,23 @@ const OnlineTest: React.FC = () => {
           return
         }
 
-        // Parse detection content into messages
         const mappedData: ExcelRow[] = jsonData
           .map((row: any) => {
             const rawContent = String(row[detectionContentKey] || '').trim()
             if (!rawContent) return null
 
-            const messages = parseDetectionContent(rawContent)
-            // If no [User]/[Assistant] markers found, treat as single user message
-            if (messages.length === 0) {
+            const parsedMessages = parseDetectionContent(rawContent)
+            if (parsedMessages.length === 0) {
               return {
                 detection_content: rawContent,
-                messages: [{ role: 'user' as const, content: rawContent }]
+                messages: [{ role: 'user' as const, content: rawContent }],
+                originalRow: { ...row }
               }
             }
             return {
               detection_content: rawContent,
-              messages
+              messages: parsedMessages,
+              originalRow: { ...row }
             }
           })
           .filter((row): row is ExcelRow => row !== null)
@@ -560,14 +513,12 @@ const OnlineTest: React.FC = () => {
     setBatchStatus('detecting')
     setBatchProgress({ current: 0, total: batchData.length })
     setBatchResults([])
-    setBatchError(null)
 
     const results: BatchTestResult[] = []
 
     for (let i = 0; i < batchData.length; i++) {
       const row = batchData[i]
       try {
-        // Send multi-turn messages directly for proper sliding window detection
         const batchRequestData: any = {
           messages: row.messages,
         }
@@ -614,49 +565,145 @@ const OnlineTest: React.FC = () => {
     toast.success(t('onlineTest.batchTest.status.completed'))
   }
 
+  const findDifferences = (original: ExcelRow[], replay: BatchTestResult[]) => {
+    const differences: any[] = []
+
+    for (let i = 0; i < original.length && i < replay.length; i++) {
+      const orig = original[i].originalRow || {}
+      const repl = replay[i]
+
+      const origRequestId = orig['Request ID'] || orig['请求ID'] || ''
+      const origApplication = orig['Application'] || orig['应用'] || ''
+      const origWorkspace = orig['Workspace'] || orig['工作区'] || ''
+      const origPromptAttackRisk = orig['Prompt Attack Risk'] || orig['提示词攻击风险'] || orig['安全风险'] || 'no_risk'
+      const origPromptAttackCategories = orig['Prompt Attack Categories'] || orig['提示词攻击类别'] || orig['安全类别'] || ''
+      const origContentComplianceRisk = orig['Content Compliance Risk'] || orig['内容合规风险'] || orig['合规风险'] || 'no_risk'
+      const origContentComplianceCategories = orig['Content Compliance Categories'] || orig['内容合规类别'] || orig['合规类别'] || ''
+      const origDataLeakRisk = orig['Data Leak Risk'] || orig['数据泄漏风险'] || orig['数据风险'] || 'no_risk'
+      const origDataLeakCategories = orig['Data Leak Categories'] || orig['数据泄漏类别'] || orig['数据类别'] || ''
+      const origSuggestedAction = orig['Suggested Action'] || orig['建议操作'] || 'pass'
+
+      const isDifferent =
+        origPromptAttackRisk !== repl.security_risk_level ||
+        origPromptAttackCategories !== repl.security_categories ||
+        origContentComplianceRisk !== repl.compliance_risk_level ||
+        origContentComplianceCategories !== repl.compliance_categories ||
+        origDataLeakRisk !== repl.data_risk_level ||
+        origDataLeakCategories !== repl.data_categories ||
+        origSuggestedAction !== repl.suggest_action
+
+      if (isDifferent) {
+        const truncatedContent = repl.detection_content.length > 32000
+          ? repl.detection_content.slice(0, 32000) + '...(truncated)'
+          : repl.detection_content
+        differences.push({
+          [t('onlineTest.batchTest.resultColumns.requestId') || 'Request ID']: origRequestId,
+          [t('onlineTest.batchTest.resultColumns.application') || 'Application']: origApplication,
+          [t('onlineTest.batchTest.resultColumns.workspace') || 'Workspace']: origWorkspace,
+          [t('onlineTest.batchTest.resultColumns.detectionContent') || 'Detection Content']: truncatedContent,
+          [t('onlineTest.batchTest.diffColumns.origPromptAttackRisk') || 'Original Prompt Attack Risk']: origPromptAttackRisk,
+          [t('onlineTest.batchTest.diffColumns.replayPromptAttackRisk') || 'Replay Prompt Attack Risk']: repl.security_risk_level,
+          [t('onlineTest.batchTest.diffColumns.origPromptAttackCategories') || 'Original Prompt Attack Categories']: origPromptAttackCategories,
+          [t('onlineTest.batchTest.diffColumns.replayPromptAttackCategories') || 'Replay Prompt Attack Categories']: repl.security_categories,
+          [t('onlineTest.batchTest.diffColumns.origContentComplianceRisk') || 'Original Content Compliance Risk']: origContentComplianceRisk,
+          [t('onlineTest.batchTest.diffColumns.replayContentComplianceRisk') || 'Replay Content Compliance Risk']: repl.compliance_risk_level,
+          [t('onlineTest.batchTest.diffColumns.origContentComplianceCategories') || 'Original Content Compliance Categories']: origContentComplianceCategories,
+          [t('onlineTest.batchTest.diffColumns.replayContentComplianceCategories') || 'Replay Content Compliance Categories']: repl.compliance_categories,
+          [t('onlineTest.batchTest.diffColumns.origDataLeakRisk') || 'Original Data Leak Risk']: origDataLeakRisk,
+          [t('onlineTest.batchTest.diffColumns.replayDataLeakRisk') || 'Replay Data Leak Risk']: repl.data_risk_level,
+          [t('onlineTest.batchTest.diffColumns.origDataLeakCategories') || 'Original Data Leak Categories']: origDataLeakCategories,
+          [t('onlineTest.batchTest.diffColumns.replayDataLeakCategories') || 'Replay Data Leak Categories']: repl.data_categories,
+          [t('onlineTest.batchTest.diffColumns.origSuggestedAction') || 'Original Suggested Action']: origSuggestedAction,
+          [t('onlineTest.batchTest.diffColumns.replaySuggestedAction') || 'Replay Suggested Action']: repl.suggest_action,
+        })
+      }
+    }
+
+    return differences
+  }
+
   const downloadResults = () => {
     if (batchResults.length === 0) return
 
-    // Prepare data for Excel
-    const excelData = batchResults.map(result => ({
-      [t('onlineTest.batchTest.resultColumns.detectionContent')]: result.detection_content,
-      [t('onlineTest.batchTest.resultColumns.complianceRiskLevel')]: result.compliance_risk_level,
-      [t('onlineTest.batchTest.resultColumns.complianceCategories')]: result.compliance_categories,
-      [t('onlineTest.batchTest.resultColumns.securityRiskLevel')]: result.security_risk_level,
-      [t('onlineTest.batchTest.resultColumns.securityCategories')]: result.security_categories,
-      [t('onlineTest.batchTest.resultColumns.dataRiskLevel')]: result.data_risk_level,
-      [t('onlineTest.batchTest.resultColumns.dataCategories')]: result.data_categories,
-      [t('onlineTest.batchTest.resultColumns.overallRiskLevel')]: result.overall_risk_level,
-      [t('onlineTest.batchTest.resultColumns.action')]: result.suggest_action,
-      [t('onlineTest.batchTest.resultColumns.suggestAnswer')]: result.suggest_answer,
-    }))
+    const EXCEL_MAX_CELL_LENGTH = 32000
+    const truncateText = (text: any): string => {
+      const str = String(text ?? '')
+      if (str.length > EXCEL_MAX_CELL_LENGTH) {
+        return str.slice(0, EXCEL_MAX_CELL_LENGTH) + '...(truncated)'
+      }
+      return str
+    }
 
-    // Create workbook and worksheet
-    const wb = XLSX.utils.book_new()
-    const ws = XLSX.utils.json_to_sheet(excelData)
+    const truncateRow = (row: Record<string, any>): Record<string, any> => {
+      const result: Record<string, any> = {}
+      for (const [key, value] of Object.entries(row)) {
+        result[key] = typeof value === 'string' ? truncateText(value) : value
+      }
+      return result
+    }
 
-    // Set column widths
-    ws['!cols'] = [
-      { wch: 60 }, // detection_content
-      { wch: 18 }, // compliance_risk_level
-      { wch: 25 }, // compliance_categories
-      { wch: 18 }, // security_risk_level
-      { wch: 25 }, // security_categories
-      { wch: 15 }, // data_risk_level
-      { wch: 25 }, // data_categories
-      { wch: 18 }, // overall_risk_level
-      { wch: 15 }, // suggest_action
-      { wch: 50 }, // suggest_answer
-    ]
+    try {
+      const wb = XLSX.utils.book_new()
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Replay Results')
+      const sheetNameOriginal = String(t('onlineTest.batchTest.sheets.original') || 'Original Data').slice(0, 31)
+      const sheetNameReplay = String(t('onlineTest.batchTest.sheets.replay') || 'Replay Results').slice(0, 31)
+      const sheetNameDiff = String(t('onlineTest.batchTest.sheets.differences') || 'Differences').slice(0, 31)
 
-    // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const filename = `replay_results_${timestamp}.xlsx`
+      const originalSheetData = batchData.map(row => truncateRow(row.originalRow || { 'Detection Content': row.detection_content }))
+      const ws1 = XLSX.utils.json_to_sheet(originalSheetData)
+      XLSX.utils.book_append_sheet(wb, ws1, sheetNameOriginal)
 
-    // Download
-    XLSX.writeFile(wb, filename)
+      const replayData = batchResults.map((result, index) => {
+        const orig = batchData[index]?.originalRow || {}
+        const origRequestId = orig['Request ID'] || orig['请求ID'] || ''
+        const origApplication = orig['Application'] || orig['应用'] || ''
+        const origWorkspace = orig['Workspace'] || orig['工作区'] || ''
+
+        return {
+          [t('onlineTest.batchTest.resultColumns.requestId') || 'Request ID']: origRequestId,
+          [t('onlineTest.batchTest.resultColumns.application') || 'Application']: origApplication,
+          [t('onlineTest.batchTest.resultColumns.workspace') || 'Workspace']: origWorkspace,
+          [t('onlineTest.batchTest.resultColumns.detectionContent') || 'Detection Content']: truncateText(result.detection_content),
+          [t('onlineTest.batchTest.resultColumns.promptAttackRisk') || 'Prompt Attack Risk']: result.security_risk_level,
+          [t('onlineTest.batchTest.resultColumns.promptAttackCategories') || 'Prompt Attack Categories']: result.security_categories,
+          [t('onlineTest.batchTest.resultColumns.contentComplianceRisk') || 'Content Compliance Risk']: result.compliance_risk_level,
+          [t('onlineTest.batchTest.resultColumns.contentComplianceCategories') || 'Content Compliance Categories']: result.compliance_categories,
+          [t('onlineTest.batchTest.resultColumns.dataLeakRisk') || 'Data Leak Risk']: result.data_risk_level,
+          [t('onlineTest.batchTest.resultColumns.dataLeakCategories') || 'Data Leak Categories']: result.data_categories,
+          [t('onlineTest.batchTest.resultColumns.suggestedAction') || 'Suggested Action']: result.suggest_action,
+          [t('onlineTest.batchTest.resultColumns.suggestedAnswer') || 'Suggested Answer']: truncateText(result.suggest_answer),
+        }
+      })
+      const ws2 = XLSX.utils.json_to_sheet(replayData)
+      ws2['!cols'] = [
+        { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 60 },
+        { wch: 20 }, { wch: 30 }, { wch: 22 }, { wch: 30 },
+        { wch: 18 }, { wch: 25 }, { wch: 18 }, { wch: 50 },
+      ]
+      XLSX.utils.book_append_sheet(wb, ws2, sheetNameReplay)
+
+      const differences = findDifferences(batchData, batchResults)
+      if (differences.length > 0) {
+        const ws3 = XLSX.utils.json_to_sheet(differences)
+        ws3['!cols'] = [
+          { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 50 },
+          { wch: 22 }, { wch: 22 }, { wch: 25 }, { wch: 25 },
+          { wch: 24 }, { wch: 24 }, { wch: 28 }, { wch: 28 },
+          { wch: 20 }, { wch: 20 }, { wch: 22 }, { wch: 22 },
+          { wch: 20 }, { wch: 20 },
+        ]
+        XLSX.utils.book_append_sheet(wb, ws3, sheetNameDiff)
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      const filename = `replay_comparison_${timestamp}.xlsx`
+
+      XLSX.writeFile(wb, filename)
+      toast.success(t('onlineTest.batchTest.downloadSuccess'))
+    } catch (error: any) {
+      console.error('Failed to download results:', error)
+      toast.error(`${t('onlineTest.batchTest.downloadError')}: ${error?.message || error}`)
+    }
   }
 
   const resetBatchTest = () => {
@@ -665,7 +712,6 @@ const OnlineTest: React.FC = () => {
     setBatchData([])
     setBatchResults([])
     setBatchProgress({ current: 0, total: 0 })
-    setBatchError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -689,9 +735,12 @@ const OnlineTest: React.FC = () => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold">{t('onlineTest.title')}</h1>
+    <div className="max-w-4xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-2xl font-bold">{t('onlineTest.title')}</h1>
+          <p className="text-muted-foreground text-sm mt-1">{t('onlineTest.chat.description')}</p>
+        </div>
         {workspaces.length > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{t('onlineTest.guardrailConfig')}:</span>
@@ -719,399 +768,119 @@ const OnlineTest: React.FC = () => {
           </div>
         )}
       </div>
-      <p className="text-muted-foreground mb-6">{t('onlineTest.description')}</p>
 
-      <Tabs defaultValue="single" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="single">{t('onlineTest.batchTest.tabSingle')}</TabsTrigger>
-          <TabsTrigger value="batch">{t('onlineTest.batchTest.tabBatch')}</TabsTrigger>
+      <Tabs defaultValue="chat" className="flex-1 flex flex-col min-h-0">
+        <TabsList className="mb-4 self-start">
+          <TabsTrigger value="chat">{t('onlineTest.chat.tabChat')}</TabsTrigger>
+          <TabsTrigger value="replay">{t('onlineTest.batchTest.tabBatch')}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="single">
-      <div className="space-y-6">
-        {/* Test input area */}
-        <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>{t('onlineTest.testInput')}</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Select value={inputType} onValueChange={(value: 'question' | 'qa_pair') => setInputType(value)}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="question">{t('onlineTest.singleQuestion')}</SelectItem>
-                      <SelectItem value="qa_pair">{t('onlineTest.qaPair')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/security-gateway')}>
-                    <Settings className="h-4 w-4 mr-2" />
-                    {t('onlineTest.manageProxyModels')}
-                  </Button>
-                </div>
+        <TabsContent value="chat" className="flex-1 flex flex-col min-h-0 mt-0">
+          {/* Chat messages area */}
+          <Card className="flex-1 flex flex-col min-h-0">
+            <CardContent className="flex-1 flex flex-col min-h-0 p-0">
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {messages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+                    <ShieldCheck className="h-12 w-12 mb-4 opacity-50" />
+                    <p className="text-lg font-medium mb-2">{t('onlineTest.chat.emptyState')}</p>
+                    <p className="text-sm text-center max-w-md">{t('onlineTest.chat.emptyStateDesc')}</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        "flex",
+                        msg.role === 'user' ? 'justify-end' : 'justify-start'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "max-w-[80%] rounded-lg px-4 py-2",
+                          msg.role === 'user'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-secondary text-foreground'
+                        )}
+                      >
+                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                        {msg.role === 'user' && msg.isDetecting && (
+                          <div className="mt-2 flex items-center gap-2 text-xs text-blue-200">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {t('onlineTest.chat.detecting')}
+                          </div>
+                        )}
+                        {msg.role === 'user' && msg.detection && !msg.isDetecting && (
+                          <DetectionBadge detection={msg.detection} />
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={messagesEndRef} />
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                value={testInput}
-                onChange={(e) => setTestInput(e.target.value)}
-                placeholder={inputType === 'question' ? t('onlineTest.questionPlaceholder') : t('onlineTest.qaPairPlaceholder')}
-                rows={6}
-                className="font-mono text-sm"
-              />
 
               {/* Preset test cases */}
-              <Collapsible>
-                <CollapsibleTrigger asChild>
-                  <Button variant="outline" size="sm" className="w-full justify-between">
-                    <span>{t('onlineTest.presetTestCases')}</span>
-                    <span className="text-xs text-muted-foreground">{t('onlineTest.clickToExpand')}</span>
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="mt-3 space-y-3">
-                  <Select defaultValue="security" onValueChange={(value) => setSelectedCategory(value)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="security">{t('onlineTest.categories.security')}</SelectItem>
-                      <SelectItem value="dataLeak">{t('onlineTest.categories.dataLeak')}</SelectItem>
-                      <SelectItem value="professional">{t('onlineTest.categories.professional')}</SelectItem>
-                      <SelectItem value="safe">{t('onlineTest.categories.safe')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {testCasesByCategory[selectedCategory as keyof typeof testCasesByCategory].map((testCase) => (
-                      <Card key={testCase.id} className="cursor-pointer hover:bg-card/5 transition-colors" onClick={() => useTestCase(testCase)}>
-                        <CardContent className="p-3 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold">{testCase.name}</p>
-                            <span className="px-2 py-0.5 text-xs rounded bg-sky-500/15 text-sky-300 border border-sky-500/20">{testCase.category}</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">{testCase.description}</p>
-                          <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testCase.expectedRisk || '')}`}>
-                            {t('onlineTest.expected')} {testCase.expectedRisk}
-                          </span>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-
-              {/* Proxy model selection */}
-              {inputType === 'question' && (
-                <div>
-                  <h4 className="text-sm font-medium mb-3">{t('onlineTest.selectTestModels')}</h4>
-                  {models.length === 0 ? (
-                    <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-md">
-                      <div className="flex items-start gap-2">
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className="h-5 w-5 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs">i</div>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-sky-200">{t('onlineTest.noProxyModels')}</p>
-                          <p className="text-sm text-sky-400 mt-1">
-                            {t('onlineTest.noProxyModelsDesc').split(t('onlineTest.securityGateway'))[0]}
-                            <Button variant="link" size="sm" className="h-auto p-0 text-sky-400" onClick={() => navigate('/security-gateway')}>
-                              {t('onlineTest.securityGateway')}
-                            </Button>
-                            {t('onlineTest.noProxyModelsDesc').split(t('onlineTest.securityGateway'))[1]}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {models.map((model) => (
-                        <Collapsible key={model.id} defaultOpen={model.selected}>
-                          <Card className="bg-secondary">
-                            <CollapsibleTrigger className="w-full">
-                              <CardHeader className="py-3">
-                                <div className="flex items-center justify-between w-full">
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-medium text-sm">{model.config_name}</span>
-                                    {model.selected && <span className="px-2 py-0.5 text-xs rounded bg-sky-500/15 text-sky-300 border border-sky-500/20">{t('onlineTest.selected')}</span>}
-                                  </div>
-                                  <Switch
-                                    checked={model.selected}
-                                    onCheckedChange={(checked) => {
-                                      updateModelSelection(model.id, checked)
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              </CardHeader>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                              <CardContent className="pt-0 pb-3 space-y-3">
-                                <div>
-                                  <p className="text-xs text-muted-foreground mb-1">{t('onlineTest.apiBaseUrl')}</p>
-                                  <p className="text-xs text-slate-300">{model.api_base_url}</p>
-                                </div>
-
-                                {model.selected && (
-                                  <div>
-                                    <p className="text-xs text-muted-foreground mb-1">{t('onlineTest.modelNameLabel')}</p>
-                                    <Input
-                                      size={1}
-                                      placeholder={t('onlineTest.modelNamePlaceholder')}
-                                      value={model.user_model_name}
-                                      onChange={(e) => updateModelName(model.id, e.target.value)}
-                                      onBlur={(e) => updateModelName(model.id, e.target.value)}
-                                      className="h-8 text-xs"
-                                    />
-                                  </div>
-                                )}
-                              </CardContent>
-                            </CollapsibleContent>
-                          </Card>
-                        </Collapsible>
-                      ))}
-                    </div>
-                  )}
-                  {models.filter((m) => m.selected).length > 0 && (
-                    <p className="text-xs text-sky-400 mt-2">{t('onlineTest.selectedModels', { count: models.filter((m) => m.selected).length })}</p>
-                  )}
+              <div className="px-4 py-2 border-t border-border">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-muted-foreground">{t('onlineTest.chat.quickTest')}:</span>
+                  {presetTestCases.map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => usePresetCase(preset)}
+                      className="px-2 py-1 text-xs rounded-md bg-secondary hover:bg-secondary/80 text-foreground transition-colors"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
 
-              <div className="flex gap-2">
-                <Button onClick={runTest} disabled={loading} size="lg" className="bg-blue-600 hover:bg-blue-700">
-                  {loading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                      {t('onlineTest.runTest')}
-                    </>
-                  ) : (
-                    <>
-                      <PlayCircle className="h-4 w-4 mr-2" />
-                      {t('onlineTest.runTest')}
-                    </>
-                  )}
-                </Button>
-                <Button variant="outline" onClick={clearInput} size="lg">
-                  <X className="h-4 w-4 mr-2" />
-                  {t('onlineTest.clear')}
-                </Button>
+              {/* Input area */}
+              <div className="p-4 border-t border-border">
+                <div className="flex gap-2">
+                  <Textarea
+                    ref={inputRef}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={t('onlineTest.chat.inputPlaceholder')}
+                    className="flex-1 min-h-[60px] max-h-[120px] resize-none"
+                    disabled={isDetecting}
+                  />
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      onClick={sendMessage}
+                      disabled={!inputValue.trim() || isDetecting}
+                      className="bg-blue-600 hover:bg-blue-700 h-[60px]"
+                    >
+                      {isDetecting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={clearConversation}
+                      disabled={messages.length === 0 || isDetecting}
+                      title={t('onlineTest.chat.newConversation')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {t('onlineTest.chat.enterToSend')}
+                </p>
               </div>
             </CardContent>
-        </Card>
-
-        {/* Test Result */}
-        {testResult && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('onlineTest.testResult')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                {/* Guardrail detection result */}
-                <div>
-                  <h4 className="text-base font-semibold mb-4">{t('onlineTest.guardrailResult')}</h4>
-
-                  {testResult.guardrail.error ? (
-                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-md">
-                      <div className="flex items-start gap-2">
-                        <div className="flex-shrink-0 mt-0.5">
-                          <div className="h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-white text-xs">!</div>
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-red-200">{t('onlineTest.detectionFailed')}</p>
-                          <div className="text-sm text-red-400 mt-2">
-                            <p className="font-semibold">{t('onlineTest.failureReason')}</p>
-                            <p>{testResult.guardrail.error}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm">{t('onlineTest.securityRisk')}</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            <div>
-                              <span className="text-xs text-muted-foreground">{t('onlineTest.riskLevel')} </span>
-                              <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testResult.guardrail.security?.risk_level)}`}>
-                                {translateRiskLevel(testResult.guardrail.security?.risk_level || 'no_risk')}
-                              </span>
-                            </div>
-                            {testResult.guardrail.security?.categories?.length > 0 && (
-                              <div>
-                                <span className="text-xs text-muted-foreground">{t('onlineTest.riskCategory')} </span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {testResult.guardrail.security.categories.map((cat, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-red-500/15 text-red-300 border border-red-500/20">
-                                      {cat}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm">{t('onlineTest.complianceRisk')}</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            <div>
-                              <span className="text-xs text-muted-foreground">{t('onlineTest.riskLevel')} </span>
-                              <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testResult.guardrail.compliance?.risk_level)}`}>
-                                {translateRiskLevel(testResult.guardrail.compliance?.risk_level || 'no_risk')}
-                              </span>
-                            </div>
-                            {testResult.guardrail.compliance?.categories?.length > 0 && (
-                              <div>
-                                <span className="text-xs text-muted-foreground">{t('onlineTest.riskCategory')} </span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {testResult.guardrail.compliance.categories.map((cat, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-orange-500/15 text-orange-300 border border-orange-500/20">
-                                      {cat}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        <Card>
-                          <CardHeader>
-                            <CardTitle className="text-sm">{t('onlineTest.dataLeak')}</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                            <div>
-                              <span className="text-xs text-muted-foreground">{t('onlineTest.riskLevel')} </span>
-                              <span className={`inline-block px-2 py-0.5 text-xs rounded border ${getRiskColor(testResult.guardrail.data?.risk_level || 'no_risk')}`}>
-                                {translateRiskLevel(testResult.guardrail.data?.risk_level || 'no_risk')}
-                              </span>
-                            </div>
-                            {testResult.guardrail.data?.categories && testResult.guardrail.data.categories.length > 0 && (
-                              <div>
-                                <span className="text-xs text-muted-foreground">{t('onlineTest.riskCategory')} </span>
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {testResult.guardrail.data.categories.map((cat, idx) => (
-                                    <span key={idx} className="px-2 py-0.5 text-xs rounded bg-purple-500/15 text-purple-300 border border-purple-500/20">
-                                      {cat}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      <Separator />
-
-                      <Card className="border-border bg-secondary">
-                        <CardContent className="pt-4">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                              <p className="text-sm font-medium text-slate-300 mb-1">{t('onlineTest.overallRiskLevel')}</p>
-                              <span className={`inline-block px-3 py-1.5 text-sm font-semibold rounded border ${getRiskColor(testResult.guardrail.overall_risk_level)}`}>
-                                {translateRiskLevel(testResult.guardrail.overall_risk_level)}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-slate-300 mb-1">{t('onlineTest.suggestedAction')}</p>
-                              <span className={`inline-block px-3 py-1.5 text-sm font-semibold rounded border ${getActionColor(testResult.guardrail.suggest_action)}`}>{testResult.guardrail.suggest_action}</span>
-                            </div>
-                            <div>
-                              {testResult.guardrail.suggest_answer && (
-                                <>
-                                  <p className="text-sm font-medium text-slate-300 mb-1">{t('onlineTest.suggestedAnswer')}</p>
-                                  <code className="text-xs bg-card px-3 py-1.5 rounded border border-border block whitespace-pre-wrap break-all">{testResult.guardrail.suggest_answer}</code>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </>
-                  )}
-                </div>
-
-                {/* Proxy model original responses */}
-                {inputType === 'question' && Object.keys(testResult.original_responses).length > 0 && (
-                  <div>
-                    <h4 className="text-base font-semibold mb-3">{t('onlineTest.proxyModelOriginalResponse')}</h4>
-                    <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-md mb-4 text-sm text-sky-300">{t('onlineTest.proxyModelOriginalResponseDesc')}</div>
-                    <div className="space-y-3">
-                      {Object.entries(testResult.original_responses).map(([modelId, response]) => {
-                        const model = models.find((m) => m.id === modelId)
-                        return (
-                          <Card key={modelId}>
-                            <CardHeader>
-                              <CardTitle className="text-sm">{model?.config_name || `Model ${modelId}`}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              {response.error ? (
-                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-sm text-red-300">{response.error}</div>
-                              ) : response.content ? (
-                                <div>
-                                  <p className="text-xs font-semibold text-slate-300 mb-2">{t('onlineTest.originalResponse')}</p>
-                                  <div className="bg-secondary p-3 rounded-md border border-border">
-                                    <p className="text-sm whitespace-pre-wrap">{response.content}</p>
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">{t('onlineTest.emptyResponse')}</p>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Model protected responses */}
-                {Object.keys(testResult.models).length > 0 && (
-                  <div>
-                    <h4 className="text-base font-semibold mb-3">{t('onlineTest.proxyModelProtectedResponse')}</h4>
-                    <div className="space-y-3">
-                      {Object.entries(testResult.models).map(([modelId, response]) => {
-                        const model = models.find((m) => m.id === modelId)
-                        return (
-                          <Card key={modelId}>
-                            <CardHeader>
-                              <CardTitle className="text-sm">{model?.config_name || `Model ${modelId}`}</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              {response.error ? (
-                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-sm text-red-300">{response.error}</div>
-                              ) : response.content ? (
-                                <div>
-                                  <p className="text-xs font-semibold text-slate-300 mb-2">{t('onlineTest.modelResponse')}</p>
-                                  <div className="bg-secondary p-3 rounded-md border border-border">
-                                    <p className="text-sm whitespace-pre-wrap">{response.content}</p>
-                                  </div>
-                                </div>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">{t('onlineTest.emptyResponse')}</p>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-            </CardContent>
           </Card>
-        )}
-      </div>
         </TabsContent>
 
-        <TabsContent value="batch">
+        <TabsContent value="replay" className="flex-1 mt-0">
           <div className="space-y-6">
-            {/* Batch test description */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1123,7 +892,6 @@ const OnlineTest: React.FC = () => {
                 <p className="text-sm text-muted-foreground">{t('onlineTest.batchTest.description')}</p>
                 <p className="text-xs text-muted-foreground">{t('onlineTest.batchTest.formatRequirement')}</p>
 
-                {/* File upload area */}
                 <div className="space-y-4">
                   <input
                     ref={fileInputRef}
@@ -1160,7 +928,6 @@ const OnlineTest: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Progress display */}
                       {batchStatus === 'detecting' && (
                         <div className="mt-4">
                           <div className="flex items-center justify-between text-sm text-muted-foreground mb-2">
@@ -1178,11 +945,10 @@ const OnlineTest: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Action buttons */}
                   <div className="flex gap-2">
                     {batchStatus === 'uploaded' && (
                       <Button onClick={runBatchDetection} className="bg-blue-600 hover:bg-blue-700">
-                        <PlayCircle className="h-4 w-4 mr-2" />
+                        <Send className="h-4 w-4 mr-2" />
                         {t('onlineTest.batchTest.startDetection')}
                       </Button>
                     )}
@@ -1203,7 +969,7 @@ const OnlineTest: React.FC = () => {
 
                     {(batchStatus === 'uploaded' || batchStatus === 'completed' || batchStatus === 'error') && (
                       <Button variant="outline" onClick={resetBatchTest}>
-                        <X className="h-4 w-4 mr-2" />
+                        <Trash2 className="h-4 w-4 mr-2" />
                         {t('onlineTest.batchTest.reupload')}
                       </Button>
                     )}
@@ -1212,7 +978,6 @@ const OnlineTest: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Results preview */}
             {batchResults.length > 0 && (
               <Card>
                 <CardHeader>
@@ -1238,27 +1003,32 @@ const OnlineTest: React.FC = () => {
                             <td className="py-2 px-3 text-muted-foreground">{index + 1}</td>
                             <td className="py-2 px-3 max-w-[300px] truncate" title={result.detection_content}>{result.detection_content}</td>
                             <td className="py-2 px-3">
-                              <span className={`px-2 py-0.5 text-xs rounded border ${getRiskColor(result.overall_risk_level)}`}>
+                              <span className={cn("px-2 py-0.5 text-xs rounded border", getRiskBgColor(result.overall_risk_level))}>
                                 {translateRiskLevel(result.overall_risk_level)}
                               </span>
                             </td>
                             <td className="py-2 px-3">
-                              <span className={`px-2 py-0.5 text-xs rounded border ${getRiskColor(result.security_risk_level)}`}>
+                              <span className={cn("px-2 py-0.5 text-xs rounded border", getRiskBgColor(result.security_risk_level))}>
                                 {translateRiskLevel(result.security_risk_level)}
                               </span>
                             </td>
                             <td className="py-2 px-3">
-                              <span className={`px-2 py-0.5 text-xs rounded border ${getRiskColor(result.compliance_risk_level)}`}>
+                              <span className={cn("px-2 py-0.5 text-xs rounded border", getRiskBgColor(result.compliance_risk_level))}>
                                 {translateRiskLevel(result.compliance_risk_level)}
                               </span>
                             </td>
                             <td className="py-2 px-3">
-                              <span className={`px-2 py-0.5 text-xs rounded border ${getRiskColor(result.data_risk_level)}`}>
+                              <span className={cn("px-2 py-0.5 text-xs rounded border", getRiskBgColor(result.data_risk_level))}>
                                 {translateRiskLevel(result.data_risk_level)}
                               </span>
                             </td>
                             <td className="py-2 px-3">
-                              <span className={`px-2 py-0.5 text-xs rounded border ${getActionColor(result.suggest_action)}`}>
+                              <span className={cn(
+                                "px-2 py-0.5 text-xs rounded border",
+                                result.suggest_action === 'pass' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' :
+                                result.suggest_action === 'reject' ? 'bg-red-500/10 border-red-500/20 text-red-300' :
+                                'bg-orange-500/10 border-orange-500/20 text-orange-300'
+                              )}>
                                 {result.suggest_action}
                               </span>
                             </td>
