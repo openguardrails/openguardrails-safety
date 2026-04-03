@@ -1349,3 +1349,69 @@ class TenantInvitation(Base):
     accepted_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# =====================================================
+# Red Teaming / Attack Campaigns Models
+# =====================================================
+
+class AttackTestQuestion(Base):
+    """Test question bank for Red Teaming attack campaigns"""
+    __tablename__ = "attack_test_questions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=True, index=True)  # NULL for preset questions
+    package_type = Column(String(50), nullable=False, index=True)  # 'gbt45654', 'owasp_top10', 'custom'
+    category = Column(String(50), nullable=False, index=True)  # 'S1'-'S21' or 'LLM01'-'LLM10'
+    content = Column(Text, nullable=False)
+    expected_action = Column(String(20), default='reject')  # 'reject', 'pass'
+    is_preset = Column(Boolean, default=False, index=True)  # true for built-in questions
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Association relationships
+    tenant = relationship("Tenant")
+
+
+class AttackCampaign(Base):
+    """Attack campaign for Red Teaming"""
+    __tablename__ = "attack_campaigns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    packages = Column(JSON, nullable=False, default=list)  # ['gbt45654', 'owasp_top10']
+    selected_categories = Column(JSON, nullable=False, default=list)  # ['S1', 'S2', 'LLM01']
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
+    status = Column(String(20), default='pending', index=True)  # 'pending', 'running', 'completed', 'failed'
+    total_tests = Column(Integer, default=0)
+    passed_tests = Column(Integer, default=0)
+    failed_tests = Column(Integer, default=0)
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Association relationships
+    tenant = relationship("Tenant")
+    workspace = relationship("Workspace")
+    results = relationship("AttackCampaignResult", back_populates="campaign", cascade="all, delete-orphan")
+
+
+class AttackCampaignResult(Base):
+    """Individual test results within an attack campaign"""
+    __tablename__ = "attack_campaign_results"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("attack_campaigns.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(UUID(as_uuid=True), ForeignKey("attack_test_questions.id", ondelete="SET NULL"), nullable=True)
+    question_content = Column(Text, nullable=False)
+    category = Column(String(50), nullable=False)
+    expected_action = Column(String(20), nullable=False)
+    actual_action = Column(String(20))
+    detection_result = Column(JSON)  # Full guardrail detection result
+    passed = Column(Boolean)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Association relationships
+    campaign = relationship("AttackCampaign", back_populates="results")
+    question = relationship("AttackTestQuestion")

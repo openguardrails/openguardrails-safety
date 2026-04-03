@@ -16,7 +16,7 @@ from pathlib import Path
 
 from config import settings
 from database.connection import init_db, create_admin_engine
-from routers import dashboard, config_api, results, auth, user, sync, admin, online_test, proxy_management, concurrent_stats, media, billing, applications, scanner_packages_api, scanner_configs_api, custom_scanners_api, purchase_api, risk_config_api, payment_api, model_routes_api
+from routers import dashboard, config_api, results, auth, user, sync, admin, online_test, proxy_management, concurrent_stats, media, billing, applications, scanner_packages_api, scanner_configs_api, custom_scanners_api, purchase_api, risk_config_api, payment_api, model_routes_api, attack_campaigns_api
 from utils.logger import setup_logger
 from services.admin_service import admin_service
 
@@ -502,6 +502,9 @@ app.include_router(gateway_connections.router, dependencies=[Depends(verify_user
 from routers import team as team_router
 app.include_router(team_router.public_router)  # Public: verify/accept invitation (no auth)
 app.include_router(team_router.router, dependencies=[Depends(verify_user_auth)])  # Protected: member management
+
+# Attack Campaigns (Red Teaming) routes
+app.include_router(attack_campaigns_api.router, dependencies=[Depends(verify_user_auth)])
 # Media router: image upload/delete needs authentication, but image access does not need authentication
 # First register image access routes that do not need authentication
 from fastapi import APIRouter

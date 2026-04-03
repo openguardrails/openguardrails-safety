@@ -187,7 +187,10 @@
     "logs": "Detection Logs",
     "gatewayConnection": "Third-Party Gateways",
     "team": "Team",
-    "guardrailUpload": "Guardrail Rules"
+    "guardrailUpload": "Guardrail Rules",
+    "sectionRedTeaming": "Red Teaming",
+    "chatTesting": "Chat Testing",
+    "attackCampaigns": "Attack Campaigns"
   },
   "layout": {
     "switchTenant": "Switch Tenant View",
@@ -561,6 +564,8 @@
     "exporting": "Exporting...",
     "exportSuccess": "Export successful",
     "exportFailed": "Export failed",
+    "replay": "Replay",
+    "replayTitle": "Detection Log Replay",
     "showOriginalContent": "Show Original",
     "showMaskedContent": "Show Masked",
     "copyContent": "Copy",
@@ -3274,6 +3279,79 @@
       "gateway_policy": "Gateway Policy",
       "admin_user": "User (Admin)",
       "rate_limit": "Rate Limit"
+    }
+  },
+  "redTeaming": {
+    "chatTesting": {
+      "title": "Chat Testing",
+      "description": "Test AI safety guardrails through interactive conversation"
+    },
+    "attackCampaigns": {
+      "title": "Attack Campaigns",
+      "description": "Batch security testing based on standardized test question banks",
+      "packages": {
+        "gbt45654": {
+          "name": "GB/T 45654-2025 Basic Package",
+          "description": "Test for unsafe topics per China's Generative AI Safety Requirements"
+        },
+        "owasp_top10": {
+          "name": "OWASP Top 10 LLM 2025 Basic Package",
+          "description": "Test for OWASP's LLM Prompt Injection Protection"
+        },
+        "custom": {
+          "name": "Custom Guardrails",
+          "description": "Test based on your configured custom guardrail rules"
+        }
+      },
+      "questionsPerRule": "{{count}} test questions per rule",
+      "generateMore": "Generate More Questions",
+      "startCampaign": "Start Campaign",
+      "selectRules": "Select Test Rules",
+      "selectPackages": "Select Test Packages",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All",
+      "campaignResults": "Campaign Results",
+      "passRate": "Pass Rate",
+      "blockRate": "Block Rate",
+      "totalTests": "Total Tests",
+      "runningCampaign": "Campaign running...",
+      "createCampaign": "Create Campaign",
+      "campaignName": "Campaign Name",
+      "campaignDescription": "Description",
+      "selectWorkspace": "Select Workspace",
+      "noCampaigns": "No attack campaigns yet",
+      "campaignStatus": {
+        "pending": "Pending",
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed"
+      },
+      "viewDetails": "View Details",
+      "runCampaign": "Run Campaign",
+      "deleteCampaign": "Delete Campaign",
+      "confirmDelete": "Are you sure you want to delete this campaign?",
+      "passed": "Passed",
+      "failed": "Failed",
+      "expectedAction": "Expected",
+      "actualAction": "Actual",
+      "questionContent": "Question",
+      "category": "Category",
+      "detectionResult": "Detection Result",
+      "testQuestions": "Test Questions",
+      "customQuestions": "Custom Questions",
+      "presetQuestions": "Preset Questions",
+      "addQuestion": "Add Question",
+      "generateQuestions": "Generate Questions",
+      "questionCount": "Number of Questions",
+      "generating": "Generating...",
+      "generated": "Generated {{count}} questions",
+      "campaignCreated": "Campaign created successfully",
+      "campaignDeleted": "Campaign deleted successfully",
+      "campaignStarted": "Campaign started",
+      "loadFailed": "Failed to load data",
+      "createFailed": "Failed to create campaign",
+      "deleteFailed": "Failed to delete campaign",
+      "runFailed": "Failed to run campaign"
     }
   }
 }

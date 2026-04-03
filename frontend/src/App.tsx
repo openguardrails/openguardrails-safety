@@ -16,7 +16,6 @@ import Reports from './pages/Reports/Reports';
 import Config from './pages/Config/Config';
 import AdminPanel from './pages/Admin/AdminPanel';
 import Account from './pages/Account/Account';
-import OnlineTest from './pages/OnlineTest/OnlineTest';
 import { SecurityPolicy, ProvidersAndRoutes } from './pages/SecurityGateway';
 import GatewayConnection from './pages/Connection/GatewayConnection';
 import Documentation from './pages/Documentation/Documentation';
@@ -27,6 +26,7 @@ import { AccessControl } from './pages/AccessControl';
 import TeamManagement from './pages/Team/TeamManagement';
 import AcceptInvitation from './pages/Auth/AcceptInvitation';
 import AuditLog from './pages/AuditLog/AuditLog';
+import { ChatTesting, AttackCampaigns } from './pages/RedTeaming';
 import { initSystemConfig, features } from './config';
 import WorkspaceSelector from './components/WorkspaceSelector';
 import { useWorkspace } from './contexts/WorkspaceContext';
@@ -87,7 +87,8 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/online-test" element={<OnlineTest />} />
+              <Route path="/redteaming/chat" element={<ChatTesting />} />
+              <Route path="/redteaming/campaigns" element={<AttackCampaigns />} />
               <Route path="/results" element={<Results />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/audit-log" element={<AuditLog />} />

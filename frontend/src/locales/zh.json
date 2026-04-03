@@ -179,12 +179,15 @@
     "packageMarketplace": "高级包市场",
     "sectionDiscover": "发现",
     "sectionSecure": "安全",
+    "sectionRedTeaming": "红队测试",
     "sectionGovern": "治理",
     "sectionSettings": "设置",
     "logs": "检测日志",
     "gatewayConnection": "第三方网关",
     "team": "团队",
-    "guardrailUpload": "防护规则"
+    "guardrailUpload": "防护规则",
+    "chatTesting": "对话测试",
+    "attackCampaigns": "攻击活动"
   },
   "layout": {
     "switchTenant": "切换租户视角",
@@ -558,6 +561,8 @@
     "exporting": "正在导出...",
     "exportSuccess": "导出成功",
     "exportFailed": "导出失败",
+    "replay": "回放",
+    "replayTitle": "检测日志回放",
     "showOriginalContent": "显示原始内容",
     "showMaskedContent": "显示脱敏内容",
     "copyContent": "复制",
@@ -3270,6 +3275,82 @@
       "gateway_policy": "网关策略",
       "admin_user": "用户（管理员）",
       "rate_limit": "速率限制"
+    }
+  },
+  "redTeaming": {
+    "chatTesting": {
+      "title": "对话测试",
+      "description": "通过对话形式测试AI安全防护能力"
+    },
+    "attackCampaigns": {
+      "title": "攻击活动",
+      "description": "基于标准化测试题库的批量安全测试",
+      "packages": {
+        "gbt45654": {
+          "name": "GB/T 45654-2025 基础包",
+          "description": "《生成式人工智能服务安全基本要求》不安全话题测试"
+        },
+        "owasp_top10": {
+          "name": "OWASP Top 10 LLM 2025 基础包",
+          "description": "OWASP LLM应用十大安全风险测试（仅提示词攻击防护）"
+        },
+        "custom": {
+          "name": "自定义防护规则",
+          "description": "基于您配置的自定义防护规则进行测试"
+        }
+      },
+      "categories": {
+        "LLM01": "提示词注入",
+        "LLM02": "不安全输出处理",
+        "LLM03": "训练数据投毒",
+        "LLM04": "模型拒绝服务",
+        "LLM05": "供应链漏洞",
+        "LLM06": "敏感信息泄露",
+        "LLM07": "不安全插件设计",
+        "LLM08": "过度代理",
+        "LLM09": "过度依赖",
+        "LLM10": "模型窃取"
+      },
+      "questionsPerRule": "每规则 {{count}} 道测试题",
+      "generateMore": "生成更多测试题",
+      "startCampaign": "开始测试",
+      "createCampaign": "创建活动",
+      "selectRules": "选择测试规则",
+      "selectPackages": "选择测试包",
+      "selectAll": "全选",
+      "deselectAll": "取消全选",
+      "campaignResults": "测试结果",
+      "passRate": "通过率",
+      "blockRate": "拦截率",
+      "totalTests": "总测试数",
+      "runningCampaign": "测试进行中...",
+      "noCampaigns": "暂无攻击活动",
+      "noCampaignsDesc": "创建您的第一个攻击活动以开始测试AI安全防护能力",
+      "campaignName": "活动名称",
+      "campaignDescription": "活动描述",
+      "campaignStatus": {
+        "pending": "待执行",
+        "running": "执行中",
+        "completed": "已完成",
+        "failed": "失败"
+      },
+      "viewResults": "查看结果",
+      "runCampaign": "运行活动",
+      "deleteCampaign": "删除活动",
+      "confirmDelete": "确定要删除这个攻击活动吗？此操作无法撤销。",
+      "deleteSuccess": "活动已删除",
+      "createSuccess": "活动创建成功",
+      "runSuccess": "活动已开始运行",
+      "loadError": "加载失败",
+      "passed": "通过",
+      "failed": "失败",
+      "expected": "预期",
+      "actual": "实际",
+      "testQuestion": "测试问题",
+      "detectionResult": "检测结果",
+      "workspace": "工作区",
+      "globalConfig": "全局配置",
+      "selectWorkspace": "选择工作区"
     }
   }
 }

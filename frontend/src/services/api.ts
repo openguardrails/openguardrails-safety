@@ -1182,4 +1182,82 @@ export const auditLogApi = {
     }).then(res => res.data),
 };
 
+// Attack Campaigns API (Red Teaming)
+export const attackCampaignsApi = {
+  // Get available test packages
+  getPackages: (): Promise<any[]> =>
+    api.get('/api/v1/attack-campaigns/packages').then(res => res.data),
+
+  // List test questions
+  listQuestions: (params?: {
+    package_type?: string;
+    category?: string;
+    is_preset?: boolean;
+    page?: number;
+    page_size?: number;
+  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> =>
+    api.get('/api/v1/attack-campaigns/questions', { params }).then(res => res.data),
+
+  // Create custom test question
+  createQuestion: (data: {
+    package_type: string;
+    category: string;
+    content: string;
+    expected_action?: string;
+  }): Promise<any> =>
+    api.post('/api/v1/attack-campaigns/questions', data).then(res => res.data),
+
+  // Generate test questions using AI
+  generateQuestions: (data: {
+    package_type: string;
+    category: string;
+    count?: number;
+  }): Promise<{ success: boolean; questions: any[]; message: string }> =>
+    api.post('/api/v1/attack-campaigns/questions/generate', data).then(res => res.data),
+
+  // List campaigns
+  listCampaigns: (params?: {
+    status?: string;
+    page?: number;
+    page_size?: number;
+  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> =>
+    api.get('/api/v1/attack-campaigns', { params }).then(res => res.data),
+
+  // Get campaign details
+  getCampaign: (id: string): Promise<any> =>
+    api.get(`/api/v1/attack-campaigns/${id}`).then(res => res.data),
+
+  // Create campaign
+  createCampaign: (data: {
+    name: string;
+    description?: string;
+    packages: string[];
+    selected_categories: string[];
+    workspace_id?: string;
+  }): Promise<any> =>
+    api.post('/api/v1/attack-campaigns', data).then(res => res.data),
+
+  // Update campaign
+  updateCampaign: (id: string, data: {
+    name?: string;
+    description?: string;
+  }): Promise<any> =>
+    api.put(`/api/v1/attack-campaigns/${id}`, data).then(res => res.data),
+
+  // Delete campaign
+  deleteCampaign: (id: string): Promise<{ success: boolean; message: string }> =>
+    api.delete(`/api/v1/attack-campaigns/${id}`).then(res => res.data),
+
+  // Run campaign
+  runCampaign: (id: string): Promise<{ success: boolean; campaign_id: string; status: string; message: string }> =>
+    api.post(`/api/v1/attack-campaigns/${id}/run`).then(res => res.data),
+
+  // Get campaign results
+  getCampaignResults: (id: string, params?: {
+    page?: number;
+    page_size?: number;
+  }): Promise<{ items: any[]; total: number; page: number; page_size: number }> =>
+    api.get(`/api/v1/attack-campaigns/${id}/results`, { params }).then(res => res.data),
+};
+
 export default api;

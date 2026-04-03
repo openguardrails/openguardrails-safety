@@ -9,7 +9,6 @@ import {
   User,
   LogOut,
   RefreshCw,
-  TestTube,
   Book,
   Grid3x3,
   ChevronDown,
@@ -26,6 +25,8 @@ import {
   Cable,
   Network,
   ClipboardList,
+  Target,
+  MessageCircle,
   type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -112,7 +113,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         { key: '/config/keyword-list', icon: ListFilter, label: t('config.keywordList') },
         { key: '/config/answers', icon: MessageSquareText, label: t('config.answers') },
         { key: '/security-gateway/policy', icon: Settings, label: t('nav.securityPolicy') },
-        { key: '/online-test', icon: TestTube, label: t('nav.onlineTest') },
+      ],
+    },
+    {
+      label: t('nav.sectionRedTeaming'),
+      items: [
+        { key: '/redteaming/chat', icon: MessageCircle, label: t('nav.chatTesting') },
+        { key: '/redteaming/campaigns', icon: Target, label: t('nav.attackCampaigns') },
       ],
     },
     {
