@@ -6,7 +6,7 @@ Only accessible by Owner/Admin roles.
 import csv
 import io
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -58,6 +58,7 @@ def _build_filters(
     start_date: Optional[str],
     end_date: Optional[str],
     keyword: Optional[str],
+    tz_offset: Optional[int] = None,
 ) -> list:
     """Build query filters for audit logs."""
     filters = [AuditLog.tenant_id == str(tenant_id)]
@@ -71,14 +72,17 @@ def _build_filters(
     if start_date:
         try:
             start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            if tz_offset is not None:
+                start_dt = start_dt + timedelta(minutes=tz_offset)
             filters.append(AuditLog.created_at >= start_dt)
         except ValueError:
             pass
     if end_date:
         try:
             end_dt = datetime.strptime(end_date, "%Y-%m-%d")
-            # Include the entire end date
             end_dt = end_dt.replace(hour=23, minute=59, second=59)
+            if tz_offset is not None:
+                end_dt = end_dt + timedelta(minutes=tz_offset)
             filters.append(AuditLog.created_at <= end_dt)
         except ValueError:
             pass
@@ -114,13 +118,14 @@ async def get_audit_logs(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    tz_offset: Optional[int] = Query(None, description="Client timezone offset in minutes"),
 ):
     """Get paginated audit logs with filters."""
     tenant = _get_authorized_tenant(request, db)
 
     filters = _build_filters(
         tenant.id, user_id, action, resource_type,
-        start_date, end_date, keyword,
+        start_date, end_date, keyword, tz_offset=tz_offset,
     )
 
     base_query = db.query(AuditLog).filter(and_(*filters))
@@ -191,13 +196,14 @@ async def export_audit_logs(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    tz_offset: Optional[int] = Query(None, description="Client timezone offset in minutes"),
 ):
     """Export audit logs as CSV."""
     tenant = _get_authorized_tenant(request, db)
 
     filters = _build_filters(
         tenant.id, user_id, action, resource_type,
-        start_date, end_date, keyword,
+        start_date, end_date, keyword, tz_offset=tz_offset,
     )
 
     logs = db.query(AuditLog).filter(

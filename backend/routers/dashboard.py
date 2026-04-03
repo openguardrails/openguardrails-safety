@@ -77,6 +77,7 @@ async def get_category_distribution(
     request: Request,
     start_date: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    tz_offset: Optional[int] = Query(None, description="Client timezone offset in minutes"),
     db: Session = Depends(get_admin_db)
 ):
     """Get risk category distribution stats"""
@@ -84,7 +85,7 @@ async def get_category_distribution(
         current_user, application_id = get_current_tenant_and_optional_application(request, db)
 
         stats_service = StatsService(db)
-        category_data = stats_service.get_category_distribution(start_date, end_date, tenant_id=current_user.id, application_id=application_id)
+        category_data = stats_service.get_category_distribution(start_date, end_date, tenant_id=current_user.id, application_id=application_id, tz_offset=tz_offset)
 
         logger.info(f"Category distribution retrieved successfully for tenant {current_user.id}, application {application_id}")
         return {"categories": category_data}

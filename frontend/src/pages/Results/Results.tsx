@@ -204,6 +204,7 @@ const Results: React.FC = () => {
       if (dateRange?.from && dateRange?.to) {
         params.start_date = format(dateRange.from, 'yyyy-MM-dd')
         params.end_date = format(dateRange.to, 'yyyy-MM-dd')
+        params.tz_offset = new Date().getTimezoneOffset()
       }
       if (filters.content_search) {
         params.content_search = filters.content_search
@@ -338,6 +339,7 @@ const Results: React.FC = () => {
       if (dateRange?.from && dateRange?.to) {
         params.start_date = format(dateRange.from, 'yyyy-MM-dd')
         params.end_date = format(dateRange.to, 'yyyy-MM-dd')
+        params.tz_offset = new Date().getTimezoneOffset()
       }
       if (filters.content_search) {
         params.content_search = filters.content_search

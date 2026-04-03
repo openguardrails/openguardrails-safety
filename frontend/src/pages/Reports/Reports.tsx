@@ -37,6 +37,7 @@ const Reports: React.FC = () => {
         dashboardApi.getCategoryDistribution({
           start_date: format(dateRange.from, 'yyyy-MM-dd'),
           end_date: format(dateRange.to, 'yyyy-MM-dd'),
+          tz_offset: new Date().getTimezoneOffset(),
         }),
       ])
 

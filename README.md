@@ -14,9 +14,28 @@
 [![Version](https://img.shields.io/badge/Version-5.1.0-green.svg)](https://github.com/openguardrails/openguardrails-safety/releases)
 [![Stars](https://img.shields.io/github/stars/openguardrails/openguardrails?style=social)](https://github.com/openguardrails/openguardrails-safety)
 
-> **The only production-ready, fully open-source AI guardrails platform for enterprise data protection**
+> **Open-source enterprise AI guardrails for secure, compliant, and consistent AI agents**
 
-**OpenGuardrails** is an **open-source AI security gateway** that prevents enterprise AI applications from leaking sensitive data to external model providers — **without disrupting user workflows**.
+**OpenGuardrails** is an **enterprise AI safety and security guardrail platform** that ensures all AI agents behave consistently under your organization's policies — regardless of model, framework, or use case.
+
+It protects enterprise AI systems from:
+- **PII cross-border transfer**
+- **Sensitive data leakage to external LLMs**
+- **Non-compliant content** (NSFW, violence, extremism)
+- **Prompt injection and adversarial attacks**
+- **Policy violations** (e.g. non-work-related usage during work time)
+
+More importantly, OpenGuardrails enforces a **unified standard of behavior across all AI agents**:
+- Same safety rules across different models (OpenAI, open-source, etc.)
+- Same behavior across different agent frameworks (LangChain, custom agents, etc.)
+- Same output standards across different contexts and applications  
+
+You can define your own:
+- **Security policies**
+- **Compliance rules**
+- **Enterprise culture and communication style**
+
+So every AI agent in your organization speaks, behaves, and responds **in alignment with your company’s standards**.
 
 <p align="center">
     <a href="https://www.youtube.com/watch?v=b1ZRODONTm8" target="_blank">

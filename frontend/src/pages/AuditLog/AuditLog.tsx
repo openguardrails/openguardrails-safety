@@ -154,6 +154,7 @@ const AuditLog: React.FC = () => {
       if (dateRange?.from && dateRange?.to) {
         params.start_date = format(dateRange.from, 'yyyy-MM-dd')
         params.end_date = format(dateRange.to, 'yyyy-MM-dd')
+        params.tz_offset = new Date().getTimezoneOffset()
       }
 
       const result = await auditLogApi.getLogs(params)
@@ -196,6 +197,7 @@ const AuditLog: React.FC = () => {
       if (dateRange?.from && dateRange?.to) {
         params.start_date = format(dateRange.from, 'yyyy-MM-dd')
         params.end_date = format(dateRange.to, 'yyyy-MM-dd')
+        params.tz_offset = new Date().getTimezoneOffset()
       }
 
       const blob = await auditLogApi.exportLogs(params)

@@ -3,7 +3,7 @@ import json
 import uuid
 from pathlib import Path
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -145,8 +145,14 @@ def _build_common_filters(
     request_id_search: Optional[str],
     db: Session,
     application_name_search: Optional[str] = None,
+    tz_offset: Optional[int] = None,
 ) -> list:
-    """Build common query filters for detection results"""
+    """Build common query filters for detection results
+
+    Args:
+        tz_offset: Client timezone offset in minutes (from JS getTimezoneOffset()).
+                   For UTC+8, this is -480. Used to convert local dates to UTC for filtering.
+    """
     filters = []
 
     # Tenant-level filter: show ALL results for this tenant
@@ -232,10 +238,17 @@ def _build_common_filters(
         filters.append(cast(DetectionResult.data_categories, JSONB).contains([data_entity_type]))
 
     if start_date:
-        filters.append(DetectionResult.created_at >= start_date + ' 00:00:00')
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        if tz_offset is not None:
+            # Convert local midnight to UTC: local_time + tz_offset = UTC
+            start_dt = start_dt + timedelta(minutes=tz_offset)
+        filters.append(DetectionResult.created_at >= start_dt)
 
     if end_date:
-        filters.append(DetectionResult.created_at <= end_date + ' 23:59:59')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+        if tz_offset is not None:
+            end_dt = end_dt + timedelta(minutes=tz_offset)
+        filters.append(DetectionResult.created_at <= end_dt)
 
     if content_search:
         filters.append(DetectionResult.content.like(f'%{content_search}%'))
@@ -265,6 +278,7 @@ async def get_detection_results(
     content_search: Optional[str] = Query(None),
     request_id_search: Optional[str] = Query(None),
     application_name_search: Optional[str] = Query(None, description="Fuzzy search by application name"),
+    tz_offset: Optional[int] = Query(None, description="Client timezone offset in minutes (JS getTimezoneOffset)"),
 ):
     """Get detection results (global view - all applications for current tenant)"""
     try:
@@ -286,6 +300,7 @@ async def get_detection_results(
             request_id_search=request_id_search,
             db=db,
             application_name_search=application_name_search,
+            tz_offset=tz_offset,
         )
 
         base_query = db.query(DetectionResult).filter(and_(*filters))
@@ -337,6 +352,7 @@ async def export_detection_results(
     content_search: Optional[str] = Query(None),
     request_id_search: Optional[str] = Query(None),
     application_name_search: Optional[str] = Query(None, description="Fuzzy search by application name"),
+    tz_offset: Optional[int] = Query(None, description="Client timezone offset in minutes (JS getTimezoneOffset)"),
 ):
     """Export detection results to Excel"""
     try:
@@ -358,6 +374,7 @@ async def export_detection_results(
             request_id_search=request_id_search,
             db=db,
             application_name_search=application_name_search,
+            tz_offset=tz_offset,
         )
 
         base_query = db.query(DetectionResult).filter(and_(*filters))

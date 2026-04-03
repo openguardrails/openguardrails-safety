@@ -140,6 +140,7 @@ export const dashboardApi = {
   getCategoryDistribution: (params?: {
     start_date?: string;
     end_date?: string;
+    tz_offset?: number;
   }): Promise<{ categories: { name: string; value: number }[] }> =>
     api.get('/api/v1/dashboard/category-distribution', { params }).then(res => res.data),
 };
@@ -157,6 +158,7 @@ export const resultsApi = {
     data_entity_type?: string;
     start_date?: string;
     end_date?: string;
+    tz_offset?: number;
     content_search?: string;
     request_id_search?: string;
   }): Promise<PaginatedResponse<DetectionResult>> =>
@@ -179,6 +181,7 @@ export const resultsApi = {
     data_entity_type?: string;
     start_date?: string;
     end_date?: string;
+    tz_offset?: number;
     content_search?: string;
     request_id_search?: string;
   }): Promise<Blob> =>

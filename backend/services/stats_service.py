@@ -213,7 +213,7 @@ class StatsService:
             logger.error(f"Get daily trends error: {e}")
             return []
     
-    def get_category_distribution(self, start_date: str = None, end_date: str = None, tenant_id: uuid.UUID = None, application_id: uuid.UUID = None) -> List[Dict[str, Any]]:
+    def get_category_distribution(self, start_date: str = None, end_date: str = None, tenant_id: uuid.UUID = None, application_id: uuid.UUID = None, tz_offset: int = None) -> List[Dict[str, Any]]:
         """Get risk category distribution statistics
 
         Args:
@@ -221,6 +221,7 @@ class StatsService:
             end_date: End date for filtering (YYYY-MM-DD)
             tenant_id: Tenant ID to filter by
             application_id: Application ID to filter by
+            tz_offset: Client timezone offset in minutes (JS getTimezoneOffset)
         """
         try:
             # Build query conditions - query records with security or compliance risks
@@ -235,9 +236,15 @@ class StatsService:
             if application_id is not None:
                 query = query.filter(DetectionResult.application_id == application_id)
             if start_date:
-                query = query.filter(func.date(DetectionResult.created_at) >= start_date)
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                if tz_offset is not None:
+                    start_dt = start_dt + timedelta(minutes=tz_offset)
+                query = query.filter(DetectionResult.created_at >= start_dt)
             if end_date:
-                query = query.filter(func.date(DetectionResult.created_at) <= end_date)
+                end_dt = datetime.strptime(end_date, '%Y-%m-%d').replace(hour=23, minute=59, second=59)
+                if tz_offset is not None:
+                    end_dt = end_dt + timedelta(minutes=tz_offset)
+                query = query.filter(DetectionResult.created_at <= end_dt)
             
             # Get categories field of all related records
             results = query.with_entities(
