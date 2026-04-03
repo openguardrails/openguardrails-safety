@@ -56,9 +56,14 @@ class ModelIdRequest(BaseModel):
     id: int
     enabled: bool = True
 
-class OnlineTestRequest(BaseModel):
+class OnlineTestMessageItem(BaseModel):
+    role: str  # 'user' or 'assistant'
     content: str
-    input_type: str  # 'question' or 'qa_pair'
+
+class OnlineTestRequest(BaseModel):
+    content: Optional[str] = None
+    input_type: Optional[str] = None  # 'question' or 'qa_pair'
+    messages: Optional[List[OnlineTestMessageItem]] = None  # Multi-turn messages for log replay
     models: Optional[List[ModelIdRequest]] = []
     images: Optional[List[str]] = []  # base64 encoded image data list
     workspace_id: Optional[str] = None  # workspace ID for testing with workspace-specific guardrail config
@@ -313,13 +318,16 @@ async def online_test(
 
         # Construct message format
         messages = []
-        if request_data.input_type == 'question':
+        if request_data.messages and len(request_data.messages) > 0:
+            # Multi-turn messages mode (detection log replay)
+            messages = [{"role": msg.role, "content": msg.content} for msg in request_data.messages]
+        elif request_data.input_type == 'question':
             # Check if there is image data
             if request_data.images and len(request_data.images) > 0:
                 # Multimodal message format
                 content = []
                 # Add text content (if any)
-                if request_data.content.strip():
+                if request_data.content and request_data.content.strip():
                     content.append({"type": "text", "text": request_data.content})
                 # Add image content
                 for image_base64 in request_data.images:
@@ -331,25 +339,28 @@ async def online_test(
             else:
                 # Pure text message format
                 messages = [{"role": "user", "content": request_data.content}]
-        else:  # qa_pair
+        elif request_data.input_type == 'qa_pair':
             # Parse qa pair
             lines = request_data.content.split('\n')
             question = None
             answer = None
-            
+
             for line in lines:
-                if line.strip().startswith('Q:'):
-                    question = line[2:].strip()
-                elif line.strip().startswith('A:'):
-                    answer = line[2:].strip()
-            
+                stripped = line.strip()
+                if stripped.startswith('[User]:'):
+                    question = stripped[len('[User]:'):].strip()
+                elif stripped.startswith('[Assistant]:'):
+                    answer = stripped[len('[Assistant]:'):].strip()
+
             if not question or not answer:
-                raise HTTPException(status_code=400, detail="Qa pair format error, please use Q: question\\nA: answer format")
-            
+                raise HTTPException(status_code=400, detail="Qa pair format error, please use [User]: question\\n[Assistant]: answer format")
+
             messages = [
                 {"role": "user", "content": question},
                 {"role": "assistant", "content": answer}
             ]
+        else:
+            raise HTTPException(status_code=400, detail="Must provide either 'messages' or 'content' with 'input_type'")
         
         # Get user API key
         user_api_key = None

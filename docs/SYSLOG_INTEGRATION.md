@@ -13,7 +13,7 @@ User Request
 Guardrail Detection
     |
     +---> JSONL file  (always, detection_YYYYMMDD.jsonl)
-    +---> Syslog/CEF  (when SYSLOG_HOST is configured)
+    +---> Syslog       (when SYSLOG_HOST is configured, CEF or JSON format)
     +---> Database     (when store_detection_results=true)
 ```
 
@@ -42,6 +42,7 @@ SYSLOG_PORT=514
 SYSLOG_PROTOCOL=UDP          # UDP (default) | TCP | TLS
 SYSLOG_FACILITY=LOCAL0        # Syslog facility (default: LOCAL0)
 SYSLOG_CA_CERT=               # Path to CA cert file (required for TLS)
+SYSLOG_FORMAT=cef             # cef (default) | json
 ```
 
 When `SYSLOG_HOST` is not set, syslog forwarding is completely disabled and the system behaves exactly as before.
@@ -88,7 +89,7 @@ The overall severity is the highest severity across security, compliance, and da
 | `duid` | string | `tenant_id` | Tenant identifier |
 | `cs1` | string | `application_id` | Application identifier |
 | `cs1Label` | string | — | `"ApplicationId"` |
-| `act` | string | `suggest_action` | Action taken: `pass`, `reject`, `replace` |
+| `act` | string | `suggest_action` | Action taken: `pass`, `reject`, `replace`, `anonymize`, `switch_private_model` |
 | `requestClientApplication` | string | `user_agent` | Client user agent |
 | `cs2` | string | `security_risk_level` | Security risk level |
 | `cs2Label` | string | — | `"SecurityRiskLevel"` |
@@ -113,12 +114,101 @@ The overall severity is the highest severity across security, compliance, and da
 | `cn2Label` | string | — | `"ImageCount"` |
 | `cs10` | string | `source` | Detection source: `guardrail_api`, `proxy`, `gateway`, `direct_model`, `content_scan` |
 | `cs10Label` | string | — | `"DetectionSource"` |
+| `cs11` | string | `doublecheck_result` | Doublecheck result: `confirmed_unsafe`, `overturned_safe`, or empty |
+| `cs11Label` | string | — | `"DoublecheckResult"` |
+| `cs12` | string | `doublecheck_categories` | Doublecheck categories (comma-separated) |
+| `cs12Label` | string | — | `"DoublecheckCategories"` |
+| `cs13` | string | `model_response` | Model raw response (truncated to 512 chars) |
+| `cs13Label` | string | — | `"ModelResponse"` |
+| `cs14` | string | `suggest_answer` | Suggested answer text (truncated to 512 chars) |
+| `cs14Label` | string | — | `"SuggestAnswer"` |
+| `cn3` | int | `has_image` | Whether request contains images (0/1) |
+| `cn3Label` | string | — | `"HasImage"` |
 
 ### Example CEF Message
 
 ```
-CEF:0|OpenGuardrails|AI-Safety-Platform|5.2.0|detection|AI Content Detection|9|externalId=req_abc123 rt=1711234567000 src=192.168.1.100 duid=tenant_456 cs1=app_789 cs1Label=ApplicationId act=reject cs2=high cs2Label=SecurityRiskLevel cs3=S5 cs3Label=SecurityCategories cs4=no_risk cs4Label=ComplianceRiskLevel cs5= cs5Label=ComplianceCategories cs6=no_risk cs6Label=DataRiskLevel cs7= cs7Label=DataCategories cn1=0.95 cn1Label=SensitivityScore cs8=S5 cs8Label=MatchedScannerTags msg=User attempted prompt injection... cn2=0 cn2Label=ImageCount cs10=guardrail_api cs10Label=DetectionSource
+CEF:0|OpenGuardrails|AI-Safety-Platform|5.4.20|detection|AI Content Detection|9|externalId=req_abc123 rt=1711234567000 src=192.168.1.100 duid=tenant_456 cs1=app_789 cs1Label=ApplicationId act=reject requestClientApplication=python-requests/2.31 cs2=high cs2Label=SecurityRiskLevel cs3=S5 cs3Label=SecurityCategories cs4=no_risk cs4Label=ComplianceRiskLevel cs5= cs5Label=ComplianceCategories cs6=no_risk cs6Label=DataRiskLevel cs7= cs7Label=DataCategories cn1=0.95 cn1Label=SensitivityScore cs8=S5 cs8Label=MatchedScannerTags cs9= cs9Label=HitKeywords msg=User attempted prompt injection... cn2=0 cn2Label=ImageCount cs10=guardrail_api cs10Label=DetectionSource cs11= cs11Label=DoublecheckResult cs12= cs12Label=DoublecheckCategories cs13=S5:prompt_attack cs13Label=ModelResponse cs14=This request has been blocked. cs14Label=SuggestAnswer cn3=0 cn3Label=HasImage
 ```
+
+## JSON Message Format
+
+When `SYSLOG_FORMAT=json`, each detection event is sent as a JSON object wrapped in a syslog priority header:
+
+```
+<132>{"timestamp":"2026-04-02T10:30:00+00:00","version":"5.4.20","event_type":"detection","severity":9,"request_id":"req_abc123","ip_address":"192.168.1.100","tenant_id":"tenant_456","application_id":"app_789","action":"reject","user_agent":"python-requests/2.31","security_risk_level":"high","security_categories":["S5"],"compliance_risk_level":"no_risk","compliance_categories":[],"data_risk_level":"no_risk","data_categories":[],"sensitivity_score":0.95,"matched_scanner_tags":["S5"],"hit_keywords":[],"content":"User attempted prompt injection...","has_image":false,"image_count":0,"source":"guardrail_api","model_response":"S5:prompt_attack","suggest_answer":"This request has been blocked.","doublecheck_result":null,"doublecheck_categories":[],"doublecheck_reasoning":null}
+```
+
+### JSON Field Reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `timestamp` | string | ISO 8601 event timestamp |
+| `version` | string | OpenGuardrails version |
+| `event_type` | string | Always `"detection"` |
+| `severity` | int | 0-10 (same mapping as CEF) |
+| `request_id` | string | Unique request identifier |
+| `ip_address` | string | Source IP |
+| `tenant_id` | string | Tenant identifier |
+| `application_id` | string | Application identifier |
+| `action` | string | `pass` / `reject` / `replace` / `anonymize` / `switch_private_model` |
+| `user_agent` | string | Client user agent |
+| `security_risk_level` | string | `no_risk` / `low` / `medium` / `high` |
+| `security_categories` | array | Security risk category tags |
+| `compliance_risk_level` | string | Compliance risk level |
+| `compliance_categories` | array | Compliance risk category tags |
+| `data_risk_level` | string | Data leakage risk level |
+| `data_categories` | array | Data leakage category tags |
+| `sensitivity_score` | float | 0.0-1.0 (nullable) |
+| `matched_scanner_tags` | array | All matched scanner tags |
+| `hit_keywords` | array | Hit keywords from blacklist |
+| `content` | string | Detected content (truncated to 1024 chars) |
+| `has_image` | bool | Whether request contains images |
+| `image_count` | int | Number of images in request |
+| `source` | string | Detection source |
+| `model_response` | string | Model raw response (truncated to 512 chars) |
+| `suggest_answer` | string | Suggested answer text (truncated to 512 chars) |
+| `doublecheck_result` | string | Doublecheck result (nullable): `confirmed_unsafe` / `overturned_safe` |
+| `doublecheck_categories` | array | Doublecheck categories |
+| `doublecheck_reasoning` | string | Doublecheck reasoning text (nullable) |
+
+JSON format is recommended when your SIEM supports native JSON ingestion (e.g., Splunk HEC, Elastic with JSON processor, Datadog), as it avoids the need for CEF parsing and preserves array types.
+
+## Alerting
+
+The `act` field (CEF) / `action` field (JSON) reflects the **final action** determined by the application's disposal policy. This is the recommended field for building SIEM alert rules.
+
+### Alert Rules by Action
+
+| SIEM Rule | Meaning |
+|-----------|---------|
+| `act = reject` | Request blocked (security/compliance risk or DLP block) |
+| `act = replace` | Response content replaced with safe alternative |
+| `act = anonymize` | Sensitive data anonymized before forwarding |
+| `act = switch_private_model` | Request redirected to private/on-premise model |
+
+### Alert Rules by Severity
+
+The `Severity` header field (CEF) / `severity` field (JSON) reflects the **detected risk level**, regardless of the disposal policy action. Use this to detect risks even when the policy is configured to allow them.
+
+| SIEM Rule | Meaning |
+|-----------|---------|
+| `Severity >= 9` | High risk detected (prompt attack, violent crime, etc.) |
+| `Severity >= 6` | Medium risk or above |
+| `Severity >= 3` | Low risk or above |
+
+### Correlation Rules
+
+Combining `act` and `Severity` enables more advanced alerting scenarios:
+
+| SIEM Rule | Meaning |
+|-----------|---------|
+| `Severity >= 9 AND act = pass` | High risk detected but policy allowed it — potential misconfiguration |
+| `act = reject` spike (> N/min) | Possible attack in progress |
+| Same `src` with multiple `act = reject` in short window | Single IP probing for vulnerabilities |
+| `act = switch_private_model` spike | Unusual volume of sensitive data routing |
+
+> **Note:** Alert thresholds (rate limits, time windows, notification channels) are configured on the SIEM side. OpenGuardrails provides the event data; your SIEM handles alerting logic.
 
 ## SIEM-Specific Notes
 

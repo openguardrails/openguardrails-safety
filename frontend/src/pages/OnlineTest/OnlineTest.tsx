@@ -66,14 +66,18 @@ interface TestResult {
 }
 
 // Batch test interfaces
+interface ReplayMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 interface ExcelRow {
-  prompt: string
-  response: string
+  detection_content: string  // Raw detection content from export
+  messages: ReplayMessage[]  // Parsed multi-turn messages
 }
 
 interface BatchTestResult {
-  prompt: string
-  response: string
+  detection_content: string
   compliance_risk_level: string
   compliance_categories: string
   security_risk_level: string
@@ -315,8 +319,8 @@ const OnlineTest: React.FC = () => {
     try {
       if (inputType === 'qa_pair') {
         const lines = testInput.split('\n')
-        const question = lines.find((line) => line.startsWith('Q:'))?.substring(2).trim()
-        const answer = lines.find((line) => line.startsWith('A:'))?.substring(2).trim()
+        const question = lines.find((line) => line.trim().startsWith('[User]:'))?.trim().substring('[User]:'.length).trim()
+        const answer = lines.find((line) => line.trim().startsWith('[Assistant]:'))?.trim().substring('[Assistant]:'.length).trim()
 
         if (!question || !answer) {
           toast.error(t('onlineTest.qaPairFormatError'))
@@ -434,6 +438,43 @@ const OnlineTest: React.FC = () => {
     }
   }
 
+  // Parse detection content format: [User]: ...\n[Assistant]: ...
+  const parseDetectionContent = (content: string): ReplayMessage[] => {
+    const messages: ReplayMessage[] = []
+    const lines = content.split('\n')
+    let currentRole: 'user' | 'assistant' | null = null
+    let currentContent = ''
+
+    for (const line of lines) {
+      const userMatch = line.match(/^\[User\]:\s*(.*)/)
+      const assistantMatch = line.match(/^\[Assistant\]:\s*(.*)/)
+
+      if (userMatch) {
+        if (currentRole && currentContent.trim()) {
+          messages.push({ role: currentRole, content: currentContent.trim() })
+        }
+        currentRole = 'user'
+        currentContent = userMatch[1]
+      } else if (assistantMatch) {
+        if (currentRole && currentContent.trim()) {
+          messages.push({ role: currentRole, content: currentContent.trim() })
+        }
+        currentRole = 'assistant'
+        currentContent = assistantMatch[1]
+      } else if (currentRole) {
+        // Continuation of current message
+        currentContent += '\n' + line
+      }
+    }
+
+    // Push last message
+    if (currentRole && currentContent.trim()) {
+      messages.push({ role: currentRole, content: currentContent.trim() })
+    }
+
+    return messages
+  }
+
   // Batch test functions
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -460,23 +501,40 @@ const OnlineTest: React.FC = () => {
           return
         }
 
-        // Check for required columns (case-insensitive)
+        // Check for columns - support detection log export format
         const firstRow = jsonData[0]
         const keys = Object.keys(firstRow)
-        const promptKey = keys.find(k => k.toLowerCase() === 'prompt')
-        const responseKey = keys.find(k => k.toLowerCase() === 'response')
+        // Detection log export format: "Detection Content" / "检测内容"
+        const detectionContentKey = keys.find(k =>
+          k === 'Detection Content' || k === '检测内容'
+        )
 
-        if (!promptKey || !responseKey) {
+        if (!detectionContentKey) {
           toast.error(t('onlineTest.batchTest.missingColumns'))
           setBatchFile(null)
           return
         }
 
-        // Map data - filter out rows with empty prompt
-        const mappedData: ExcelRow[] = jsonData.map((row: any) => ({
-          prompt: String(row[promptKey] || '').trim(),
-          response: String(row[responseKey] || '').trim(),
-        })).filter(row => row.prompt !== '')
+        // Parse detection content into messages
+        const mappedData: ExcelRow[] = jsonData
+          .map((row: any) => {
+            const rawContent = String(row[detectionContentKey] || '').trim()
+            if (!rawContent) return null
+
+            const messages = parseDetectionContent(rawContent)
+            // If no [User]/[Assistant] markers found, treat as single user message
+            if (messages.length === 0) {
+              return {
+                detection_content: rawContent,
+                messages: [{ role: 'user' as const, content: rawContent }]
+              }
+            }
+            return {
+              detection_content: rawContent,
+              messages
+            }
+          })
+          .filter((row): row is ExcelRow => row !== null)
 
         if (mappedData.length === 0) {
           toast.error(t('onlineTest.batchTest.emptyFile'))
@@ -509,18 +567,9 @@ const OnlineTest: React.FC = () => {
     for (let i = 0; i < batchData.length; i++) {
       const row = batchData[i]
       try {
-        // Determine input type: if response is not empty, use qa_pair format
-        let content = row.prompt
-        let inputTypeForRequest: 'question' | 'qa_pair' = 'question'
-
-        if (row.response) {
-          content = `Q: ${row.prompt}\nA: ${row.response}`
-          inputTypeForRequest = 'qa_pair'
-        }
-
+        // Send multi-turn messages directly for proper sliding window detection
         const batchRequestData: any = {
-          content: content,
-          input_type: inputTypeForRequest,
+          messages: row.messages,
         }
         if (selectedWorkspaceId !== 'global') {
           batchRequestData.workspace_id = selectedWorkspaceId
@@ -530,8 +579,7 @@ const OnlineTest: React.FC = () => {
 
         const guardrail = response.data.guardrail
         results.push({
-          prompt: row.prompt,
-          response: row.response,
+          detection_content: row.detection_content,
           compliance_risk_level: guardrail.compliance?.risk_level || 'no_risk',
           compliance_categories: (guardrail.compliance?.categories || []).join(', '),
           security_risk_level: guardrail.security?.risk_level || 'no_risk',
@@ -545,8 +593,7 @@ const OnlineTest: React.FC = () => {
       } catch (error: any) {
         console.error(`Detection failed for row ${i + 1}:`, error)
         results.push({
-          prompt: row.prompt,
-          response: row.response,
+          detection_content: row.detection_content,
           compliance_risk_level: 'error',
           compliance_categories: '',
           security_risk_level: 'error',
@@ -555,7 +602,7 @@ const OnlineTest: React.FC = () => {
           data_categories: '',
           overall_risk_level: 'error',
           suggest_action: 'error',
-          suggest_answer: error?.message || 'Detection failed',
+          suggest_answer: error?.response?.data?.detail || error?.message || 'Detection failed',
         })
       }
 
@@ -570,19 +617,18 @@ const OnlineTest: React.FC = () => {
   const downloadResults = () => {
     if (batchResults.length === 0) return
 
-    // Prepare data for Excel - results already have the correct structure
+    // Prepare data for Excel
     const excelData = batchResults.map(result => ({
-      prompt: result.prompt,
-      response: result.response,
-      compliance_risk_level: result.compliance_risk_level,
-      compliance_categories: result.compliance_categories,
-      security_risk_level: result.security_risk_level,
-      security_categories: result.security_categories,
-      data_risk_level: result.data_risk_level,
-      data_categories: result.data_categories,
-      overall_risk_level: result.overall_risk_level,
-      suggest_action: result.suggest_action,
-      suggest_answer: result.suggest_answer,
+      [t('onlineTest.batchTest.resultColumns.detectionContent')]: result.detection_content,
+      [t('onlineTest.batchTest.resultColumns.complianceRiskLevel')]: result.compliance_risk_level,
+      [t('onlineTest.batchTest.resultColumns.complianceCategories')]: result.compliance_categories,
+      [t('onlineTest.batchTest.resultColumns.securityRiskLevel')]: result.security_risk_level,
+      [t('onlineTest.batchTest.resultColumns.securityCategories')]: result.security_categories,
+      [t('onlineTest.batchTest.resultColumns.dataRiskLevel')]: result.data_risk_level,
+      [t('onlineTest.batchTest.resultColumns.dataCategories')]: result.data_categories,
+      [t('onlineTest.batchTest.resultColumns.overallRiskLevel')]: result.overall_risk_level,
+      [t('onlineTest.batchTest.resultColumns.action')]: result.suggest_action,
+      [t('onlineTest.batchTest.resultColumns.suggestAnswer')]: result.suggest_answer,
     }))
 
     // Create workbook and worksheet
@@ -591,8 +637,7 @@ const OnlineTest: React.FC = () => {
 
     // Set column widths
     ws['!cols'] = [
-      { wch: 50 }, // prompt
-      { wch: 50 }, // response
+      { wch: 60 }, // detection_content
       { wch: 18 }, // compliance_risk_level
       { wch: 25 }, // compliance_categories
       { wch: 18 }, // security_risk_level
@@ -604,11 +649,11 @@ const OnlineTest: React.FC = () => {
       { wch: 50 }, // suggest_answer
     ]
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Detection Results')
+    XLSX.utils.book_append_sheet(wb, ws, 'Replay Results')
 
     // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const filename = `detection_results_${timestamp}.xlsx`
+    const filename = `replay_results_${timestamp}.xlsx`
 
     // Download
     XLSX.writeFile(wb, filename)
@@ -1106,7 +1151,7 @@ const OnlineTest: React.FC = () => {
                           <div>
                             <p className="text-sm font-medium text-slate-300">{batchFile?.name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {batchData.length} {t('onlineTest.batchTest.resultColumns.prompt').toLowerCase()}
+                              {batchData.length} {t('onlineTest.batchTest.rowCount')}
                             </p>
                           </div>
                         </div>
@@ -1179,8 +1224,7 @@ const OnlineTest: React.FC = () => {
                       <thead>
                         <tr className="border-b border-border">
                           <th className="text-left py-2 px-3 font-medium text-slate-300">#</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.prompt')}</th>
-                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.response')}</th>
+                          <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.detectionContent')}</th>
                           <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.overallRiskLevel')}</th>
                           <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.securityRiskLevel')}</th>
                           <th className="text-left py-2 px-3 font-medium text-slate-300">{t('onlineTest.batchTest.resultColumns.complianceRiskLevel')}</th>
@@ -1192,8 +1236,7 @@ const OnlineTest: React.FC = () => {
                         {batchResults.slice(0, 50).map((result, index) => (
                           <tr key={index} className="border-b border-border hover:bg-card/5">
                             <td className="py-2 px-3 text-muted-foreground">{index + 1}</td>
-                            <td className="py-2 px-3 max-w-[200px] truncate" title={result.prompt}>{result.prompt}</td>
-                            <td className="py-2 px-3 max-w-[200px] truncate" title={result.response || '-'}>{result.response || '-'}</td>
+                            <td className="py-2 px-3 max-w-[300px] truncate" title={result.detection_content}>{result.detection_content}</td>
                             <td className="py-2 px-3">
                               <span className={`px-2 py-0.5 text-xs rounded border ${getRiskColor(result.overall_risk_level)}`}>
                                 {translateRiskLevel(result.overall_risk_level)}

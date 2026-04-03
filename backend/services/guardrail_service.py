@@ -16,6 +16,7 @@ from models.requests import GuardrailRequest, Message
 from models.responses import GuardrailResponse, GuardrailResult, ComplianceResult, SecurityResult, DataSecurityResult
 from utils.logger import setup_logger
 from utils.i18n_loader import get_translation
+from database.connection import get_db_session
 
 logger = setup_logger()
 
@@ -321,10 +322,11 @@ class GuardrailService:
                     anonymized_text = data_detection_result.get('anonymized_text')
 
             # 6. Determine suggested action and answer
+            direction = 'output' if has_assistant_message else 'input'
             overall_risk_level, suggest_action, suggest_answer = await self._determine_action(
                 compliance_result, security_result, tenant_id=tenant_id, application_id=application_id,
                 user_query=user_content, data_result=data_result, anonymized_text=anonymized_text,
-                matched_scanners=matched_scanners
+                matched_scanners=matched_scanners, direction=direction
             )
 
             # 6.1 Append appeal link if applicable (any risk level with reject/replace action)
@@ -538,9 +540,14 @@ class GuardrailService:
         user_query: Optional[str] = None,
         data_result: Optional[DataSecurityResult] = None,
         anonymized_text: Optional[str] = None,  # De-sensitized text for data leak scenarios
-        matched_scanners: Optional[list] = None  # Matched scanners from scanner detection
+        matched_scanners: Optional[list] = None,  # Matched scanners from scanner detection
+        direction: str = "input"
     ) -> Tuple[str, str, Optional[str]]:
-        """Determine suggested action and answer"""
+        """Determine suggested action based on disposal policy
+
+        Uses the application's disposal policy to determine the final action,
+        ensuring consistent behavior across guardrail API, gateway, and online test.
+        """
 
         # Define risk level priority (higher value = higher priority)
         risk_priority = {
@@ -550,16 +557,21 @@ class GuardrailService:
             "high_risk": 3
         }
 
-        # Get highest risk level (including data leak detection)
+        # Determine general risk level (security + compliance only, NOT DLP)
         compliance_priority = risk_priority.get(compliance_result.risk_level, 0)
         security_priority = risk_priority.get(security_result.risk_level, 0)
-        data_priority = risk_priority.get(data_result.risk_level, 0) if data_result else 0
+        general_max = max(compliance_priority, security_priority)
+        general_risk_level = next(level for level, priority in risk_priority.items() if priority == general_max)
 
-        # Get the risk level corresponding to the highest priority
+        # Get overall risk level (including DLP for logging purposes)
+        data_priority = risk_priority.get(data_result.risk_level, 0) if data_result else 0
         max_priority = max(compliance_priority, security_priority, data_priority)
         overall_risk_level = next(level for level, priority in risk_priority.items() if priority == max_priority)
 
-        # Collect all risk categories
+        if overall_risk_level == "no_risk":
+            return overall_risk_level, "pass", None
+
+        # Collect risk categories for answer generation
         risk_categories = []
         if compliance_result.risk_level != "no_risk":
             risk_categories.extend(compliance_result.categories)
@@ -568,24 +580,78 @@ class GuardrailService:
         if data_result and data_result.risk_level != "no_risk":
             risk_categories.extend(data_result.categories)
 
-        # Determine action based on overall risk level
-        if overall_risk_level == "no_risk":
-            return overall_risk_level, "pass", None
-        elif overall_risk_level == "high_risk":
+        # Get suggest_answer
+        suggest_answer = None
+        if general_risk_level != "no_risk":
             suggest_answer = await self._get_suggest_answer(risk_categories, tenant_id, application_id, user_query, matched_scanners)
-            return overall_risk_level, "reject", suggest_answer
-        elif overall_risk_level == "medium_risk":
-            # For data leak scenarios with replace action, use anonymized text if available
-            if anonymized_text and data_result and data_result.risk_level != "no_risk":
-                return overall_risk_level, "replace", anonymized_text
-            suggest_answer = await self._get_suggest_answer(risk_categories, tenant_id, application_id, user_query, matched_scanners)
-            return overall_risk_level, "replace", suggest_answer
-        else:  # low_risk
-            # For data leak scenarios with replace action, use anonymized text if available
-            if anonymized_text and data_result and data_result.risk_level != "no_risk":
-                return overall_risk_level, "replace", anonymized_text
-            suggest_answer = await self._get_suggest_answer(risk_categories, tenant_id, application_id, user_query, matched_scanners)
-            return overall_risk_level, "replace", suggest_answer
+        elif anonymized_text and data_result and data_result.risk_level != "no_risk":
+            suggest_answer = anonymized_text
+
+        # Get action from disposal policy
+        suggest_action = self._get_policy_action(application_id, general_risk_level, data_result, direction)
+        logger.info(f"Policy action for app={application_id}: direction={direction}, general_risk={general_risk_level}, dlp_risk={data_result.risk_level if data_result else 'no_risk'}, action={suggest_action}")
+
+        return overall_risk_level, suggest_action, suggest_answer
+
+    def _get_policy_action(
+        self,
+        application_id: Optional[str],
+        general_risk_level: str,
+        data_result: Optional[DataSecurityResult],
+        direction: str = "input"
+    ) -> str:
+        """Get final action from disposal policy, matching gateway behavior."""
+        from services.data_leakage_disposal_service import DataLeakageDisposalService
+
+        if not application_id:
+            # No application context, use hardcoded defaults (backward compatibility)
+            if general_risk_level == "high_risk":
+                return "reject"
+            elif general_risk_level in ["medium_risk", "low_risk"]:
+                return "replace"
+            return "pass"
+
+        try:
+            db = get_db_session()
+            try:
+                disposal_service = DataLeakageDisposalService(db)
+
+                # 1. General risk (security/compliance) takes priority
+                if general_risk_level != "no_risk":
+                    policy_action = disposal_service.get_general_risk_action(
+                        application_id=application_id,
+                        risk_level=general_risk_level,
+                        direction=direction
+                    )
+                    if policy_action == "block":
+                        return "reject"
+                    elif policy_action == "replace":
+                        return "replace"
+                    else:
+                        return "pass"
+
+                # 2. DLP risk only
+                if data_result and data_result.risk_level != "no_risk" and data_result.detected_entities:
+                    dlp_action = disposal_service.get_disposal_action(
+                        application_id=application_id,
+                        risk_level=data_result.risk_level,
+                        direction=direction
+                    )
+                    if dlp_action == "block":
+                        return "reject"
+                    return dlp_action
+
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Failed to get policy action for app={application_id}: {e}, using defaults")
+            if general_risk_level == "high_risk":
+                return "reject"
+            elif general_risk_level in ["medium_risk", "low_risk"]:
+                return "replace"
+            return "pass"
+
+        return "pass"
     
     async def _get_suggest_answer(self, categories: List[str], tenant_id: Optional[str] = None, application_id: Optional[str] = None, user_query: Optional[str] = None, matched_scanners: Optional[list] = None) -> str:
         """Get suggested answer (using enhanced template service, supports knowledge base search)

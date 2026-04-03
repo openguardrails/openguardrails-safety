@@ -1,5 +1,6 @@
 import socket
 import ssl
+import json
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
@@ -106,8 +107,77 @@ def format_as_cef(data: Dict[str, Any]) -> str:
     add("cn2", data.get("image_count", 0), "ImageCount")
     add("cs10", data.get("source", ""), "DetectionSource")
 
+    # Doublecheck fields (v5.4.19+)
+    add("cs11", data.get("doublecheck_result", ""), "DoublecheckResult")
+    add("cs12", _list_to_csv(data.get("doublecheck_categories")), "DoublecheckCategories")
+
+    # Model response and suggest answer
+    model_resp = data.get("model_response", "") or ""
+    if len(model_resp) > 512:
+        model_resp = model_resp[:509] + "..."
+    add("cs13", model_resp, "ModelResponse")
+
+    suggest_answer = data.get("suggest_answer", "") or ""
+    if len(suggest_answer) > 512:
+        suggest_answer = suggest_answer[:509] + "..."
+    add("cs14", suggest_answer, "SuggestAnswer")
+
+    # Image flag
+    add("cn3", 1 if data.get("has_image") else 0, "HasImage")
+
     extensions = " ".join(ext_parts)
     return f"CEF:0|OpenGuardrails|AI-Safety-Platform|{version}|detection|AI Content Detection|{severity}|{extensions}"
+
+
+def format_as_json(data: Dict[str, Any]) -> str:
+    """Format a detection event dict as a JSON syslog message."""
+    version = getattr(settings, "app_version", "1.0.0")
+    severity = _get_overall_severity(data)
+
+    content = data.get("content", "") or ""
+    if len(content) > 1024:
+        content = content[:1021] + "..."
+
+    model_resp = data.get("model_response", "") or ""
+    if len(model_resp) > 512:
+        model_resp = model_resp[:509] + "..."
+
+    suggest_answer = data.get("suggest_answer", "") or ""
+    if len(suggest_answer) > 512:
+        suggest_answer = suggest_answer[:509] + "..."
+
+    event = {
+        "timestamp": data.get("created_at", datetime.now(timezone.utc).isoformat()),
+        "version": version,
+        "event_type": "detection",
+        "severity": severity,
+        "request_id": data.get("request_id"),
+        "ip_address": data.get("ip_address"),
+        "tenant_id": data.get("tenant_id"),
+        "application_id": data.get("application_id"),
+        "action": data.get("suggest_action"),
+        "user_agent": data.get("user_agent"),
+        "security_risk_level": data.get("security_risk_level", "no_risk"),
+        "security_categories": data.get("security_categories") or [],
+        "compliance_risk_level": data.get("compliance_risk_level", "no_risk"),
+        "compliance_categories": data.get("compliance_categories") or [],
+        "data_risk_level": data.get("data_risk_level", "no_risk"),
+        "data_categories": data.get("data_categories") or [],
+        "sensitivity_score": data.get("sensitivity_score"),
+        "matched_scanner_tags": data.get("matched_scanner_tags") or [],
+        "hit_keywords": data.get("hit_keywords") or [],
+        "content": content,
+        "has_image": bool(data.get("has_image")),
+        "image_count": data.get("image_count", 0),
+        "source": data.get("source", ""),
+        "model_response": model_resp,
+        "suggest_answer": suggest_answer,
+        "doublecheck_result": data.get("doublecheck_result"),
+        "doublecheck_categories": data.get("doublecheck_categories") or [],
+        "doublecheck_reasoning": data.get("doublecheck_reasoning"),
+    }
+
+    return json.dumps(event, ensure_ascii=False, separators=(",", ":"))
 
 
 class SyslogForwarder:
@@ -125,9 +195,10 @@ class SyslogForwarder:
             self._protocol = settings.syslog_protocol.upper()
             self._facility = FACILITY_MAP.get(settings.syslog_facility.upper(), 16)
             self._ca_cert = settings.syslog_ca_cert or None
+            self._format = settings.syslog_format.lower()  # cef | json
             logger.info(
                 f"Syslog forwarder enabled: {self._protocol}://{self._host}:{self._port} "
-                f"facility={settings.syslog_facility}"
+                f"facility={settings.syslog_facility} format={self._format}"
             )
         else:
             logger.debug("Syslog forwarder disabled (SYSLOG_HOST not set)")
@@ -179,22 +250,25 @@ class SyslogForwarder:
             if not self._connected:
                 return
 
-            cef_msg = format_as_cef(data)
+            if self._format == "json":
+                formatted_msg = format_as_json(data)
+            else:
+                formatted_msg = format_as_cef(data)
 
             # Wrap in syslog priority header: <facility*8 + severity>
-            cef_severity = _get_overall_severity(data)
-            # Map CEF severity (0-10) to syslog severity (0-7)
-            if cef_severity >= 9:
+            event_severity = _get_overall_severity(data)
+            # Map severity (0-10) to syslog severity (0-7)
+            if event_severity >= 9:
                 syslog_severity = 2  # critical
-            elif cef_severity >= 6:
+            elif event_severity >= 6:
                 syslog_severity = 4  # warning
-            elif cef_severity >= 3:
+            elif event_severity >= 3:
                 syslog_severity = 5  # notice
             else:
                 syslog_severity = 6  # informational
 
             priority = self._facility * 8 + syslog_severity
-            syslog_msg = f"<{priority}>{cef_msg}"
+            syslog_msg = f"<{priority}>{formatted_msg}"
             payload = syslog_msg.encode("utf-8")
 
             if self._protocol == "UDP":

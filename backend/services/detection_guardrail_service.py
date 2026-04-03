@@ -356,8 +356,10 @@ class DetectionGuardrailService:
                 )
 
             # 5. Determine suggested action and answer (include data security result)
+            # Determine direction from message structure (last message is assistant = output)
+            direction = 'output' if truncated_messages and truncated_messages[-1].role == 'assistant' else 'input'
             overall_risk_level, suggest_action, suggest_answer = await self._determine_action_with_data(
-                compliance_result, security_result, data_result, tenant_id, application_id, user_content, data_anonymized_text, matched_scanners
+                compliance_result, security_result, data_result, tenant_id, application_id, user_content, data_anonymized_text, matched_scanners, direction=direction
             )
 
             # 5.0.1 Doublecheck: if workspace has doublecheck enabled and result is unsafe, verify with AI
@@ -748,16 +750,16 @@ class DetectionGuardrailService:
         application_id: Optional[str] = None,
         user_query: Optional[str] = None,
         data_anonymized_text: Optional[str] = None,
-        matched_scanners: Optional[list] = None
+        matched_scanners: Optional[list] = None,
+        direction: str = "input"
     ) -> Tuple[str, str, Optional[str]]:
-        """Determine suggested action (include data security detection result)
+        """Determine suggested action based on disposal policy
 
-        Important:
-        - For general risks (security + compliance), use template/KB answer
-        - For DLP risks, use fixed i18n message (not anonymized text)
-        - overall_risk_level considers all three types for logging purposes
-        - suggest_action is based on the highest risk from general risks
-        - DLP disposal is handled separately in proxy layer
+        Uses the application's disposal policy to determine the final action,
+        ensuring consistent behavior across guardrail API, gateway, and online test.
+
+        Args:
+            direction: 'input' or 'output' — determines which disposal policy column to use
         """
         # Collect all categories for general risks only (not DLP)
         all_categories = []
@@ -829,15 +831,81 @@ class DetectionGuardrailService:
             suggest_answer = await enhanced_template_service.get_data_leakage_answer(entity_type_names, user_language, application_id)
             logger.info(f"Using data masking template for DLP risk: {data_result.risk_level}, entity_type_names={entity_type_names}")
 
-        # Determine action based on general risk level (DLP handling is done in proxy layer)
-        if general_risk_level == "high_risk":
-            return overall_risk_level, "reject", suggest_answer
-        elif general_risk_level in ["medium_risk", "low_risk"]:
-            return overall_risk_level, "replace", suggest_answer
-        else:
-            # Only DLP risk, no general risk - action depends on DLP policy (handled in proxy)
-            # Return "pass" for suggest_action, actual DLP disposal is in proxy layer
-            return overall_risk_level, "pass", suggest_answer
+        # Determine action using disposal policy (consistent with gateway behavior)
+        suggest_action = self._get_policy_action(application_id, general_risk_level, data_result, direction)
+        logger.info(f"Policy action for app={application_id}: direction={direction}, general_risk={general_risk_level}, dlp_risk={data_result.risk_level}, action={suggest_action}")
+
+        return overall_risk_level, suggest_action, suggest_answer
+
+    def _get_policy_action(
+        self,
+        application_id: Optional[str],
+        general_risk_level: str,
+        data_result: DataSecurityResult,
+        direction: str = "input"
+    ) -> str:
+        """Get final action from disposal policy, matching gateway behavior.
+
+        Priority: general risk action first, then DLP action.
+        Maps policy actions to suggest_action values:
+          block -> reject, replace -> replace, pass -> pass
+          DLP: block -> reject, anonymize/switch_private_model -> actual action (for syslog)
+        """
+        from services.data_leakage_disposal_service import DataLeakageDisposalService
+
+        if not application_id:
+            # No application context, use hardcoded defaults (backward compatibility)
+            if general_risk_level == "high_risk":
+                return "reject"
+            elif general_risk_level in ["medium_risk", "low_risk"]:
+                return "replace"
+            return "pass"
+
+        try:
+            db = get_db_session()
+            try:
+                disposal_service = DataLeakageDisposalService(db)
+
+                # 1. General risk (security/compliance) takes priority
+                if general_risk_level != "no_risk":
+                    policy_action = disposal_service.get_general_risk_action(
+                        application_id=application_id,
+                        risk_level=general_risk_level,
+                        direction=direction
+                    )
+                    # Map policy action to suggest_action
+                    if policy_action == "block":
+                        return "reject"
+                    elif policy_action == "replace":
+                        return "replace"
+                    else:  # pass
+                        return "pass"
+
+                # 2. DLP risk only (no general risk)
+                if data_result.risk_level != "no_risk" and data_result.detected_entities:
+                    dlp_action = disposal_service.get_disposal_action(
+                        application_id=application_id,
+                        risk_level=data_result.risk_level,
+                        direction=direction
+                    )
+                    if dlp_action == "block":
+                        return "reject"
+                    # anonymize, switch_private_model, pass — actual handling in proxy layer
+                    # but record the real intended action for syslog accuracy
+                    return dlp_action
+
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Failed to get policy action for app={application_id}: {e}, using defaults")
+            # Fallback to hardcoded defaults
+            if general_risk_level == "high_risk":
+                return "reject"
+            elif general_risk_level in ["medium_risk", "low_risk"]:
+                return "replace"
+            return "pass"
+
+        return "pass"
 
     async def _determine_action(self, compliance_result: ComplianceResult, security_result: SecurityResult, tenant_id: Optional[str] = None, application_id: Optional[str] = None, user_query: Optional[str] = None, matched_scanners: Optional[list] = None) -> Tuple[str, str, Optional[str]]:
         """Determine suggested action"""

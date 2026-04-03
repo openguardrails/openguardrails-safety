@@ -202,58 +202,42 @@ class GatewayIntegrationService:
             }
 
             # 4. Determine action based on detection results
+            # suggest_action now reflects the disposal policy (set by detection service)
 
-            # Check if we have actual security/compliance risks (not just DLP)
-            has_security_risk = bool(security_result.get("categories"))
-            has_compliance_risk = bool(compliance_result.get("categories"))
             has_dlp_risk = data_result.get("risk_level") not in (None, "no_risk")
 
-            # 4a. Security/Compliance risks - use policy-based action determination
-            # Only apply if there are actual security/compliance categories (not DLP)
-            if has_security_risk or has_compliance_risk:
-                # Get action from policy instead of using hardcoded logic
-                general_action = self.disposal_service.get_general_risk_action(
-                    application_id=application_id,
-                    risk_level=overall_risk
+            # 4a. Security/Compliance risks - use suggest_action from detection service
+            #     (detection service already applied disposal policy)
+            if suggest_action == "reject":
+                if not suggest_answer:
+                    suggest_answer = get_translation(language, 'guardrail', 'securityPolicyBlocked')
+                return self._create_block_response(
+                    request_id=request_id,
+                    reason="security_risk",
+                    message=suggest_answer,
+                    detection_result=result_info
                 )
 
-                logger.info(f"[{request_id}] General risk: {overall_risk}, policy action: {general_action}")
+            if suggest_action == "replace":
+                if not suggest_answer:
+                    suggest_answer = get_translation(language, 'guardrail', 'cannotAssist')
+                return self._create_replace_response(
+                    request_id=request_id,
+                    message=suggest_answer,
+                    detection_result=result_info
+                )
 
-                if general_action == "block":
-                    if not suggest_answer:
-                        suggest_answer = get_translation(language, 'guardrail', 'securityPolicyBlocked')
-                    return self._create_block_response(
-                        request_id=request_id,
-                        reason="security_risk",
-                        message=suggest_answer,
-                        detection_result=result_info
-                    )
-
-                if general_action == "replace":
-                    if not suggest_answer:
-                        suggest_answer = get_translation(language, 'guardrail', 'cannotAssist')
-                    return self._create_replace_response(
-                        request_id=request_id,
-                        message=suggest_answer,
-                        detection_result=result_info
-                    )
-
-                # If general_action == "pass", continue to check DLP risks
-
-            # 4b. Data leakage risks - get disposal action from policy
+            # 4b. Data leakage risks - handle DLP-specific actions
+            #     suggest_action can be: anonymize, switch_private_model, pass
             data_risk_level = data_result.get("risk_level", "no_risk")
             detected_entities = data_result.get("detected_entities", [])
 
             if data_risk_level != "no_risk" and detected_entities:
-                disposal_action = self.disposal_service.get_disposal_action(
-                    application_id=application_id,
-                    risk_level=data_risk_level,
-                    direction="input"
-                )
-
+                # Use suggest_action from detection service (already reflects disposal policy)
+                disposal_action = suggest_action
                 logger.info(f"[{request_id}] Data risk: {data_risk_level}, disposal: {disposal_action}")
 
-                if disposal_action == "block":
+                if disposal_action == "reject":
                     message = get_translation(language, 'guardrail', 'sensitiveDataPolicyViolation')
                     return self._create_block_response(
                         request_id=request_id,
@@ -434,58 +418,39 @@ class GatewayIntegrationService:
             }
 
             # 3. Handle output risks
+            # suggest_action now reflects the disposal policy (set by detection service)
 
-            # Check if we have actual security/compliance risks (not just DLP)
-            has_security_risk = bool(security_result.get("categories"))
-            has_compliance_risk = bool(compliance_result.get("categories"))
             has_dlp_risk = data_result.get("risk_level") not in (None, "no_risk")
 
-            # 3a. Security/Compliance risks - use policy-based action determination
-            if has_security_risk or has_compliance_risk:
-                # Get action from policy for output direction
-                general_action = self.disposal_service.get_general_risk_action(
-                    application_id=application_id,
-                    risk_level=overall_risk,
-                    direction="output"
+            # 3a. Security/Compliance risks - use suggest_action from detection service
+            if suggest_action == "reject":
+                if not suggest_answer:
+                    suggest_answer = get_translation(language, 'guardrail', 'responseBlockedSecurity')
+                return self._create_block_response(
+                    request_id=request_id,
+                    reason="security_risk",
+                    message=suggest_answer,
+                    detection_result=result_info
                 )
 
-                logger.info(f"[{request_id}] Output general risk: {overall_risk}, policy action: {general_action}")
+            if suggest_action == "replace":
+                if not suggest_answer:
+                    suggest_answer = get_translation(language, 'guardrail', 'cannotProvideInformation')
+                return self._create_replace_response(
+                    request_id=request_id,
+                    message=suggest_answer,
+                    detection_result=result_info
+                )
 
-                if general_action == "block":
-                    if not suggest_answer:
-                        suggest_answer = get_translation(language, 'guardrail', 'responseBlockedSecurity')
-                    return self._create_block_response(
-                        request_id=request_id,
-                        reason="security_risk",
-                        message=suggest_answer,
-                        detection_result=result_info
-                    )
-
-                if general_action == "replace":
-                    if not suggest_answer:
-                        suggest_answer = get_translation(language, 'guardrail', 'cannotProvideInformation')
-                    return self._create_replace_response(
-                        request_id=request_id,
-                        message=suggest_answer,
-                        detection_result=result_info
-                    )
-
-                # If general_action == "pass", continue to check DLP risks
-
-            # 3b. Data leakage risks - get disposal action from policy
+            # 3b. Data leakage risks - handle DLP-specific actions
             data_risk_level = data_result.get("risk_level", "no_risk")
             detected_entities = data_result.get("detected_entities", [])
 
             if data_risk_level != "no_risk" and detected_entities:
-                disposal_action = self.disposal_service.get_disposal_action(
-                    application_id=application_id,
-                    risk_level=data_risk_level,
-                    direction="output"
-                )
-
+                disposal_action = suggest_action
                 logger.info(f"[{request_id}] Output data risk: {data_risk_level}, disposal: {disposal_action}")
 
-                if disposal_action == "block":
+                if disposal_action == "reject":
                     message = get_translation(language, 'guardrail', 'responseBlockedDataLeakage')
                     return self._create_block_response(
                         request_id=request_id,

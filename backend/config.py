@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     syslog_protocol: str = "UDP"  # UDP | TCP | TLS
     syslog_facility: str = "LOCAL0"
     syslog_ca_cert: str = ""  # Path to CA cert for TLS
+    syslog_format: str = "cef"  # cef | json
     
     @property
     def log_dir(self) -> str:
